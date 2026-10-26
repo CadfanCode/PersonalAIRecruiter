@@ -137,7 +137,7 @@ prints one JSON object whose `structured_output` field holds the schema-valid re
 
 The last three flags (decided in milestone 1) stop the CLI from loading the user's plugins,
 skills, MCP servers and user-level settings. Measured on 26 Oct 2026: a tiny call dropped from
-about $0.40 (50k cache tokens) to $0.004. The process runs in `<data.dir>/claude-work/`, which
+about $0.40 (50k cache tokens) to about $0.03 (3k tokens) when run by the app. The process runs in `<data.dir>/claude-work/`, which
 has no CLAUDE.md or project settings, so nothing else is loaded.
 
 Implementation requirements:

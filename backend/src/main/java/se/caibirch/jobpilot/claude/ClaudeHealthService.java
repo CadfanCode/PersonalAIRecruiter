@@ -50,11 +50,12 @@ public class ClaudeHealthService {
         pb.redirectErrorStream(true);
         try {
             Process p = pb.start();
-            byte[] out = p.getInputStream().readAllBytes();
+            // The output is one line, so the pipe cannot fill while we wait.
             if (!p.waitFor(VERSION_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                 p.destroyForcibly();
                 throw new ClaudeCallException("'" + config.path() + " --version' timed out");
             }
+            byte[] out = p.getInputStream().readAllBytes();
             String text = new String(out, StandardCharsets.UTF_8).trim();
             if (p.exitValue() != 0) {
                 throw new ClaudeCallException("'" + config.path() + " --version' exited with " + p.exitValue() + ": " + text);
