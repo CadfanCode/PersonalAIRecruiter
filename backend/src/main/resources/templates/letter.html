@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${letter.language}">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${name}">Letter</title>
+</head>
+<body class="letter">
+<div class="header">
+    <h1 class="name" th:text="${name}">CAI BIRCH</h1>
+    <p class="contact" th:text="${contact}">Stockholm | phone | email</p>
+</div>
+<p class="subject" th:text="${letter.subject}">Ansökan: Title</p>
+<p class="subline" th:if="${letter.subline != null and !letter.subline.isEmpty()}" th:text="${letter.subline}">Employer, City</p>
+<p class="greeting" th:text="${letter.greeting}">Hej,</p>
+<p class="para" th:each="paragraph : ${letter.paragraphs}" th:text="${paragraph}">Paragraph</p>
+<p class="closing" th:text="${letter.closing}">Vänliga hälsningar,</p>
+<p class="signature" th:text="${letter.signature}">Cai Birch</p>
+</body>
+</html>

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:lang="${cv.language}">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="${name}">CV</title>
+</head>
+<body class="cv">
+<div class="header">
+    <h1 class="name" th:text="${name}">CAI BIRCH</h1>
+    <p class="headline" th:if="${cv.headline != null and !cv.headline.isEmpty()}" th:text="${cv.headline}">Headline</p>
+    <p class="contact" th:text="${contact}">Stockholm | phone | email</p>
+</div>
+
+<div class="section" th:if="${cv.profileParagraphs != null and !cv.profileParagraphs.isEmpty()}">
+    <h2 th:text="${labels.profile}">PROFIL</h2>
+    <p class="para" th:each="paragraph : ${cv.profileParagraphs}" th:text="${paragraph}">Profile</p>
+</div>
+
+<div class="section" th:each="section : ${cv.sections}" th:classappend="${'kind-' + section.kind}">
+    <h2 th:text="${section.heading}">HEADING</h2>
+    <ul class="bullets skills" th:if="${section.kind == 'SKILLS'}">
+        <li th:each="item : ${section.items}"><span class="skill-label" th:if="${item.title != null and !item.title.isEmpty()}" th:text="${item.title + ': '}">Group: </span><span th:text="${item.meta}">Java, Spring Boot</span></li>
+    </ul>
+    <th:block th:if="${section.kind != 'SKILLS'}">
+        <div class="item" th:each="item : ${section.items}">
+            <table class="line" th:if="${item.title != null and !item.title.isEmpty()}">
+                <tr>
+                    <td class="l"><span class="title" th:text="${item.title}">Title</span><span class="meta" th:if="${item.meta != null and !item.meta.isEmpty()}" th:text="${' | ' + item.meta}"> | Org</span></td>
+                    <td class="r" th:text="${item.rightSide}">Stockholm | 2026</td>
+                </tr>
+            </table>
+            <ul class="bullets" th:if="${section.kind != 'EDUCATION' and item.bullets != null and !item.bullets.isEmpty()}">
+                <li th:each="bullet : ${item.bullets}" th:text="${bullet.text}">Bullet</li>
+            </ul>
+            <p class="para tight" th:if="${section.kind == 'EDUCATION' and item.bullets != null}" th:each="bullet : ${item.bullets}" th:text="${bullet.text}">Education text</p>
+        </div>
+    </th:block>
+    <p class="gapnote" th:if="${section.kind == 'EXPERIENCE' and cv.gapNote != null and !cv.gapNote.isEmpty()}" th:text="${cv.gapNote}">Other employment</p>
+</div>
+
+<ul class="bullets skills languages" th:if="${cv.languagesLine != null and !cv.languagesLine.isEmpty()}">
+    <li><span class="skill-label" th:text="${labels.languages + ' '}">Språk: </span><span th:text="${cv.languagesLine}">Svenska</span></li>
+</ul>
+</body>
+</html>
