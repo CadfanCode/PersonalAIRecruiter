@@ -208,6 +208,10 @@ SearchProfile:
 }
 ```
 
+`locations` holds one entry per municipality the candidate could commute to: `buildSearchProfile`
+expands a city such as Stockholm into its neighbours (Solna, Järfälla, Nacka and so on), because
+ads sit in those municipalities. The user can edit the list before the search runs.
+
 `relevantTags` drives fact selection. A PE teacher profile might give
 `["teaching", "sport-science", "coaching", "pedagogy"]`; a developer profile gives
 `["software", "java", "security", "devops"]`. `yrkesrollForAktivitetsrapport` defaults from the
@@ -320,11 +324,16 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 ## 7. Ranking
 
 1. Pre-filter in Java: drop ads older than maxAgeDays, past deadline, matching exclusions, or
-   outside locations (unless remote is allowed).
+   outside locations (unless remote is allowed). Exclusions are whole-word, case-insensitive
+   matches against the ad title and employer name only (matching the description would drop
+   almost every ad that mentions "senior colleagues"). Location compares the ad's municipality
+   with the profile's municipality list; an ad without a municipality is kept.
 2. Build a compact CV digest (entries, facts and skills as JSON, at most around 8k tokens) once
    per run.
 3. Call `scoreJob` per remaining ad (concurrency 2). Cache by (job id, CV database version,
-   SearchProfile id).
+   SearchProfile id). The run option `limit` (default 50) is the number of ads scored, best JobTech
+   relevance first, unverified web dates last; other ads that passed the filters are stored and
+   listed unscored. Measured 26 Oct 2026 on Sonnet: about $0.04 per scored ad.
 4. Default results view: top 10 by total, with a toggle to show all.
 
 ## 8. Documents
@@ -489,8 +498,10 @@ POST     /runs                   {prompt, maxAgeDays?, limit?, includeWeb?} -> r
 GET      /runs/{id}              status, step, progress, message
 PUT      /runs/{id}/profile      edit the SearchProfile before search continues
 POST     /runs/{id}/continue     | /cancel
-GET      /runs/{id}/jobs?sort=&filter=
-GET/PATCH /jobs/{id}             status, notes, pinned/excluded entries
+GET      /runs/{id}/jobs?q=&status=&language=&minScore=&sort=rank|deadline|published&top=
+GET      /runs/{id}/jobs.csv  /runs/{id}/jobs.xlsx   export of the full ranked table
+GET      /jobs/{id}?run={runId}  full ad text and the score for that run's search profile
+PATCH    /jobs/{id}             status, notes (pinned/excluded entries arrive with milestone 4)
 POST     /jobs/{id}/documents    generate CV and letter
 GET/PUT  /documents/{id}         edit content -> re-render
 POST     /documents/{id}/approve
