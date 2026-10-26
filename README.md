@@ -32,4 +32,8 @@ Everything runs on your machine. The browser profile in `~/.jobpilot/browser-pro
 milestone 5) holds your logins and cookies, so treat that directory like a password store.
 JobPilot never stores passwords. `scripts/backup.sh` dumps the database.
 
-Status: milestone 1 (skeleton) done. See `docs/SPEC.md` section 15.
+Loading your CV data: with the API running, `curl --data-binary @seed/cv_database_seed.json
+-H 'Content-Type: application/json' http://127.0.0.1:8080/api/cv/seed` (or use the file picker on
+the CV database page when it is empty). It refuses to run on a non-empty database.
+
+Status: milestones 1 (skeleton) and 2 (CV database) done. See `docs/SPEC.md` section 15.
