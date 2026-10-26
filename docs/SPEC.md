@@ -284,17 +284,26 @@ FormActions:
 
 - Base URL `https://jobsearch.api.jobtechdev.se`, endpoints `GET /search` and `GET /ad/{id}`.
   Docs: https://jobsearch.api.jobtechdev.se and https://jobtechdev.se.
-- Parameters used: `q` (free text, one request per entry in `jobtechQueries`),
-  `published-after` (ISO date-time = now minus maxAgeDays), `limit` (100), `offset` (paging),
-  and location filtering (municipality or region concept ids via the JobTech Taxonomy API, or
-  free-text location in `q` with client-side filtering on `workplace_address.municipality`).
-- Before implementing, fetch the live OpenAPI spec and confirm the exact parameter names and
-  whether an `api-key` header is currently required. Support an optional key in settings either
-  way.
+- Verified against the live OpenAPI spec (`/swagger.json`, there is no `/openapi.json`) on
+  26 Oct 2026: **no api-key header is required**; the spec declares no security scheme and
+  anonymous calls succeed. An optional key from settings is still sent as `api-key` when set.
+- Parameters used: `q` (free text, one request per entry in `jobtechQueries`), `published-after`
+  (accepts `YYYY-MM-DDTHH:MM:SS` without zone, or a number of minutes; we send minutes =
+  maxAgeDays x 1440 so no time zone is involved), `limit` (max 100), `offset` (0-2000, paging),
+  `sort=pubdate-desc`, `municipality` (repeatable; takes a taxonomy concept id such as
+  `AvNB_uwa_6n6` for Stockholm, or the 4-digit municipality code), and `remote=true` for the
+  second pass when `remoteOk` is set. `resdet=full` is the default. Search results come back in
+  `hits[]` with `total.value`.
+- Municipality names are resolved to concept ids through the JobTech Taxonomy API,
+  `GET https://taxonomy.api.jobtechdev.se/v1/taxonomy/main/concepts?type=municipality&limit=400`
+  (no key; entries have `taxonomy/id` and `taxonomy/preferred-label`). Names that do not resolve
+  are searched nationwide and removed by the Java location pre-filter. `radiusKm` is not applied
+  to the API call in v1 (it would need coordinates); only the municipality list is used.
 - Map fields: `id`, `headline`, `employer.name`, `workplace_address.municipality`,
   `publication_date`, `application_deadline`, `description.text`, `webpage_url`,
   `application_details.url` / `.email`, `employment_type.label`, `working_hours_type.label`,
-  `must_have` / `nice_to_have` (skills, languages, work experiences) when present.
+  `must_have` / `nice_to_have` (skills, languages, work experiences) when present, plus
+  `workplace_address.municipality_code`, `experience_required` (boolean) and `removed`.
 - Respect rate limits: at most 5 requests per second and exponential backoff on 429 and 5xx.
 
 ### 6.2 Company career pages (secondary, optional per run)
