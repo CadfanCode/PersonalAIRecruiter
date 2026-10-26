@@ -16,30 +16,24 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import se.caibirch.jobpilot.claude.ClaudeCallLog;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
 import se.caibirch.jobpilot.claude.FakeClaudeRunner;
+import se.caibirch.jobpilot.support.PostgresTestConfig;
 
 /** Flyway V1 against real PostgreSQL, plus the Claude endpoints with a fake runner. */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers
+@Import(PostgresTestConfig.class)
 class ApiIT {
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16");
 
     static Path versionStub;
 

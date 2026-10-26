@@ -103,6 +103,14 @@ application_form_snapshot(id, job_id, url, fields_json, actions_json, created_at
 aktivitet_log(id, job_id, yrkesroll, employer_label, municipality, omfattning,
               answered_ad, applied_date, saved_at, result, message)
 
+-- added in V2 (milestone 2), to hold the whole seed:
+--   profile: phone_international, work_authorisation, security_vetting
+--   cv_entry: title_en, note (note is an owner to-do, internal only, never sent to a prompt)
+--   start_ym / end_ym hold "YYYY-MM", or "YYYY" when the month is unknown
+known_gap(id, text, sort_order)
+answers_memory(id, question_key UNIQUE, question, answer, updated_at)
+  -- question_key = lowercase, punctuation stripped, whitespace collapsed
+
 claude_call(id, task, model, started_at, duration_ms, cost_usd, input_tokens, output_tokens,
             cache_read_tokens, cache_creation_tokens, success, error_message)
   -- one row per Claude CLI call (5.1)
