@@ -24,7 +24,17 @@ jobpilot:
     - http://127.0.0.1:5173
   claude:
     path: ${JOBPILOT_CLAUDE_PATH:claude}
-    model: ""
+    model: ${JOBPILOT_CLAUDE_MODEL:}
     timeout-seconds: 180
     web-timeout-seconds: 600
     concurrency: 2
+  search:
+    default-max-age-days: 7
+    default-limit: 50
+    results-top-n: 10
+    default-yrkesroll: Systemutvecklare/Programmerare
+  jobtech:
+    base-url: ${JOBPILOT_JOBTECH_URL:https://jobsearch.api.jobtechdev.se}
+    taxonomy-url: ${JOBPILOT_TAXONOMY_URL:https://taxonomy.api.jobtechdev.se}
+    api-key: ${JOBPILOT_JOBTECH_API_KEY:}
+    requests-per-second: 5

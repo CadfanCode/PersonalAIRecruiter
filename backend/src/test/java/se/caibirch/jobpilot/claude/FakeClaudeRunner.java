@@ -1,10 +1,12 @@
 package se.caibirch.jobpilot.claude;
 
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,11 +18,17 @@ import com.networknt.schema.ValidationMessage;
 public class FakeClaudeRunner implements ClaudeRunner {
 
     private final ObjectMapper mapper = new ObjectMapper();
-    private final Map<String, String> responses = new HashMap<>();
-    private final List<ClaudeTask<?>> calls = new ArrayList<>();
+    private final Map<String, Function<ClaudeTask<?>, String>> responses = new ConcurrentHashMap<>();
+    private final List<ClaudeTask<?>> calls = Collections.synchronizedList(new ArrayList<>());
 
     public FakeClaudeRunner respond(String taskName, String json) {
-        responses.put(taskName, json);
+        responses.put(taskName, t -> json);
+        return this;
+    }
+
+    /** The answer can depend on the prompt, for example on which ad is being scored. */
+    public FakeClaudeRunner respond(String taskName, Function<ClaudeTask<?>, String> answer) {
+        responses.put(taskName, answer);
         return this;
     }
 
@@ -31,10 +39,11 @@ public class FakeClaudeRunner implements ClaudeRunner {
     @Override
     public <T> T run(ClaudeTask<T> task) {
         calls.add(task);
-        String json = responses.get(task.name());
-        if (json == null) {
+        Function<ClaudeTask<?>, String> answer = responses.get(task.name());
+        if (answer == null) {
             throw new ClaudeCallException("FakeClaudeRunner has no response for task " + task.name());
         }
+        String json = answer.apply(task);
         try {
             JsonNode node = mapper.readTree(json);
             Set<ValidationMessage> problems = JsonSchemaFactory.getInstance(SpecVersion.VersionFlag.V202012)
