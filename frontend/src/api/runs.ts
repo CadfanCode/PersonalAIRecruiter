@@ -101,8 +101,14 @@ export const useRun = (id: number) =>
     refetchInterval: (q) => (q.state.data && ACTIVE.includes(q.state.data.run.status) ? 2000 : false),
   })
 
-export const useRunJobs = (id: number, enabled = true) =>
-  useQuery({ queryKey: ['runs', id, 'jobs'], queryFn: () => api<JobRow[]>(`/api/runs/${id}/jobs`), enabled })
+/** Ads appear while the run works, so the list is refetched every 2 s until the run has ended. */
+export const useRunJobs = (id: number, enabled = true, active = false) =>
+  useQuery({
+    queryKey: ['runs', id, 'jobs'],
+    queryFn: () => api<JobRow[]>(`/api/runs/${id}/jobs`),
+    enabled,
+    refetchInterval: active ? 2000 : false,
+  })
 
 export const useJobDetail = (jobId: number | null, runId: number) =>
   useQuery({

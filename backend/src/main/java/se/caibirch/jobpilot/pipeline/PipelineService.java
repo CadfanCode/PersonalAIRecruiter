@@ -174,8 +174,9 @@ public class PipelineService {
         // Unverified web dates sort last, so they are scored last when the limit bites.
         List<Long> toScore = bestFirst(kept, stored).stream().limit(limit).toList();
 
-        String summary = "Found " + candidates.size() + " ads, " + kept.size() + " after filters, scoring "
-                + toScore.size();
+        String dropped = filtered.dropped().isEmpty() ? "" : " (dropped: " + filtered.dropSummary() + ")";
+        String summary = "Found " + candidates.size() + " ads, " + kept.size() + " after filters" + dropped
+                + ", scoring " + toScore.size();
         runs.update(id, Status.RUNNING, Step.RANK, 45, summary);
         checkCancelled(id);
 

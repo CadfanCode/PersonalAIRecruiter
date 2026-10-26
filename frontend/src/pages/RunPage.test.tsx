@@ -72,6 +72,28 @@ describe('run page', () => {
     expect(screen.getByText('Comstream AB')).toBeInTheDocument()
   })
 
+  it('fills the table by itself while the run progresses and never claims "no ads" on the way', async () => {
+    let runPolls = 0
+    let jobPolls = 0
+    const finished = [job({ title: 'Junior Java-utvecklare', rank: 1, total: 87, employer: 'Comstream AB' })]
+    mockApi({
+      'GET /api/runs/7': () => {
+        runPolls++
+        return runPolls < 3
+          ? { run: run({ status: 'RUNNING', step: 'SEARCH', progress: 30, message: 'Searching Platsbanken' }), profile }
+          : { run: run(), profile }
+      },
+      'GET /api/runs/7/jobs': () => (++jobPolls < 3 ? [] : finished),
+    })
+    renderRun()
+
+    expect(await screen.findByText('Searching Platsbanken')).toBeInTheDocument()
+    expect(screen.queryByText(/No ads matched/)).not.toBeInTheDocument()
+    expect(await screen.findByText('Junior Java-utvecklare', undefined, { timeout: 8000 })).toBeInTheDocument()
+    expect(screen.queryByText(/No ads matched/)).not.toBeInTheDocument()
+    expect(runPolls).toBeGreaterThanOrEqual(3)
+  }, 12000)
+
   it('explains a failed run', async () => {
     mockApi({
       'GET /api/runs/7': { run: run({ status: 'FAILED', step: 'SEARCH', message: 'Every JobTech query failed' }), profile: null },

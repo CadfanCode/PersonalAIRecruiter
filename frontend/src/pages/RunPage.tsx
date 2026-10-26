@@ -1,3 +1,5 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useCancelRun, useContinueRun, useEditProfile, useRun, useRunJobs } from '../api/runs'
 import { Button } from '../components/Form'
@@ -12,8 +14,14 @@ const WORKING = ['QUEUED', 'RUNNING']
 export function RunPage() {
   const runId = Number(useParams().id)
   const view = useRun(runId)
+  const status = view.data?.run.status
   const jobsEnabled = view.data !== undefined && view.data.run.searchProfileId !== null && view.data.run.step !== 'PROFILE'
-  const jobs = useRunJobs(runId, jobsEnabled)
+  const jobs = useRunJobs(runId, jobsEnabled, status !== undefined && WORKING.includes(status))
+  const client = useQueryClient()
+  // The last poll can land before the final scores are written, so fetch once more when the run ends.
+  useEffect(() => {
+    if (status && !WORKING.includes(status)) void client.invalidateQueries({ queryKey: ['runs', runId, 'jobs'] })
+  }, [status, runId, client])
   const edit = useEditProfile(runId)
   const proceed = useContinueRun(runId)
   const cancel = useCancelRun(runId)
@@ -79,7 +87,7 @@ export function RunPage() {
       )}
 
       {jobs.data && jobs.data.length > 0 && <ResultsTable runId={runId} jobs={jobs.data} />}
-      {run.status === 'DONE' && jobs.data?.length === 0 && (
+      {run.status === 'DONE' && jobs.data?.length === 0 && !jobs.isFetching && (
         <Panel>
           <p className="text-sm text-[var(--muted)]">No ads matched. Widen the municipalities or the age limit and start a new run.</p>
         </Panel>

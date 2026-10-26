@@ -24,6 +24,12 @@ cd frontend && npm install && npm run dev # UI on http://localhost:5173
 `./mvnw` needs a valid `JAVA_HOME` (Java 21 or newer). If port 8080 is taken, start the API with
 `SERVER_PORT=8081` and the UI with `VITE_API_TARGET=http://127.0.0.1:8081`.
 
+Model and cost: JobPilot runs your own `claude` CLI. Without `JOBPILOT_CLAUDE_MODEL` it uses the
+CLI's default model (Opus on this machine). Measured on 26 Oct 2026: scoring one ad costs about
+$0.04 on Sonnet (`JOBPILOT_CLAUDE_MODEL=sonnet`), and a run scores up to 50 ads by default. The
+cost at the default model has not been measured but is several times higher, so set the variable
+unless you want Opus. Totals are shown on the dashboard and at `/api/claude/usage`.
+
 Tests: `cd backend && ./mvnw verify` (needs Docker) and `cd frontend && npm test`.
 
 ## Privacy
@@ -36,4 +42,4 @@ Loading your CV data: with the API running, `curl --data-binary @seed/cv_databas
 -H 'Content-Type: application/json' http://127.0.0.1:8080/api/cv/seed` (or use the file picker on
 the CV database page when it is empty). It refuses to run on a non-empty database.
 
-Status: milestones 1 (skeleton) and 2 (CV database) done. See `docs/SPEC.md` section 15.
+Status: milestones 1 (skeleton), 2 (CV database) and 3 (search and ranking) done. See `docs/SPEC.md` section 15.

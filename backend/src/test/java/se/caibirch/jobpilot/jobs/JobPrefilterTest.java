@@ -84,6 +84,19 @@ class JobPrefilterTest {
     }
 
     @Test
+    void summarisesWhyAdsWereDropped() {
+        var result = JobPrefilter.apply(List.of(
+                job("Senior A", "A", "Stockholm", NOW, null), job("Senior B", "B", "Stockholm", NOW, null),
+                job("Closed", "C", "Stockholm", NOW, NOW.minus(Duration.ofHours(1))),
+                job("Old", "D", "Stockholm", NOW.minus(Duration.ofDays(30)), null),
+                job("Far", "E", "Malmö", NOW, null), job("Fine", "F", "Stockholm", NOW, null)),
+                profile(false, List.of("senior"), "Stockholm"), NOW);
+
+        assertThat(result.dropSummary()).isEqualTo("2 excluded term, 1 deadline passed, 1 too old, 1 outside locations");
+        assertThat(JobPrefilter.apply(List.of(), profile(false, List.of()), NOW).dropSummary()).isEmpty();
+    }
+
+    @Test
     void adWithoutLocationIsKeptBecauseItCannotBeRuledOut() {
         var result = JobPrefilter.apply(List.of(job("Anywhere", "A", null, NOW, null)), profile(false, List.of(), "Stockholm"), NOW);
 

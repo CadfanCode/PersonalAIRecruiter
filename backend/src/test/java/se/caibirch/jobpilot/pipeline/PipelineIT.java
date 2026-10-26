@@ -224,7 +224,8 @@ class PipelineIT {
         assertThat(rows.get(2).get("municipality").asText()).isEqualTo("Solna");
         assertThat(rows.get(0).get("experienceRequiredText").asText()).isEqualTo("1 år");
         assertThat(rows.get(0).get("applyUrl").asText()).isEqualTo("https://apply/1");
-        assertThat(view.get("run").get("message").asText()).contains("Found 7 ads", "4 after filters", "scoring 3");
+        assertThat(view.get("run").get("message").asText()).contains("Found 7 ads", "4 after filters",
+                "1 excluded term", "1 outside locations", "1 deadline passed", "scoring 3");
 
         // search used the three resolved municipality ids and the age in minutes
         wm.verify(getRequestedFor(urlPathEqualTo("/search")).withQueryParam("municipality", equalTo("AvNB_uwa_6n6"))

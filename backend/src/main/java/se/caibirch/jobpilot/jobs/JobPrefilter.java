@@ -3,7 +3,9 @@ package se.caibirch.jobpilot.jobs;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -18,6 +20,22 @@ public final class JobPrefilter {
     }
 
     public record Result(List<NewJob> kept, List<Dropped> dropped) {
+
+        /** Why ads were dropped, as "3 excluded term, 1 deadline passed", most frequent first. */
+        public String dropSummary() {
+            Map<String, Long> counts = dropped.stream()
+                    .collect(Collectors.groupingBy(d -> category(d.reason()), LinkedHashMap::new, Collectors.counting()));
+            return counts.entrySet().stream().sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                    .map(e -> e.getValue() + " " + e.getKey()).collect(Collectors.joining(", "));
+        }
+
+        private static String category(String reason) {
+            if (reason.startsWith("older than")) return "too old";
+            if (reason.startsWith("deadline")) return "deadline passed";
+            if (reason.startsWith("excluded term")) return "excluded term";
+            if (reason.startsWith("outside locations")) return "outside locations";
+            return "other";
+        }
     }
 
     private record Exclusion(String term, Pattern pattern) {
