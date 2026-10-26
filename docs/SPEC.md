@@ -102,7 +102,13 @@ application_form_snapshot(id, job_id, url, fields_json, actions_json, created_at
 
 aktivitet_log(id, job_id, yrkesroll, employer_label, municipality, omfattning,
               answered_ad, applied_date, saved_at, result, message)
+
+claude_call(id, task, model, started_at, duration_ms, cost_usd, input_tokens, output_tokens,
+            cache_read_tokens, cache_creation_tokens, success, error_message)
+  -- one row per Claude CLI call (5.1)
 ```
+
+Tables for settings and the answers memory are added by the milestones that need them.
 
 `dedupe_key` = lowercase(employer + "|" + normalised title + "|" + municipality). Keep the
 source with the richest description when duplicates collide.
@@ -119,7 +125,8 @@ claude -p <prompt>
   --json-schema <schema-json>
   --tools ""                          # no tools for pure text tasks
   --no-session-persistence
-  [--allowedTools WebSearch WebFetch] # only for web discovery (6.2)
+  --disable-slash-commands --strict-mcp-config --setting-sources project
+  [--tools WebSearch,WebFetch --allowedTools WebSearch WebFetch]   # only for web discovery (6.2)
   [--model <settings.claude.model>]
 ```
 
@@ -127,6 +134,11 @@ Verified behaviour (Claude Code 2.1.x): with `--output-format json --json-schema
 prints one JSON object whose `structured_output` field holds the schema-valid result. Also read
 `is_error`, `subtype` (expect `"success"`), `result`, `total_cost_usd`, `usage` and
 `duration_ms`. Redirect stdin from `/dev/null` (otherwise the CLI waits 3 s for stdin).
+
+The last three flags (decided in milestone 1) stop the CLI from loading the user's plugins,
+skills, MCP servers and user-level settings. Measured on 26 Oct 2026: a tiny call dropped from
+about $0.40 (50k cache tokens) to $0.004. The process runs in `<data.dir>/claude-work/`, which
+has no CLAUDE.md or project settings, so nothing else is loaded.
 
 Implementation requirements:
 - `ProcessBuilder` with an argument list (never a shell string). Prompt via an argument, or via
@@ -137,7 +149,8 @@ Implementation requirements:
 - Parse with Jackson. If `is_error` is true, `subtype` is not success, the exit code is not
   zero, or `structured_output` is missing, throw `ClaudeCallException` with stderr attached.
 - Validate `structured_output` against the same schema again (networknt json-schema-validator).
-- Log every call (task name, duration, cost, tokens, success) to the `claude_call` table and show
+- Log every call (task name, duration, cost, tokens, success) to the `claude_call` table (added
+  to the V1 migration; it is not in section 4's list) and show
   totals on the Settings page so the user can see usage against his subscription.
 - Health check endpoint `/api/claude/health` runs `claude --version` and a tiny schema call.
 - Interface `ClaudeRunner { <T> T run(ClaudeTask<T> task) }` with a `FakeClaudeRunner` for

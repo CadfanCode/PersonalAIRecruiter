@@ -1,0 +1,26 @@
+spring:
+  application:
+    name: jobpilot
+  datasource:
+    url: ${JOBPILOT_DB_URL:jdbc:postgresql://127.0.0.1:5432/jobpilot}
+    username: ${JOBPILOT_DB_USER:jobpilot}
+    password: ${JOBPILOT_DB_PASSWORD:jobpilot}
+  flyway:
+    enabled: true
+
+server:
+  # Local single-user app: never listen on anything but loopback.
+  address: 127.0.0.1
+  port: ${SERVER_PORT:8080}
+
+jobpilot:
+  data-dir: ${JOBPILOT_DATA_DIR:${user.home}/.jobpilot}
+  allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+  claude:
+    path: ${JOBPILOT_CLAUDE_PATH:claude}
+    model: ""
+    timeout-seconds: 180
+    web-timeout-seconds: 600
+    concurrency: 2
