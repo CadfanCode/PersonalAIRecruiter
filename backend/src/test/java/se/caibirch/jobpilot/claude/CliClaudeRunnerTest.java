@@ -195,6 +195,19 @@ class CliClaudeRunnerTest {
     }
 
     @Test
+    void longRunningTasksGetTheLongTimeout() throws IOException {
+        Path script = dir.resolve("claude-stub.sh");
+        Files.writeString(script, "#!/bin/bash\nsleep 2\n" + printsFile("out.json", recorded) + "\n");
+        Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwxr-xr-x"));
+        JobPilotProperties props = new JobPilotProperties(dir.resolve("data"), List.of(),
+                new JobPilotProperties.Claude(script.toString(), "", 1, 10, 2));
+        CliClaudeRunner runner = new CliClaudeRunner(props, new ObjectMapper(), callLog);
+
+        assertThatThrownBy(() -> runner.run(task("x"))).hasMessageContaining("timed out");
+        assertThat(runner.run(ClaudeTask.longRunning("importCv", "x", schema, Status.class)).status()).isEqualTo("ok");
+    }
+
+    @Test
     void missingBinaryGivesActionableMessage() {
         JobPilotProperties props = new JobPilotProperties(dir.resolve("data"), List.of(),
                 new JobPilotProperties.Claude(dir.resolve("nope").toString(), "", 5, 5, 1));

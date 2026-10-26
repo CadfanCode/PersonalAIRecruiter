@@ -256,6 +256,12 @@ public class CvRepository {
                 .single();
     }
 
+    /** Adds a skill unless one with that name exists, so an import never overwrites level or years. */
+    public void insertSkillIfAbsent(String name, String category) {
+        jdbc.sql("INSERT INTO skill (name, category) VALUES (:n, :c) ON CONFLICT (name) DO NOTHING")
+                .param("n", name).param("c", category).update();
+    }
+
     public boolean deleteSkill(long id) {
         return jdbc.sql("DELETE FROM skill WHERE id = :id").param("id", id).update() > 0;
     }

@@ -153,7 +153,7 @@ Implementation requirements:
   stdin with `--input-format text` if it exceeds the argument length limit (use stdin when the
   prompt is over 100 kB).
 - Configurable binary path (`settings.claude.path`, default `claude` on PATH), timeout (default
-  180 s, web discovery 600 s), and max concurrency (default 2, a `Semaphore`).
+  180 s, web discovery and CV import 600 s), and max concurrency (default 2, a `Semaphore`).
 - Parse with Jackson. If `is_error` is true, `subtype` is not success, the exit code is not
   zero, or `structured_output` is missing, throw `ClaudeCallException` with stderr attached.
 - Validate `structured_output` against the same schema again (networknt json-schema-validator).
@@ -470,7 +470,10 @@ duplicates.
 GET/PUT  /profile
 GET/POST /cv/entries            GET/PUT/DELETE /cv/entries/{id}
 POST     /cv/entries/{id}/facts  PUT/DELETE /cv/facts/{id}
-GET/POST /cv/tags  GET/POST /cv/skills
+GET/POST /cv/tags  GET/POST /cv/skills   DELETE /cv/skills/{id}
+GET/PUT  /cv/gaps               known gaps (PUT replaces the list)
+GET/PUT  /cv/answers            answers memory (PUT upserts one answer by normalised question)
+POST     /cv/seed               body = seed/cv_database_seed.json; 409 unless the CV database is empty
 POST     /cv/import              (multipart: PDF/DOCX/TXT files) -> import preview
 POST     /cv/import/{previewId}/commit
 POST     /runs                   {prompt, maxAgeDays?, limit?, includeWeb?} -> run id

@@ -83,7 +83,7 @@ public class CvSeedImporter {
 
         seed.tags().forEach(repo::upsertTag);
         for (SeedSkill s : seed.skills()) {
-            service.saveSkill(new SkillInput(s.name(), s.category(), null, null, null));
+            service.addSkillIfAbsent(s.name(), s.category());
         }
 
         int facts = 0;

@@ -127,6 +127,12 @@ public class CvService {
     }
 
     @Transactional
+    public void addSkillIfAbsent(String name, String category) {
+        require(name != null && !name.isBlank(), "skill name is required");
+        repo.insertSkillIfAbsent(name.trim(), category);
+    }
+
+    @Transactional
     public void deleteSkill(long id) {
         if (!repo.deleteSkill(id)) {
             throw new NotFoundException("No skill " + id);

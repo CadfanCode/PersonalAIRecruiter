@@ -110,6 +110,21 @@ class CvImportIT {
     }
 
     @Test
+    void importNeverOverwritesExistingSkillDetails() throws Exception {
+        jdbc.sql("INSERT INTO skill (name, category, level, years) VALUES ('Java', 'language', 'strong', 3.5)").update();
+        JsonNode preview = preview(txt("cv.txt", "x"));
+        var request = mapper.createObjectNode();
+        request.putArray("entries");
+        request.set("skills", preview.get("skills"));
+
+        mvc.perform(post("/api/cv/import/" + preview.get("previewId").asText() + "/commit")
+                .contentType(MediaType.APPLICATION_JSON).content(request.toString())).andExpect(status().isOk());
+
+        assertThat(jdbc.sql("SELECT level FROM skill WHERE name = 'Java'").query(String.class).single()).isEqualTo("strong");
+        assertThat(jdbc.sql("SELECT count(*) FROM skill").query(Long.class).single()).isEqualTo(2);
+    }
+
+    @Test
     void commitStoresTheEditedEntriesAndFactsOnce() throws Exception {
         JsonNode preview = preview(txt("cv.txt", "x"));
         String id = preview.get("previewId").asText();

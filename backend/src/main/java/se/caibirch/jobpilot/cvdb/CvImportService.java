@@ -2,8 +2,6 @@ package se.caibirch.jobpilot.cvdb;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -88,14 +86,15 @@ public class CvImportService {
             text.append("=== File: ").append(f.name()).append(" ===\n").append(extracted).append("\n\n");
         }
         String tags = service.tags().stream().map(Tag::name).collect(Collectors.joining(", "));
-        ImportedCv result = claude.run(ClaudeTask.of("importCv",
+        ImportedCv result = claude.run(ClaudeTask.longRunning("importCv",
                 ClaudeResources.prompt("importCv", Map.of("existingTags", tags.isEmpty() ? "(none yet)" : tags,
                         "text", text.toString().strip())),
                 ClaudeResources.schema("importCv"), ImportedCv.class));
 
-        Map<String, Long> existing = existingKeys();
+        List<Entry> existing = service.entries();
         List<PreviewEntry> entries = result.entries().stream()
-                .map(e -> new PreviewEntry(e, existing.get(key(e.title(), e.organisation())))).toList();
+                .map(e -> new PreviewEntry(e, EntryMatcher.findMatch(e.kind(), e.title(), e.organisation(), existing)
+                        .map(Entry::id).orElse(null))).toList();
         Preview preview = new Preview(UUID.randomUUID().toString(), files.stream().map(UploadedFile::name).toList(),
                 entries, result.skills());
         evictExpired();
@@ -123,25 +122,10 @@ public class CvImportService {
             facts += factInputs.size();
         }
         for (ImportedSkill s : request.skills()) {
-            service.saveSkill(new SkillInput(s.name(), s.category(), null, null, null));
+            service.addSkillIfAbsent(s.name(), s.category());
         }
         previews.remove(previewId);
         return new CommitResult(ids, facts, request.skills().size());
-    }
-
-    private Map<String, Long> existingKeys() {
-        Map<String, Long> keys = new HashMap<>();
-        for (Entry e : service.entries()) {
-            keys.putIfAbsent(key(e.title(), e.organisation()), e.id());
-            if (e.titleEn() != null) {
-                keys.putIfAbsent(key(e.titleEn(), e.organisation()), e.id());
-            }
-        }
-        return new LinkedHashMap<>(keys);
-    }
-
-    static String key(String title, String organisation) {
-        return AnswerKeys.normalise(title) + "|" + (organisation == null ? "" : AnswerKeys.normalise(organisation));
     }
 
     private void evictExpired() {

@@ -91,7 +91,7 @@ public class CliClaudeRunner implements ClaudeRunner {
     private JsonNode execute(ClaudeTask<?> task) {
         boolean viaStdin = task.prompt().getBytes(StandardCharsets.UTF_8).length > MAX_ARGUMENT_PROMPT_BYTES;
         List<String> command = buildCommand(task, viaStdin);
-        int timeout = task.webTools() ? config.webTimeoutSeconds() : config.timeoutSeconds();
+        int timeout = task.usesLongTimeout() ? config.webTimeoutSeconds() : config.timeoutSeconds();
 
         ProcessBuilder pb = new ProcessBuilder(command);
         try {
