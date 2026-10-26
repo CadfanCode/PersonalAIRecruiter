@@ -1,0 +1,754 @@
+{
+  "_comment": "Seed for the JobPilot CV database. Facts come from Cai's CV (Knowit version), his Knowit cover letter and details he confirmed on 26 Oct 2026. Each fact is atomic and verifiable. Add teaching and other history that is not in the software CV.",
+  "profile": {
+    "fullName": "Cai Birch",
+    "headline": "Systemutvecklare | Java, säker utveckling och IAM",
+    "email": "caibirch@proton.me",
+    "phone": "076-185 95 27",
+    "phoneInternational": "+46 76 185 95 27",
+    "city": "Stockholm",
+    "website": "https://www.caibirch.com",
+    "github": "https://github.com/CadfanCode",
+    "languages": [
+      {
+        "language": "English",
+        "level": "native"
+      },
+      {
+        "language": "Swedish",
+        "level": "fluent"
+      }
+    ],
+    "workAuthorisation": "Swedish/Nordic/EU/EEA/Swiss citizen (answered on the Arbetsförmedlingen application, 26 Oct 2026)",
+    "securityVetting": "Passed security vetting under säkerhetsskyddslagen (Kriminalvården)"
+  },
+  "tags": [
+    "software",
+    "java",
+    "backend",
+    "frontend",
+    "security",
+    "iam",
+    "devops",
+    "testing",
+    "research",
+    "data-analysis",
+    "teaching",
+    "pedagogy",
+    "sport-science",
+    "biomechanics",
+    "public-sector",
+    "health-tech",
+    "leadership",
+    "communication",
+    "maritime"
+  ],
+  "entries": [
+    {
+      "key": "braive",
+      "kind": "INTERNSHIP",
+      "title": "Systemutvecklare (praktik)",
+      "titleEn": "Software Developer (intern)",
+      "organisation": "Braive AB",
+      "location": "Stockholm",
+      "start": "2026-01",
+      "end": "2026-05",
+      "tags": [
+        "software",
+        "java",
+        "backend",
+        "devops",
+        "health-tech",
+        "security"
+      ],
+      "facts": [
+        {
+          "en": "Built and deployed microservices in Java and Kotlin with Spring Boot.",
+          "sv": "Utvecklade och driftsatte mikrotjänster i Java och Kotlin med Spring Boot.",
+          "tags": [
+            "java",
+            "backend"
+          ]
+        },
+        {
+          "en": "Built admin interfaces in Vue.js on top of the team's Spring Boot services.",
+          "sv": "Byggde administrationsgränssnitt i Vue.js ovanpå teamets Spring Boot-tjänster.",
+          "tags": [
+            "frontend"
+          ]
+        },
+        {
+          "en": "Worked in an agile team with Git, JIRA and code review.",
+          "sv": "Arbetade i ett agilt team med Git, JIRA och kodgranskning.",
+          "tags": [
+            "software"
+          ]
+        },
+        {
+          "en": "Improved the handling of sensitive healthcare data in PostgreSQL and Hibernate/JPA based on IT security principles, reducing the risk of manual errors.",
+          "sv": "Förbättrade hanteringen av känsliga vårddata i PostgreSQL och Hibernate/JPA utifrån IT-säkerhetsprinciper, vilket minskade risken för manuella fel.",
+          "tags": [
+            "security",
+            "backend"
+          ]
+        },
+        {
+          "en": "Found and fixed race conditions in the backend logging flows, improving stability and data integrity.",
+          "sv": "Hittade och åtgärdade race conditions i backendens loggningsflöden, vilket förbättrade stabiliteten och dataintegriteten.",
+          "tags": [
+            "backend",
+            "testing"
+          ]
+        },
+        {
+          "en": "Containerised services with Docker and worked in Kubernetes-based CI/CD pipelines from development to production.",
+          "sv": "Containeriserade tjänster med Docker och arbetade i Kubernetes-baserade CI/CD-pipelines från utveckling till produktion.",
+          "tags": [
+            "devops"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "omika",
+      "kind": "INTERNSHIP",
+      "title": "Systemutvecklare (praktik)",
+      "titleEn": "Software Developer (intern)",
+      "organisation": "Omika Health AB",
+      "location": "Stockholm",
+      "start": "2025-01",
+      "end": "2025-04",
+      "tags": [
+        "software",
+        "frontend",
+        "health-tech",
+        "security"
+      ],
+      "facts": [
+        {
+          "en": "Designed and built a production-ready peer-to-peer video chat with WebRTC in React Native, including a signalling server and secure authentication.",
+          "sv": "Designade och byggde en produktionsfärdig P2P-videochatt med WebRTC i React Native, inklusive signaleringsserver och säker autentisering.",
+          "tags": [
+            "frontend",
+            "security"
+          ]
+        },
+        {
+          "en": "Developed in React and TypeScript.",
+          "sv": "Utvecklade i React och TypeScript.",
+          "tags": [
+            "frontend"
+          ],
+          "evidence": "Confirmed by Cai on 26 Oct 2026"
+        },
+        {
+          "en": "Built and debugged low-latency real-time flows and verified complex client interactions with tests.",
+          "sv": "Byggde och felsökte realtidsflöden med låg latens och verifierade komplexa klientinteraktioner med tester.",
+          "tags": [
+            "testing"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "skepparklar",
+      "kind": "OWN_BUSINESS",
+      "title": "Grundare och utvecklare, Skepparklar",
+      "titleEn": "Founder and developer, Skepparklar",
+      "organisation": "Skepparklar (www.skepparklar.se)",
+      "location": "Stockholm",
+      "start": null,
+      "end": null,
+      "ongoing": true,
+      "note": "Own product, soon to become Cai's own company. May be described as own business/employment in screening answers.",
+      "tags": [
+        "software",
+        "java",
+        "backend",
+        "frontend",
+        "security",
+        "iam",
+        "devops",
+        "testing",
+        "maritime",
+        "pedagogy"
+      ],
+      "facts": [
+        {
+          "en": "Designed and built a full-stack e-learning platform with courses for Förarintyg, Kustskepparintyg and VHF/SRC, from database schema to production.",
+          "sv": "Designade och byggde en fullstack e-lärandeplattform med kurser inför Förarintyg, Kustskepparintyg och VHF/SRC, från databasschema till drift i produktion.",
+          "tags": [
+            "software",
+            "maritime",
+            "pedagogy"
+          ]
+        },
+        {
+          "en": "Wrote the REST API in Java 21 and Spring Boot 4 with Spring Data JDBC, PostgreSQL and 15 versioned Flyway migrations.",
+          "sv": "Skrev REST-API:t i Java 21 och Spring Boot 4 med Spring Data JDBC, PostgreSQL och 15 versionerade Flyway-migreringar.",
+          "tags": [
+            "java",
+            "backend"
+          ]
+        },
+        {
+          "en": "Built the front end in React 19, TypeScript, Vite and Tailwind CSS.",
+          "sv": "Byggde gränssnittet i React 19, TypeScript, Vite och Tailwind CSS.",
+          "tags": [
+            "frontend"
+          ]
+        },
+        {
+          "en": "Built authentication and account management without an external provider: Argon2 password hashing, TOTP two-factor authentication, email verification, password reset, per-IP rate limiting and sessions in PostgreSQL via Spring Session.",
+          "sv": "Byggde egen inloggning och kontohantering utan extern leverantör: Argon2-hashade lösenord, TOTP-tvåfaktorsautentisering, e-postverifiering, lösenordsåterställning, rate limiting per IP och sessioner i PostgreSQL via Spring Session.",
+          "tags": [
+            "security",
+            "iam"
+          ]
+        },
+        {
+          "en": "Built an admin console where risky actions require re-authentication and are written to an audit log.",
+          "sv": "Byggde en adminkonsol där riskfyllda åtgärder kräver ny autentisering och loggas i en granskningslogg.",
+          "tags": [
+            "security"
+          ]
+        },
+        {
+          "en": "Implemented GDPR-compliant deletion that anonymises accounts while keeping order history valid.",
+          "sv": "Byggde GDPR-anpassad radering som anonymiserar konton så att orderhistoriken förblir giltig.",
+          "tags": [
+            "security"
+          ]
+        },
+        {
+          "en": "Integrated Stripe payments with webhooks, refunds and course access tied to purchases.",
+          "sv": "Integrerade Stripe-betalningar med webhooks, återbetalningar och kursåtkomst kopplad till köp.",
+          "tags": [
+            "backend"
+          ]
+        },
+        {
+          "en": "Wrote Python scripts that check source citations, image licences and accessibility in every CI build.",
+          "sv": "Skrev Python-skript som i varje CI-bygge kontrollerar källhänvisningar, bildlicenser och tillgänglighet.",
+          "tags": [
+            "testing",
+            "devops",
+            "frontend"
+          ]
+        },
+        {
+          "en": "Tested with JUnit 5 and Testcontainers against real PostgreSQL, and Vitest and React Testing Library on the front end.",
+          "sv": "Testade med JUnit 5 och Testcontainers mot riktig PostgreSQL samt Vitest och React Testing Library.",
+          "tags": [
+            "testing"
+          ]
+        },
+        {
+          "en": "Deploys via CI/CD in GitHub Actions to a Linux server behind Cloudflare and nginx, managed by systemd with automatic database backups.",
+          "sv": "Driftsätter via CI/CD i GitHub Actions till en Linux-server bakom Cloudflare och nginx, styrd av systemd och med automatiska databasbackuper.",
+          "tags": [
+            "devops"
+          ]
+        },
+        {
+          "en": "Documented architecture decisions in ADRs and an operations runbook; about 46,000 lines of code and 1,200 commits.",
+          "sv": "Dokumenterade arkitekturbeslut i ADR:er och en driftrunbook; cirka 46 000 rader kod och 1 200 commits.",
+          "tags": [
+            "software"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "kriminalvarden",
+      "kind": "WORK",
+      "title": "Kriminalvårdare (timanställd och sommarvikariat)",
+      "titleEn": "Prison Officer (part-time and summer cover)",
+      "organisation": "Kriminalvården",
+      "location": "Stockholm",
+      "start": "2025-06",
+      "end": "2026-08",
+      "tags": [
+        "public-sector",
+        "security",
+        "communication"
+      ],
+      "facts": [
+        {
+          "en": "Worked in a security-classified government environment with high demands on confidentiality, security and judgement.",
+          "sv": "Arbetade i en säkerhetsklassad myndighetsmiljö med höga krav på sekretess, säkerhet och gott omdöme.",
+          "tags": [
+            "public-sector",
+            "security"
+          ]
+        },
+        {
+          "en": "Passed security vetting under the Swedish Protective Security Act (säkerhetsskyddslagen).",
+          "sv": "Genomgick säkerhetsprövning enligt säkerhetsskyddslagen.",
+          "tags": [
+            "security",
+            "public-sector"
+          ]
+        },
+        {
+          "en": "Met people calmly and clearly, from high-stress situations to everyday conversations.",
+          "sv": "Bemötte människor med lugn och tydlighet i allt från högstressituationer till vardagliga samtal.",
+          "tags": [
+            "communication"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "loughborough",
+      "kind": "WORK",
+      "title": "Laborationslärare och forskare",
+      "titleEn": "Lab Teacher and Researcher",
+      "organisation": "Loughborough University",
+      "location": "Loughborough, Storbritannien",
+      "start": "2018-01",
+      "end": "2021-01",
+      "tags": [
+        "research",
+        "teaching",
+        "pedagogy",
+        "sport-science",
+        "biomechanics",
+        "data-analysis",
+        "software"
+      ],
+      "facts": [
+        {
+          "en": "Developed software in Python and Matlab for biomechanical modelling, simulation and analysis of sensor and motion data with OpenSim.",
+          "sv": "Utvecklade mjukvara i Python och Matlab för biomekanisk modellering, simulering och analys av sensor- och rörelsedata med OpenSim.",
+          "tags": [
+            "research",
+            "biomechanics",
+            "data-analysis",
+            "software"
+          ]
+        },
+        {
+          "en": "Built and debugged tools and data collection workflows for lab classes with more than 100 students.",
+          "sv": "Byggde och felsökte verktyg och datainsamlingsflöden för laborationer med över 100 studenter.",
+          "tags": [
+            "teaching",
+            "software"
+          ]
+        },
+        {
+          "en": "Documented solutions and supervised colleagues in interdisciplinary teams.",
+          "sv": "Dokumenterade lösningar och handledde kollegor i tvärvetenskapliga team.",
+          "tags": [
+            "teaching",
+            "leadership"
+          ]
+        }
+      ]
+    },
+    {
+      "key": "yh",
+      "kind": "EDUCATION",
+      "title": "Yrkeshögskoleexamen, mjukvaruutveckling med Java",
+      "titleEn": "Higher Vocational Diploma (YH), Software Development with Java",
+      "organisation": "YH Akademin",
+      "location": "Sundsvall",
+      "start": null,
+      "end": null,
+      "note": "Months not confirmed; add them.",
+      "tags": [
+        "software",
+        "java",
+        "backend"
+      ],
+      "facts": [
+        {
+          "en": "Two-year full-time programme focused on Java back-end development, with internships at Braive AB and Omika Health AB.",
+          "sv": "Tvåårig heltidsutbildning med fokus på backendutveckling i Java och två LIA-perioder på Braive AB och Omika Health AB."
+        },
+        {
+          "en": "Java, object-oriented programming, data structures, algorithms, design patterns and unit testing.",
+          "sv": "Java, objektorienterad programmering, datastrukturer, algoritmer, designmönster och enhetstestning."
+        },
+        {
+          "en": "Spring Boot, REST APIs, microservice architecture, Hibernate/JPA, relational databases and SQL.",
+          "sv": "Spring Boot, REST API, mikrotjänstarkitektur, Hibernate/JPA, relationsdatabaser och SQL."
+        },
+        {
+          "en": "System architecture, integrations and secure development, plus Docker, CI/CD and Git in agile team projects.",
+          "sv": "Systemarkitektur, integrationer och säker utveckling samt Docker, CI/CD och Git i agila teamprojekt."
+        }
+      ],
+      "years": "2024-2026"
+    },
+    {
+      "key": "gih",
+      "kind": "EDUCATION",
+      "title": "Masterexamen i idrottsvetenskap",
+      "titleEn": "MSc in Sport Science",
+      "organisation": "Gymnastik- och idrottshögskolan (GIH)",
+      "location": "Stockholm",
+      "start": null,
+      "end": null,
+      "note": "Dates missing; add them.",
+      "tags": [
+        "sport-science",
+        "biomechanics",
+        "research",
+        "data-analysis",
+        "teaching"
+      ],
+      "facts": [
+        {
+          "en": "Biomechanics and motion analysis with signal processing, statistical analysis and modelling in Matlab.",
+          "sv": "Biomekanik och rörelseanalys med signalbehandling, statistisk analys och modellering i Matlab."
+        }
+      ]
+    },
+    {
+      "key": "lund",
+      "kind": "EDUCATION",
+      "title": "Forskningsprojekt i neurovetenskap",
+      "titleEn": "Research project in neuroscience",
+      "organisation": "Lunds universitet",
+      "location": "Lund",
+      "start": null,
+      "end": null,
+      "note": "Dates missing; add them.",
+      "tags": [
+        "research",
+        "data-analysis"
+      ],
+      "facts": [
+        {
+          "en": "Focus on motor control, with quantitative data analysis, experimental design and scientific writing.",
+          "sv": "Fokus på motorisk kontroll, med kvantitativ dataanalys, experimentdesign och vetenskapligt skrivande."
+        }
+      ]
+    },
+    {
+      "key": "bangor",
+      "kind": "EDUCATION",
+      "title": "Kandidatexamen i idrottsvetenskap",
+      "titleEn": "BSc in Sport Science",
+      "organisation": "Bangor University",
+      "location": "Bangor, Storbritannien",
+      "start": null,
+      "end": null,
+      "note": "Dates missing; add them.",
+      "tags": [
+        "sport-science",
+        "research"
+      ],
+      "facts": [
+        {
+          "en": "Broad grounding in research methods, statistics and critical thinking.",
+          "sv": "Bred grund i forskningsmetodik, statistik och kritiskt tänkande."
+        }
+      ]
+    },
+    {
+      "key": "advance-he",
+      "kind": "CERTIFICATION",
+      "title": "Associate Fellow of Advance HE",
+      "organisation": "Advance HE (via Loughborough University)",
+      "tags": [
+        "teaching",
+        "pedagogy"
+      ],
+      "facts": [
+        {
+          "en": "Internationally recognised teaching qualification in higher education.",
+          "sv": "Internationellt erkänd pedagogisk meritering."
+        }
+      ]
+    },
+    {
+      "key": "hackathon",
+      "kind": "AWARD",
+      "title": "3rd place, Innovation Pioneers Hackathon 2025",
+      "tags": [
+        "software",
+        "leadership"
+      ],
+      "facts": [
+        {
+          "en": "Built a prototype of an AI-driven collaboration app in 48 hours, judged by a panel of innovation experts.",
+          "sv": "Byggde på 48 timmar en prototyp av en AI-driven samarbetsapp, bedömd av en jury med innovationsexperter."
+        }
+      ]
+    },
+    {
+      "key": "jfokus",
+      "kind": "CONFERENCE",
+      "title": "Jfokus 2026",
+      "tags": [
+        "software",
+        "java",
+        "security"
+      ],
+      "facts": [
+        {
+          "en": "Attended one of Europe's leading developer conferences, focusing on microservice architecture, tooling and security in the Java ecosystem.",
+          "sv": "Deltog i en av Europas ledande utvecklarkonferenser med fokus på mikrotjänstarkitekturer, verktyg och säkerhetstrender i Java-ekosystemet."
+        }
+      ]
+    },
+    {
+      "key": "portfolio",
+      "kind": "PROJECT",
+      "title": "Portfolio with the AI parrot Polly",
+      "organisation": "www.caibirch.com",
+      "tags": [
+        "software",
+        "frontend"
+      ],
+      "facts": [
+        {
+          "en": "Interactive Three.js website where visitors can talk code with Polly, a lightweight AI assistant running on a local LLM.",
+          "sv": "Interaktiv webbplats i Three.js där besökare kan prata kod med Polly, en lättviktig AI-assistent som drivs av en lokal LLM."
+        }
+      ]
+    },
+    {
+      "key": "schoolproject-api",
+      "kind": "PROJECT",
+      "title": "SchoolProject_API",
+      "organisation": "github.com/CadfanCode",
+      "tags": [
+        "software",
+        "java",
+        "backend"
+      ],
+      "facts": [
+        {
+          "en": "REST API built with Spring Boot and Spring Data JPA, focused on clean architecture, entity modelling and data management.",
+          "sv": "REST API byggt med Spring Boot och Spring Data JPA, med fokus på ren arkitektur, entitetsmodellering och databashantering."
+        }
+      ]
+    },
+    {
+      "key": "personal",
+      "kind": "OTHER",
+      "title": "Personal",
+      "tags": [
+        "maritime",
+        "communication"
+      ],
+      "facts": [
+        {
+          "en": "Spends most free time out on the water, which is why his biggest side project is about boats.",
+          "sv": "Är oftast ute på sjön när han inte kodar, vilket förklarar varför hans största sidoprojekt handlar om båtar."
+        }
+      ]
+    }
+  ],
+  "skills": [
+    {
+      "name": "Java",
+      "category": "language"
+    },
+    {
+      "name": "Kotlin",
+      "category": "language"
+    },
+    {
+      "name": "TypeScript",
+      "category": "language"
+    },
+    {
+      "name": "JavaScript",
+      "category": "language"
+    },
+    {
+      "name": "SQL",
+      "category": "language"
+    },
+    {
+      "name": "Python",
+      "category": "language"
+    },
+    {
+      "name": "C#",
+      "category": "language"
+    },
+    {
+      "name": "Matlab",
+      "category": "language"
+    },
+    {
+      "name": "Spring Boot",
+      "category": "backend"
+    },
+    {
+      "name": "Spring Data JPA/JDBC",
+      "category": "backend"
+    },
+    {
+      "name": "Hibernate",
+      "category": "backend"
+    },
+    {
+      "name": "REST API",
+      "category": "backend"
+    },
+    {
+      "name": "Microservices",
+      "category": "backend"
+    },
+    {
+      "name": "PostgreSQL",
+      "category": "database"
+    },
+    {
+      "name": "Flyway",
+      "category": "database"
+    },
+    {
+      "name": "OAuth 2.0 / OIDC (Keycloak, Auth0)",
+      "category": "security"
+    },
+    {
+      "name": "TOTP 2FA",
+      "category": "security"
+    },
+    {
+      "name": "Argon2",
+      "category": "security"
+    },
+    {
+      "name": "Spring Session",
+      "category": "security"
+    },
+    {
+      "name": "TLS",
+      "category": "security"
+    },
+    {
+      "name": "Docker",
+      "category": "devops"
+    },
+    {
+      "name": "Kubernetes",
+      "category": "devops"
+    },
+    {
+      "name": "Linux",
+      "category": "devops"
+    },
+    {
+      "name": "nginx",
+      "category": "devops"
+    },
+    {
+      "name": "systemd",
+      "category": "devops"
+    },
+    {
+      "name": "Cloudflare",
+      "category": "devops"
+    },
+    {
+      "name": "GitHub Actions",
+      "category": "devops"
+    },
+    {
+      "name": "JUnit 5",
+      "category": "testing"
+    },
+    {
+      "name": "Mockito",
+      "category": "testing"
+    },
+    {
+      "name": "Testcontainers",
+      "category": "testing"
+    },
+    {
+      "name": "Vitest",
+      "category": "testing"
+    },
+    {
+      "name": "React Testing Library",
+      "category": "testing"
+    },
+    {
+      "name": "pytest",
+      "category": "testing"
+    },
+    {
+      "name": "React",
+      "category": "frontend"
+    },
+    {
+      "name": "React Native",
+      "category": "frontend"
+    },
+    {
+      "name": "Vue.js",
+      "category": "frontend"
+    },
+    {
+      "name": "Vite",
+      "category": "frontend"
+    },
+    {
+      "name": "Tailwind CSS",
+      "category": "frontend"
+    },
+    {
+      "name": "WebRTC",
+      "category": "frontend"
+    },
+    {
+      "name": "OpenSim",
+      "category": "research"
+    },
+    {
+      "name": "Agile/Scrum",
+      "category": "method"
+    },
+    {
+      "name": "Code review",
+      "category": "method"
+    },
+    {
+      "name": "ADRs",
+      "category": "method"
+    },
+    {
+      "name": "Design patterns",
+      "category": "method"
+    }
+  ],
+  "knownGaps": [
+    "No professional Angular experience",
+    "No Figma experience at work",
+    "Has not built or maintained a design system",
+    "No professional C or C++",
+    "No J2EE, MongoDB or Cosmos DB",
+    "No Google Cloud, Maven or Jenkins in production"
+  ],
+  "answersMemory": [
+    {
+      "question": "Rätt att arbeta i Sverige",
+      "answer": "Jag är svensk/nordisk/EU/EES- eller schweizisk medborgare"
+    },
+    {
+      "question": "Erfarenhet av Angular, TypeScript och React från arbete eller praktik",
+      "answer": "Ja, React och TypeScript (Omika Health, Skepparklar); Angular ännu inte"
+    },
+    {
+      "question": "Erfarenhet av Figma",
+      "answer": "Nej, men mycket angelägen att lära mig"
+    },
+    {
+      "question": "Tidigare anställd på Saab",
+      "answer": "Nej"
+    },
+    {
+      "question": "Talar och skriver svenska och engelska obehindrat",
+      "answer": "Ja"
+    }
+  ]
+}
