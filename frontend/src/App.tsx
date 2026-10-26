@@ -3,13 +3,16 @@ import { Layout } from './components/Layout'
 import { CvDatabase } from './pages/CvDatabase'
 import { Dashboard } from './pages/Dashboard'
 import { Placeholder } from './pages/Placeholder'
+import { RunPage } from './pages/RunPage'
+import { RunsPage } from './pages/RunsPage'
 
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Dashboard />} />
-        <Route path="runs" element={<Placeholder title="Runs" milestone={3} description="Run view and results table." />} />
+        <Route path="runs" element={<RunsPage />} />
+        <Route path="runs/:id" element={<RunPage />} />
         <Route path="documents" element={<Placeholder title="Documents" milestone={4} description="Tailored CV and letter editor." />} />
         <Route path="apply" element={<Placeholder title="Apply monitor" milestone={5} description="One card per open application tab." />} />
         <Route path="cv" element={<CvDatabase />} />

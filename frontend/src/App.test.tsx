@@ -14,7 +14,7 @@ function mockApi(health: unknown) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      const body = url.includes('/health') ? health : usage
+      const body = url.includes('/health') ? health : url.includes('/usage') ? usage : []
       return new Response(JSON.stringify(body), { status: 200 })
     }),
   )
