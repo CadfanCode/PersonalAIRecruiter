@@ -1,15 +1,20 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { type SearchProfile, useCancelRun, useContinueRun, useEditProfile, useRun, useRunJobs } from '../api/runs'
+import { type SearchProfile, useCancelRun, useContinueRun, useEditProfile, useRoles, useRun, useRunJobs, useSaveRoles } from '../api/runs'
 import { Button } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
 import { ResultsTable } from '../components/runs/ResultsTable'
 import { ProfileSection } from '../components/runs/ProfileSection'
+import { RoleSuggestions } from '../components/runs/RoleSuggestions'
 import { StepTracker } from '../components/runs/StepTracker'
 import { useToast } from '../components/Toasts'
 
 const WORKING = ['QUEUED', 'RUNNING']
+
+/** Discover finds broad results: ads scoring below this are hidden until the user widens the filter. Aggressive mode lowers the bar. */
+const DISCOVER_MIN_SCORE = 40
+const DISCOVER_AGGRESSIVE_MIN_SCORE = 25
 
 export function RunPage() {
   const runId = Number(useParams().id)
@@ -26,6 +31,10 @@ export function RunPage() {
   const proceed = useContinueRun(runId)
   const cancel = useCancelRun(runId)
   const toast = useToast()
+  const discover = view.data?.run.options.mode === 'DISCOVER'
+  const rolesReady = discover && (status === 'WAITING_FOR_USER' || status === 'DONE' || view.data?.run.step === 'SEARCH' || view.data?.run.step === 'RANK')
+  const roles = useRoles(runId, rolesReady)
+  const saveRoles = useSaveRoles(runId)
 
   if (view.isError) {
     return (
@@ -69,11 +78,23 @@ export function RunPage() {
         )}
       </div>
 
+      {discover && roles.data && roles.data.length > 0 && (
+        <div className="mb-6 max-w-4xl">
+          <RoleSuggestions key={`${runId}-${waiting}`} roles={roles.data} options={run.options} waiting={waiting}
+            saving={saveRoles.isPending || proceed.isPending}
+            error={saveRoles.isError ? saveRoles.error.message : proceed.isError ? proceed.error.message : null}
+            onSearch={(edits) => saveRoles.mutate(edits, { onSuccess: () => proceed.mutate() })} />
+        </div>
+      )}
+
       {profile && (
         <div className="mb-6 max-w-4xl">
           {waiting ? (
-            <ProfileSection profile={profile} waiting saving={edit.isPending} error={edit.isError ? edit.error.message : null}
-              onSave={save} onContinue={() => proceed.mutate()} continuing={proceed.isPending} />
+            <>
+              {discover && <p className="mb-2 text-sm text-[var(--muted)]">Where and when to search (optional): the roles above use these locations and this age limit.</p>}
+              <ProfileSection profile={profile} waiting saving={edit.isPending} error={edit.isError ? edit.error.message : null}
+                onSave={save} onContinue={() => proceed.mutate()} continuing={proceed.isPending} showContinue={!discover} />
+            </>
           ) : (
             // After the review the profile is reference material; the results come first.
             <details>
@@ -84,7 +105,8 @@ export function RunPage() {
         </div>
       )}
 
-      {jobs.data && jobs.data.length > 0 && <ResultsTable runId={runId} jobs={jobs.data} />}
+      {jobs.data && jobs.data.length > 0 && <ResultsTable runId={runId} jobs={jobs.data}
+        defaultMinScore={discover ? (run.options.aggressive ? DISCOVER_AGGRESSIVE_MIN_SCORE : DISCOVER_MIN_SCORE) : undefined} />}
       {run.status === 'DONE' && jobs.data?.length === 0 && !jobs.isFetching && (
         <Panel>
           <p className="text-sm text-[var(--muted)]">No ads matched. Widen the municipalities or the age limit and start a new run.</p>

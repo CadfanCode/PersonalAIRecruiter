@@ -11,6 +11,7 @@ export function ProfileSection({
   onSave,
   onContinue,
   continuing,
+  showContinue = true,
 }: {
   profile: SearchProfile
   waiting: boolean
@@ -19,12 +20,14 @@ export function ProfileSection({
   onSave: (p: SearchProfile) => void
   onContinue: () => void
   continuing: boolean
+  /** A Discover run continues from the role picker instead. */
+  showContinue?: boolean
 }) {
   return (
     <>
       <SearchProfileCard key={JSON.stringify(profile)} profile={profile} editable={waiting} saving={saving} onSave={onSave} />
       {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
-      {waiting && (
+      {waiting && showContinue && (
         <div className="mt-4 flex items-center gap-3">
           <Button onClick={onContinue} disabled={continuing}>Continue to search</Button>
           <span className="text-sm text-[var(--muted)]">Check the titles, municipalities and queries first: they decide what is found.</span>

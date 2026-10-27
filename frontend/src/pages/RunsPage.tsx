@@ -18,7 +18,11 @@ export function RunsPage() {
               className="block rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 hover:border-[var(--accent)]">
               <span className="font-medium">Run {r.id}</span>
               <span className="ml-3 text-sm text-[var(--muted)]">{r.status.replace('_', ' ').toLowerCase()}</span>
-              <span className="block text-sm">{r.prompt ?? '(profile not built yet)'}</span>
+              <span className="block text-sm">
+                {r.options.mode === 'DISCOVER' && <span className="mr-2 rounded-full bg-navy/10 px-2 py-0.5 text-xs font-medium">Discover roles</span>}
+                {r.options.mode === 'MANUAL' && <span className="mr-2 rounded-full bg-navy/10 px-2 py-0.5 text-xs font-medium">Pasted link</span>}
+                {r.prompt ?? '(profile not built yet)'}
+              </span>
               <span className="block text-xs text-[var(--muted)]">{new Date(r.startedAt).toLocaleString('sv-SE')} · {r.message}</span>
             </Link>
           </li>

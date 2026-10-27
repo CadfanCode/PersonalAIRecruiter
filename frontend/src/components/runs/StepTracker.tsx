@@ -7,12 +7,15 @@ const STEPS = [
   { key: 'DONE', label: 'Done' },
 ] as const
 
+const DISCOVER_STEPS = [STEPS[0], { key: 'SUGGEST', label: 'Roles' }, ...STEPS.slice(1)] as const
+
 export function StepTracker({ run }: { run: Run }) {
-  const current = STEPS.findIndex((s) => s.key === run.step)
+  const steps: readonly { key: string; label: string }[] = run.options.mode === 'DISCOVER' ? DISCOVER_STEPS : STEPS
+  const current = steps.findIndex((s) => s.key === run.step)
   const failed = run.status === 'FAILED' || run.status === 'CANCELLED'
   return (
     <ol aria-label="Run steps" className="flex items-center gap-2">
-      {STEPS.map((s, i) => {
+      {steps.map((s, i) => {
         const done = i < current || run.status === 'DONE'
         const active = i === current && !done
         const style = done
@@ -25,7 +28,7 @@ export function StepTracker({ run }: { run: Run }) {
         return (
           <li key={s.key} aria-current={active ? 'step' : undefined} className="flex items-center gap-2">
             <span className={`rounded-full px-3 py-1 text-sm font-medium ${style}`}>{s.label}</span>
-            {i < STEPS.length - 1 && <span className="h-px w-6 bg-[var(--line)]" />}
+            {i < steps.length - 1 && <span className="h-px w-6 bg-[var(--line)]" />}
           </li>
         )
       })}

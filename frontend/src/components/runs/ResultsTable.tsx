@@ -81,14 +81,18 @@ export function ResultsTable({
   jobs,
   topN = 10,
   now = new Date(),
+  defaultMinScore,
 }: {
   runId: number
   jobs: JobRow[]
   topN?: number
   now?: Date
+  /** Discover runs start with a minimum score filter, so the broad search does not bury the good ads. */
+  defaultMinScore?: number
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'rank', desc: false }])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() =>
+    defaultMinScore ? [{ id: 'score', value: defaultMinScore }] : [])
   const [globalFilter, setGlobalFilter] = useState('')
   const [rowSelection, setRowSelection] = useState<RowSelectionState>(() => loadSelection(runId, jobs))
   const [showAll, setShowAll] = useState(false)
@@ -100,6 +104,8 @@ export function ResultsTable({
   const navigate = useNavigate()
   const createDocuments = useCreateDocuments()
 
+  const hasRoles = jobs.some((j) => j.roleType)
+  const roleTypes = useMemo(() => [...new Set(jobs.flatMap((j) => (j.roleType ? [j.roleType] : [])))].sort(), [jobs])
   const filtering = globalFilter !== '' || columnFilters.length > 0
   // The default view is the top N by score; any filter or "show all" widens it (SPEC 7.4).
   const data = useMemo(() => (showAll || filtering ? jobs : jobs.slice(0, topN)), [jobs, showAll, filtering, topN])
@@ -135,6 +141,21 @@ export function ResultsTable({
           </span>
         ),
       },
+      ...(hasRoles
+        ? [{
+            id: 'role', header: 'Role type', accessorFn: (r: JobRow) => r.roleType ?? '', filterFn: 'equalsString' as const,
+            cell: ({ row }: { row: { original: JobRow } }) => {
+              const all = row.original.roleTypes ?? []
+              const others = all.filter((t) => t !== row.original.roleType)
+              return (
+                <span>
+                  {row.original.roleType}
+                  {others.length > 0 && <span className="block text-xs text-[var(--muted)]" title={all.join(', ')}>also found for {others.join(', ')}</span>}
+                </span>
+              )
+            },
+          } satisfies ColumnDef<JobRow>]
+        : []),
       { id: 'location', header: 'Location', accessorFn: (r) => r.municipality ?? r.location ?? '' },
       { id: 'published', header: 'Published', accessorFn: (r) => r.publishedAt ?? '', cell: ({ row }) => shortDate(row.original.publishedAt) },
       {
@@ -170,7 +191,7 @@ export function ResultsTable({
       { id: 'status', header: 'Status', accessorKey: 'status', filterFn: 'equalsString',
         cell: ({ row }) => <StatusChip status={row.original.status} /> },
     ],
-    [now],
+    [now, hasRoles],
   )
 
   const table = useReactTable({
@@ -270,6 +291,14 @@ export function ResultsTable({
           <option value="sv">Swedish</option>
           <option value="en">English</option>
         </select>
+        {hasRoles && (
+          <select aria-label="Filter by role type" value={(filterValue('role') as string) ?? ''}
+            onChange={(e) => setFilter('role', e.target.value)}
+            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+            <option value="">All role types</option>
+            {roleTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
         <label className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
           Min score
           <input aria-label="Minimum score" type="number" min={0} max={100} value={(filterValue('score') as number) ?? ''}

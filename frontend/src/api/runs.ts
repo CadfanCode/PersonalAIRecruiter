@@ -24,18 +24,27 @@ export interface SearchProfile {
   jobtechQueries: string[]
 }
 
+export type RunMode = 'TARGETED' | 'DISCOVER' | 'MANUAL'
+
 export interface RunOptions {
   maxAgeDays: number | null
   limit: number | null
   includeWeb: boolean | null
   autoContinue: boolean | null
+  mode?: RunMode | null
+  aggressive?: boolean | null
 }
+
+/** Ads a Discover run scores when the user sets no limit, and the most it will ever score. */
+export const DISCOVER_LIMIT = 60
+export const DISCOVER_AGGRESSIVE_LIMIT = 150
+export const DISCOVER_MAX_LIMIT = 150
 
 export interface Run {
   id: number
   searchProfileId: number | null
   status: RunStatus
-  step: 'PROFILE' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER' | 'OPEN' | 'CHECK' | 'SAVE'
+  step: 'PROFILE' | 'SUGGEST' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER' | 'OPEN' | 'CHECK' | 'SAVE'
   progress: number
   message: string | null
   startedAt: string
@@ -84,6 +93,30 @@ export interface JobRow {
   dateUnverified: boolean
   evidenceUrl: string | null
   score: Score | null
+  /** Discover runs: the role the ad was scored against, and every role that found it. */
+  roleType?: string | null
+  roleTypes?: string[]
+}
+
+export type RoleCategory = 'RELATED' | 'HYBRID' | 'OUTSIDE_TECH' | 'CUSTOM'
+
+export interface RoleView {
+  id: number
+  title: string
+  category: RoleCategory
+  matchScore: number | null
+  reasoning: string | null
+  gaps: string | null
+  selected: boolean
+  userAdded: boolean
+  searched: boolean
+  jobCount: number
+}
+
+export interface RoleEdit {
+  id?: number
+  title: string
+  selected: boolean
 }
 
 export interface JobDetail {
@@ -130,7 +163,7 @@ export const useJobDetail = (jobId: number | null, runId: number) =>
 export function useStartRun() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (body: { prompt: string; maxAgeDays?: number; limit?: number; includeWeb?: boolean; autoContinue?: boolean }) =>
+    mutationFn: (body: { prompt: string; maxAgeDays?: number; limit?: number; includeWeb?: boolean; autoContinue?: boolean; mode?: RunMode; aggressive?: boolean }) =>
       api<{ id: number }>('/api/runs', { method: 'POST', body }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['runs'] }),
   })
@@ -139,6 +172,18 @@ export function useStartRun() {
 function useRunAction<V>(fn: (v: V) => Promise<unknown>, runId: number) {
   const client = useQueryClient()
   return useMutation({ mutationFn: fn, onSuccess: () => client.invalidateQueries({ queryKey: ['runs', runId] }) })
+}
+
+/** The role types suggested for a Discover run; kept with the run so they can be revisited. */
+export const useRoles = (runId: number, enabled: boolean) =>
+  useQuery({ queryKey: ['runs', runId, 'roles'], queryFn: () => api<RoleView[]>(`/api/runs/${runId}/roles`), enabled })
+
+export const useSaveRoles = (runId: number) => {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (roles: RoleEdit[]) => api<RoleView[]>(`/api/runs/${runId}/roles`, { method: 'PUT', body: roles }),
+    onSuccess: (roles) => client.setQueryData(['runs', runId, 'roles'], roles),
+  })
 }
 
 export const useEditProfile = (runId: number) =>
