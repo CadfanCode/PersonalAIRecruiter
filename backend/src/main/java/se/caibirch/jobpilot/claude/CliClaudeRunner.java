@@ -82,7 +82,7 @@ public class CliClaudeRunner implements ClaudeRunner {
             throw new ClaudeCallException("Interrupted while waiting for a Claude slot");
         }
         try {
-            List<String> command = new ArrayList<>(List.of(config.path(), "-p", "ok", "--output-format", "stream-json", "--verbose",
+            List<String> command = new ArrayList<>(List.of(config.executable(), "-p", "ok", "--output-format", "stream-json", "--verbose",
                     "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "project",
                     "--tools", ""));
             if (config.model() != null && !config.model().isBlank()) {
@@ -227,7 +227,7 @@ public class CliClaudeRunner implements ClaudeRunner {
 
     List<String> buildCommand(ClaudeTask<?> task, boolean viaStdin) {
         List<String> command = new ArrayList<>();
-        command.add(config.path());
+        command.add(config.executable());
         command.add("-p");
         if (viaStdin) {
             command.add("--input-format");

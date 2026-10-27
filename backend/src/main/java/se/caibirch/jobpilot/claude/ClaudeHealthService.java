@@ -45,7 +45,7 @@ public class ClaudeHealthService {
     }
 
     String version() {
-        ProcessBuilder pb = new ProcessBuilder(config.path(), "--version");
+        ProcessBuilder pb = new ProcessBuilder(config.executable(), "--version");
         pb.redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
         pb.redirectErrorStream(true);
         try {

@@ -15,6 +15,26 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
                                  JobTech jobtech, Browser browser, Aktivitet aktivitet) {
 
     public record Claude(String path, String model, int timeoutSeconds, int webTimeoutSeconds, int concurrency) {
+
+        /**
+         * The executable to run. A bare name such as "claude" is looked up on PATH and in the usual per-user install
+         * directories, because a desktop launcher starts the app with a PATH that lacks ~/.local/bin.
+         */
+        public String executable() {
+            if (path == null || path.contains("/")) {
+                return path;
+            }
+            List<String> dirs = new java.util.ArrayList<>(List.of(System.getenv().getOrDefault("PATH", "").split(":")));
+            String home = System.getProperty("user.home");
+            dirs.addAll(List.of(home + "/.local/bin", home + "/.claude/local", home + "/.npm-global/bin", home + "/.bun/bin",
+                    "/usr/local/bin", "/opt/homebrew/bin"));
+            for (String dir : dirs) {
+                if (!dir.isBlank() && java.nio.file.Files.isExecutable(Path.of(dir, path))) {
+                    return Path.of(dir, path).toString();
+                }
+            }
+            return path;
+        }
     }
 
     public record Search(int defaultMaxAgeDays, int defaultLimit, int resultsTopN, String defaultYrkesroll) {

@@ -443,6 +443,25 @@ class ApplyIT {
     }
 
     @Test
+    void focusAndCloseOnATabTheUserClosedByHandGiveAMessageNotAnInternalServerError() throws Exception {
+        long id = job("Ponty ad", url("ponty.html"), null);
+        open(id);
+        awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
+        browser.withTab(id, p -> {
+            p.close();
+            return null;
+        });
+
+        JsonNode focus = call(post("/api/apply/" + id + "/focus"), null, 409);
+        assertThat(focus.get("error").asText()).contains("closed");
+        assertThat(awaitStatus(id, "CLOSED").get("status").asText()).isEqualTo("CLOSED");
+
+        call(post("/api/apply/" + id + "/close"), null, 204);
+        call(post("/api/apply/" + id + "/close"), null, 204); // closing twice is harmless
+        call(post("/api/apply/999999/focus"), null, 404);
+    }
+
+    @Test
     void aFailingModelCallShowsTheErrorOnTheCard() throws Exception {
         claude.respond("mapFormFields", t -> {
             throw new ClaudeCallException("Claude CLI exited with code 1");

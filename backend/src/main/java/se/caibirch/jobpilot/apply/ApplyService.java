@@ -164,14 +164,31 @@ public class ApplyService {
     }
 
     public void showTab(long jobId) {
-        state(jobId);
-        browser.bringToFront(jobId);
+        TabState state = state(jobId);
+        try {
+            browser.bringToFront(jobId);
+        } catch (BrowserService.TabClosedException e) {
+            markClosed(state);
+            throw e;
+        }
     }
 
+    /** Idempotent: closing a tab that is already gone, or whose browser died, still ends in CLOSED. */
     public void close(long jobId) {
         TabState state = state(jobId);
-        browser.closeTab(jobId);
-        state.set(Status.CLOSED, "The tab was closed");
+        try {
+            browser.closeTab(jobId);
+        } catch (RuntimeException e) {
+            log.info("Closing the tab of job {}: {}", jobId, e.toString());
+        }
+        state.set(Status.CLOSED, "The tab was closed. Use Restart and refill to open it again.");
+    }
+
+    private static void markClosed(TabState state) {
+        Status now = state.status();
+        if (now != Status.EMAIL_ONLY && now != Status.NO_APPLY_LINK) {
+            state.set(Status.CLOSED, "The tab was closed. Use Restart and refill to open it again.");
+        }
     }
 
     // ---- the fill flow (runs on the pipeline executor; page access goes through BrowserService) ----
@@ -352,6 +369,7 @@ public class ApplyService {
     /** Read-only poll every 3 s (SPEC 9.2 step 2): when the wall is gone, fill the page. */
     @Scheduled(fixedDelayString = "${jobpilot.browser.poll-millis:3000}")
     void pollWaitingTabs() {
+        reconcileClosedTabs();
         for (TabState state : tabs.values()) {
             if (state.status() != Status.WAITING_FOR_SIGN_IN || state.busy.get()) {
                 continue;
@@ -366,6 +384,27 @@ public class ApplyService {
                 state.set(Status.CLOSED, "The tab was closed");
             } catch (RuntimeException e) {
                 log.debug("Polling job {}: {}", state.jobId(), e.toString());
+            }
+        }
+    }
+
+    /** A tab the user closed by hand must not keep offering Focus and Close: mark it CLOSED. */
+    private void reconcileClosedTabs() {
+        if (browser.openTabCount().isEmpty()) {
+            return; // the browser never started, so there is nothing to compare with
+        }
+        for (TabState state : tabs.values()) {
+            Status s = state.status();
+            boolean hasPage = s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.OPENING;
+            if (!hasPage || state.busy.get()) {
+                continue;
+            }
+            try {
+                if (!browser.hasTab(state.jobId())) {
+                    markClosed(state);
+                }
+            } catch (RuntimeException e) {
+                log.debug("Checking the tab of job {}: {}", state.jobId(), e.toString());
             }
         }
     }
