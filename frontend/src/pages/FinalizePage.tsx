@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   type Application,
+  isGenerating,
   MODE_LABEL,
   useApplications,
   useMarkSubmitted,
@@ -79,8 +80,12 @@ export function FinalizePage() {
   const groups = ids.map((id) => groupOf(appById.get(id), tabs.get(id)))
   const counts = new Map<Group, number>()
   groups.forEach((g) => counts.set(g, (counts.get(g) ?? 0) + 1))
-  // "Fill all" starts what has no open tab yet; a card already filling, waiting or finished is left alone.
-  const startable = ids.filter((id, i) => groups[i] === 'notstarted' && appById.get(id)?.generation?.status !== 'RUNNING')
+  // "Fill all" starts what has no open tab yet and has documents to attach; a card already filling, waiting, finished or
+  // still writing its documents is left alone.
+  const startable = ids.filter((id, i) => {
+    const app = appById.get(id)
+    return groups[i] === 'notstarted' && (!app || ((app.cv || app.letter) && !isGenerating(app)))
+  })
 
   return (
     <>
@@ -142,6 +147,8 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
   const answered = questions.filter((q) => (text[q.fieldId] ?? '').trim() !== '')
   const isSubmitted = !!app?.submittedAt
   const unapproved = app && (app.cv || app.letter) && (!app.cv?.approved || !app.letter?.approved)
+  const hasDocs = !app || !!(app.cv || app.letter)
+  const used = app?.submittedDocs
 
   const saveAndFill = () =>
     answers.mutate(
@@ -171,7 +178,13 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
         </p>
       )}
 
-      {app && (
+      {app && isSubmitted && (
+        <p className="mb-2 text-sm text-[var(--muted)]">
+          Documents used: {used?.cv ? `CV v${used.cv.version}${used.cv.file ? ` (${used.cv.file})` : ''}` : 'no CV'}
+          {', '}{used?.letter ? `cover letter v${used.letter.version}${used.letter.file ? ` (${used.letter.file})` : ''}` : 'no cover letter'}
+        </p>
+      )}
+      {app && !isSubmitted && (
         <div className="mb-3 flex flex-wrap items-center gap-2 text-sm">
           {app.cv ? (
             <Link className="rounded-md border border-[var(--line)] px-2 py-1 hover:border-[var(--accent)]" to={`/documents/job/${jobId}`}>
@@ -187,8 +200,12 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
           ) : (
             <span className="text-[var(--muted)]">No cover letter yet</span>
           )}
-          {!app.cv && !app.letter && app.generation?.status === 'FAILED' && (
-            <span className="text-red-600">Generation failed: {app.generation.message}</span>
+          {isGenerating(app) && app.generation && <span className="text-[var(--muted)]">Writing documents: {app.generation.message} ({app.generation.progress}%)</span>}
+          {!isGenerating(app) && !app.cv && !app.letter && app.generation?.status === 'FAILED' && (
+            <span className="text-red-600">Generation failed: {app.generation.message}. <Link className="underline" to="/documents">Try again in Documents</Link></span>
+          )}
+          {!isGenerating(app) && !app.cv && !app.letter && !app.generation && (
+            <Link className="underline" to="/documents">Create the documents first</Link>
           )}
         </div>
       )}
@@ -233,7 +250,8 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {!tab && !isSubmitted && (
-          <Button onClick={() => openOne.mutate([jobId])} disabled={openOne.isPending}>Open and fill</Button>
+          <Button onClick={() => openOne.mutate([jobId])} disabled={openOne.isPending || !hasDocs || (!!app && isGenerating(app))}
+            title={hasDocs ? undefined : 'Create the documents first: there is nothing to attach yet'}>Open and fill</Button>
         )}
         {hasTab && (
           <Button variant="ghost" onClick={() => fill.mutate({ jobId })} disabled={working || fill.isPending}>

@@ -157,7 +157,8 @@ describe('finalize applications', () => {
     expect(within(first).getByText(/Only approved documents are uploaded/)).toBeInTheDocument()
     const second = screen.getByRole('region', { name: 'Application: Teacher' })
     expect(within(second).getByText('Discover roles · Lärare')).toBeInTheDocument()
-    expect(within(second).getByText('Generation failed: the model failed')).toBeInTheDocument()
+    expect(within(second).getByText(/Generation failed: the model failed/)).toBeInTheDocument()
+    expect(within(second).getByRole('link', { name: 'Try again in Documents' })).toHaveAttribute('href', '/documents')
     expect(screen.getByRole('status')).toHaveTextContent('1 ready · 1 failed')
   })
 
@@ -235,5 +236,39 @@ describe('finalize applications', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Focus tab' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('That browser tab is closed. Use Restart and refill')
+  })
+
+  it('does not fill applications that have no documents yet, and says what is happening to them', async () => {
+    const calls = mockApi({
+      'GET /api/applications': [
+        app({ jobId: 1 }),
+        app({ jobId: 2, title: 'Writing', cv: null, letter: null, generation: { runId: 5, status: 'RUNNING', step: 'CV', progress: 40, message: 'Writing the CV' } }),
+        app({ jobId: 3, title: 'Nothing yet', cv: null, letter: null, generation: null }),
+      ],
+      'GET /api/apply/status': [],
+      'POST /api/apply/batch': [],
+    })
+    renderPage()
+
+    const writing = await screen.findByRole('region', { name: 'Application: Writing' })
+    expect(within(writing).getByText(/Writing documents: Writing the CV \(40%\)/)).toBeInTheDocument()
+    expect(within(writing).getByRole('button', { name: 'Open and fill' })).toBeDisabled()
+    const empty = screen.getByRole('region', { name: 'Application: Nothing yet' })
+    expect(within(empty).getByRole('link', { name: 'Create the documents first' })).toBeInTheDocument()
+    expect(within(empty).getByRole('button', { name: 'Open and fill' })).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Fill all (1)' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/apply/batch')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/apply/batch')!.body).toEqual({ jobIds: [1] })
+  })
+
+  it('shows the documents that were used when an application was submitted', async () => {
+    mockApi({
+      'GET /api/applications': [app({ submittedAt: '2026-10-27T12:00:00Z', jobStatus: 'APPLIED', cv: null, letter: null,
+        submittedDocs: { cv: { file: 'CV_Cai_Birch_Ravion.pdf', version: 2 }, letter: { file: 'Brev_Ravion.pdf', version: 1 } } })],
+      'GET /api/apply/status': [],
+    })
+    renderPage()
+
+    expect(await screen.findByText('Documents used: CV v2 (CV_Cai_Birch_Ravion.pdf), cover letter v1 (Brev_Ravion.pdf)')).toBeInTheDocument()
   })
 })
