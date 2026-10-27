@@ -519,6 +519,31 @@ Per job (verified by hand on 26 Oct 2026):
    "Din aktivitet är sparad" and the employer name. Record the result in `aktivitet_log`.
 10. The form resets after saving; repeat for the next job.
 
+Milestone 6 decisions (see ADR 0006):
+- No model is used. The form is fixed, so the seven fields are located by label or legend and mapped in Java.
+  If a field is missing or ambiguous the form "looks different" and nothing is saved.
+- Plan, then confirm: the UI shows all seven values per job (editable) and the server writes exactly what was
+  confirmed. Only jobs with status APPLIED are eligible; the default date is the day the job was marked applied
+  (`job.applied_at`). The employer label is "Employer (end client)" only when the ad names someone else.
+- A job is saved only when every field was filled and read back correctly (yrkesroll, employer, ort and date as
+  exact text, one radio chosen in each group). Any refusal or mismatch means that job is not saved and the next
+  one is tried. Spara is clicked once per job and never retried.
+- Spara is clicked only if the guard was given the configured form address, the page is exactly that address,
+  exactly one visible control reads exactly "Spara", and it passes the submit-like deny list. "Skicka in" is
+  refused for every purpose. The only key ever pressed is one ArrowDown to open the ort list; Enter never.
+- Autocomplete lists: items with `role=option`, or list items under a `role=listbox` or under the list the input
+  points at with `aria-controls` or `aria-owns`. Only visible items count and the text must match exactly.
+- The confirmation toast must contain "Din aktivitet är sparad" and the employer. No toast: the result is
+  UNCONFIRMED and the whole batch stops; the user checks by hand. An unreadable saved list or a different form
+  also stops the batch. Remaining jobs are logged as SKIPPED with the reason.
+- Duplicates: a third fixed read-only script reads the saved activities (ISO or Swedish dates). The same
+  employer on the same date is a DUPLICATE: skipped, and the job stays APPLIED (it may be a second application
+  there; the user logs it by hand if so). Only a job JobPilot itself saved earlier counts as LOGGED.
+- LOGGED only after a confirmed save (or a duplicate). The run is an `AKTIVITET` run; a login or BankID wall
+  puts it in WAITING_FOR_USER and a read-only poll continues when the wall is gone. Only the two configured
+  addresses (`jobpilot.aktivitet.form-url` and `list-url`) are ever opened. Real Arbetsförmedlingen markup is
+  unverified: tests use fixtures only.
+
 Never click anything that submits the monthly report ("Skicka in"). The report opens 1-16 of the
 following month; show a reminder banner in the UI during that window.
 
@@ -558,8 +583,10 @@ POST     /apply/{jobId}/focus    bring the tab to the front;  POST /apply/{jobId
 POST     /apply/{jobId}/fill     re-scan and fill the current page (?restart=true reloads the application first)
 GET      /apply/status           per-tab status and questions for the user
 POST     /apply/{jobId}/answers  answers to questionsForUser (stored in answers memory)
-POST     /aktivitet/log          {jobIds:[...]} -> saves activities
-GET      /aktivitet/log
+GET      /aktivitet/plan?jobIds= what would be written for these jobs (all seven values), or why a job cannot be logged
+POST     /aktivitet/log          {entries:[...]} exactly what the user confirmed -> {runId} of an AKTIVITET run
+GET      /aktivitet/log          every attempt: SAVED, DUPLICATE, SKIPPED, UNCONFIRMED or FAILED, with a message
+GET      /aktivitet/reminder     whether the report window (days 1 to 16) is open, from the injected clock
 GET/PUT  /settings/style-rules  writing rules (PUT /settings/style-rules/{id}: ruleText, enabled)
 GET/POST /settings/banned-phrases  PUT .../{id} {enabled}, DELETE .../{id}
 POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would choose (nothing stored)

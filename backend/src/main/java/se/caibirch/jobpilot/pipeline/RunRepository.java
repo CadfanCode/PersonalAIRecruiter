@@ -92,12 +92,22 @@ public class RunRepository {
                 .query(Long.class).single();
     }
 
-    /** Runs that were RUNNING or QUEUED when the app stopped can never finish. WAITING_FOR_USER runs stay. */
+    /**
+     * Runs that were RUNNING or QUEUED when the app stopped can never finish. A search run waiting for the user's review
+     * stays (it waits for a click in the UI, not for a thread); any other kind that was waiting had a thread, which is gone.
+     */
     public int failInterrupted(Instant now) {
         return jdbc.sql("""
                 UPDATE pipeline_run SET status = 'FAILED', message = 'Interrupted by an application restart',
-                    finished_at = :now WHERE status IN ('RUNNING', 'QUEUED')
+                    finished_at = :now
+                WHERE status IN ('RUNNING', 'QUEUED') OR (status = 'WAITING_FOR_USER' AND kind <> 'SEARCH')
                 """).param("now", Timestamp.from(now)).update();
+    }
+
+    /** True while a run of this kind is queued, running or waiting for the user. */
+    public boolean hasActive(String kind) {
+        return jdbc.sql("SELECT count(*) FROM pipeline_run WHERE kind = :k AND status IN ('QUEUED', 'RUNNING', 'WAITING_FOR_USER')")
+                .param("k", kind).query(Long.class).single() > 0;
     }
 
     private static Long jobIdOf(ResultSet rs) throws SQLException {

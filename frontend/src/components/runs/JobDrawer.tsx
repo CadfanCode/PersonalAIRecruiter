@@ -66,7 +66,11 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
               Open application
             </Button>
             <Button variant="ghost" onClick={() => update({ status: 'APPLIED' }, 'Marked as applied')}>Mark applied</Button>
-            <Button variant="ghost" disabled title="Arrives in milestone 6">Log in aktivitetsrapport</Button>
+            <Button variant="ghost" disabled={row.status !== 'APPLIED'}
+              title={row.status === 'APPLIED' ? 'Saves this job under Sökta jobb after you confirm the values' : 'Mark the job as applied first'}
+              onClick={() => navigate(`/aktivitet?jobs=${jobId}`)}>
+              Log in aktivitetsrapport
+            </Button>
             <Button variant="danger" onClick={() => update({ status: 'REJECTED' }, 'Rejected')}>Reject</Button>
           </div>
 

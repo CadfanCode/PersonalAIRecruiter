@@ -31,6 +31,7 @@ import se.caibirch.jobpilot.apply.FormField;
 import se.caibirch.jobpilot.apply.PageClassifier;
 import se.caibirch.jobpilot.apply.PageScripts;
 import se.caibirch.jobpilot.apply.PageScripts.SavedActivities;
+import se.caibirch.jobpilot.common.ApiExceptions.ConflictException;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
 import se.caibirch.jobpilot.jobs.JobModel.Row;
 import se.caibirch.jobpilot.jobs.JobModel.Status;
@@ -138,9 +139,16 @@ public class AktivitetService {
 
     // ---- starting a run with what the user confirmed ----
 
-    public long start(List<Entry> confirmed) {
+    /**
+     * Synchronised on purpose: two runs started close together (two browser tabs, a retried request) must not both pass the
+     * "already saved" check for the same job and then both save it.
+     */
+    public synchronized long start(List<Entry> confirmed) {
         if (confirmed == null || confirmed.isEmpty()) {
             throw new IllegalArgumentException("Nothing to log");
+        }
+        if (runs.hasActive("AKTIVITET")) {
+            throw new ConflictException("An aktivitetsrapport run is already in progress; wait for it to finish");
         }
         LocalDate today = LocalDate.now(clock);
         for (Entry e : confirmed) {
@@ -224,8 +232,9 @@ public class AktivitetService {
                 logs.insert(runId, e, Result.DUPLICATE, "Already logged earlier by JobPilot", null);
                 jobs.markLogged(e.jobId());
             } else if (isDuplicate(saved, e)) {
-                logs.insert(runId, e, Result.DUPLICATE, "The aktivitetsrapport already lists this employer on this date", null);
-                jobs.markLogged(e.jobId());
+                // Not LOGGED: this could be a second application to the same employer on the same date, which is not reported yet.
+                logs.insert(runId, e, Result.DUPLICATE, "Already listed for this employer on this date. If this is a second application there, "
+                        + "log it by hand; the job stays marked as applied.", null);
             } else {
                 Result result;
                 try {
@@ -276,20 +285,37 @@ public class AktivitetService {
                 logs.insert(runId, e, Result.FAILED, message, null);
                 return Result.FAILED;
             }
+            // Last look before the click: another run may have saved this job while we were filling the form.
+            if (logs.hasSaved(e.jobId())) {
+                logs.insert(runId, e, Result.DUPLICATE, "Already logged by another run; not saved again", null);
+                return Result.DUPLICATE;
+            }
             Outcome click = guard.saveActivity(); // the one and only Spara click for this job; never retried
             if (!click.done()) {
                 logs.insert(runId, e, Result.FAILED, "Not saved: " + click.reason(), null);
                 return Result.FAILED;
             }
-            boolean confirmed = guard.waitForConfirmation(TOAST, List.of(e.employerLabel(), baseName(e.employerLabel())), toastWaitMs);
-            if (!confirmed) {
-                logs.insert(runId, e, Result.UNCONFIRMED, "Spara was clicked but the confirmation did not appear; check by hand", null);
+            // From here Spara has been clicked. Whatever goes wrong must leave a trace and stop the batch: a job that is
+            // saved but still shows as APPLIED would be saved again by the next run.
+            try {
+                boolean confirmed = guard.waitForConfirmation(TOAST, List.of(e.employerLabel(), baseName(e.employerLabel())), toastWaitMs);
+                if (!confirmed) {
+                    logs.insert(runId, e, Result.UNCONFIRMED, "Spara was clicked but the confirmation did not appear; check by hand", null);
+                    return Result.UNCONFIRMED;
+                }
+                Instant now = clock.instant();
+                logs.insert(runId, e, Result.SAVED, "Saved", now);
+                jobs.markLogged(e.jobId());
+                return Result.SAVED;
+            } catch (RuntimeException ex) {
+                log.error("Error after clicking Spara for job {}", e.jobId(), ex);
+                try {
+                    logs.insert(runId, e, Result.UNCONFIRMED, "Spara was clicked but an error followed (" + ex.getMessage() + "); check by hand", null);
+                } catch (RuntimeException again) {
+                    log.error("Could not record the unconfirmed save either", again);
+                }
                 return Result.UNCONFIRMED;
             }
-            Instant now = clock.instant();
-            logs.insert(runId, e, Result.SAVED, "Saved", now);
-            jobs.markLogged(e.jobId());
-            return Result.SAVED;
         });
     }
 

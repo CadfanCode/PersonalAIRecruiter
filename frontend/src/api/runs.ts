@@ -35,14 +35,14 @@ export interface Run {
   id: number
   searchProfileId: number | null
   status: RunStatus
-  step: 'PROFILE' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER'
+  step: 'PROFILE' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER' | 'OPEN' | 'CHECK' | 'SAVE'
   progress: number
   message: string | null
   startedAt: string
   finishedAt: string | null
   options: RunOptions
   prompt: string | null
-  kind: 'SEARCH' | 'DOCUMENTS'
+  kind: 'SEARCH' | 'DOCUMENTS' | 'AKTIVITET'
   jobId: number | null
 }
 
@@ -96,12 +96,16 @@ const ACTIVE: RunStatus[] = ['QUEUED', 'RUNNING']
 export const useRuns = () => useQuery({ queryKey: ['runs'], queryFn: () => api<Run[]>('/api/runs') })
 
 /** Polls every 2 s while the run is working (SPEC 3). */
-export const useRun = (id: number, enabled = true) =>
+export const useRun = (id: number, enabled = true, pollWhileWaiting = false) =>
   useQuery({
     queryKey: ['runs', id],
     queryFn: () => api<RunView>(`/api/runs/${id}`),
     enabled,
-    refetchInterval: (q) => (q.state.data && ACTIVE.includes(q.state.data.run.status) ? 2000 : false),
+    refetchInterval: (q) => {
+      const status = q.state.data?.run.status
+      // A search run waits for a click; an aktivitet run waits for a sign-in that is detected without a click.
+      return status && (ACTIVE.includes(status) || (pollWhileWaiting && status === 'WAITING_FOR_USER')) ? 2000 : false
+    },
   })
 
 /** Ads appear while the run works, so the list is refetched every 2 s until the run has ended. */

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobRow } from '../../api/runs'
 import { job } from '../../test/fixtures'
@@ -9,6 +9,10 @@ import { mockApi } from '../../test/mockApi'
 import { ResultsTable } from './ResultsTable'
 
 const NOW = new Date('2026-10-26T12:00:00Z')
+
+function LocationProbe() {
+  return <p>Aktivitet page {useLocation().search}</p>
+}
 
 function renderTable(jobs: JobRow[], topN = 10) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -19,6 +23,7 @@ function renderTable(jobs: JobRow[], topN = 10) {
           <Route path="/runs/7" element={<ResultsTable runId={7} jobs={jobs} topN={topN} now={NOW} />} />
           <Route path="/documents/job/:jobId" element={<p>Documents page</p>} />
           <Route path="/apply" element={<p>Apply page</p>} />
+          <Route path="/aktivitet" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -182,6 +187,46 @@ describe('results table', () => {
 
     expect(await screen.findByText('Apply page')).toBeInTheDocument()
     expect((calls.find((c) => c.method === 'POST')!.body as { jobIds: number[] }).jobIds).toHaveLength(5)
+  })
+
+  it('logs only the selected jobs that are marked applied, and only when there are some', async () => {
+    mockApi({})
+    const list = [
+      job({ title: 'Applied A', rank: 1, total: 90, status: 'APPLIED' }),
+      job({ title: 'New B', rank: 2, total: 80 }),
+      job({ title: 'Applied C', rank: 3, total: 70, status: 'APPLIED' }),
+    ]
+    renderTable(list)
+
+    await userEvent.click(screen.getByLabelText('Select New B'))
+    expect(screen.getByRole('button', { name: 'Log in aktivitetsrapport (0)' })).toBeDisabled()
+    await userEvent.click(screen.getByLabelText('Select Applied A'))
+    await userEvent.click(screen.getByLabelText('Select Applied C'))
+    const button = screen.getByRole('button', { name: 'Log in aktivitetsrapport (2)' })
+    expect(button).toBeEnabled()
+    await userEvent.click(button)
+
+    expect(await screen.findByText(`Aktivitet page ?jobs=${list[0].id},${list[2].id}`)).toBeInTheDocument()
+  })
+
+  it('enables Log in aktivitetsrapport in the drawer only for applied jobs', async () => {
+    const applied = job({ title: 'Applied job', rank: 1, total: 80, status: 'APPLIED' })
+    const open = job({ title: 'Open job', rank: 2, total: 70, status: 'NEW' })
+    mockApi({
+      [`GET /api/jobs/${applied.id}?run=7`]: { row: applied, description: 'x' },
+      [`GET /api/jobs/${open.id}?run=7`]: { row: open, description: 'x' },
+    })
+    renderTable([applied, open])
+
+    await userEvent.click(screen.getByText('Open job'))
+    const disabled = await screen.findByRole('button', { name: 'Log in aktivitetsrapport' })
+    expect(disabled).toBeDisabled()
+    expect(disabled).toHaveAttribute('title', 'Mark the job as applied first')
+    await userEvent.click(screen.getByRole('button', { name: 'Close details' }))
+
+    await userEvent.click(screen.getByText('Applied job'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Log in aktivitetsrapport' }))
+    expect(await screen.findByText(`Aktivitet page ?jobs=${applied.id}`)).toBeInTheDocument()
   })
 
   it('opens the documents page from the drawer without generating anything', async () => {

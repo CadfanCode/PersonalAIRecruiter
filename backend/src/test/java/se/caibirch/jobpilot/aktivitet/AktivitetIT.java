@@ -348,7 +348,7 @@ class AktivitetIT {
     }
 
     @Test
-    void anAlreadyListedActivityIsASkippedDuplicateAndTheJobCountsAsLogged() throws Exception {
+    void anAlreadyListedActivityIsASkippedDuplicateAndTheJobStaysApplied() throws Exception {
         serving.put("/list", "list.html"); // lists Comstream AB (Taxi Stockholm) on 2026-10-26
         long dup = job("Comstream AB", "Taxi Stockholm", "Stockholm", "Heltid", "APPLIED", null);
         long fresh = applied("Saab AB", "Järfälla");
@@ -359,7 +359,7 @@ class AktivitetIT {
         assertThat(saved).hasSize(1);
         assertThat(mapper.readTree(saved.get(0)).get("arbetsgivare").asText()).isEqualTo("Saab AB");
         assertThat(results()).containsExactly("DUPLICATE", "SAVED");
-        assertThat(status(dup)).isEqualTo("LOGGED");
+        assertThat(status(dup)).isEqualTo("APPLIED"); // could be a second application there; the user decides
     }
 
     @Test
@@ -429,6 +429,44 @@ class AktivitetIT {
 
         assertThat(done.get("run").get("status").asText()).as(done.get("run").get("message").asText()).isEqualTo("DONE");
         assertThat(saved).hasSize(1);
+    }
+
+    @Test
+    void aSecondRunCannotStartWhileOneIsWaitingAtTheLoginWall() throws Exception {
+        serving.put("/list", "login.html");
+        long a = applied("Comstream AB", "Stockholm");
+        long b = applied("Saab AB", "Järfälla");
+        long run = confirmAll(a);
+        await(run, "WAITING_FOR_USER", "DONE", "FAILED");
+
+        ArrayNode entries = mapper.createArrayNode();
+        entries.add(plan(b).get(0).get("entry"));
+        JsonNode refused = call(post("/api/aktivitet/log"), mapper.createObjectNode().set("entries", entries).toString(), 409);
+        assertThat(refused.toString()).containsIgnoringCase("already");
+
+        // let the first run finish so it does not leak into the next test
+        serving.put("/list", "list_empty.html");
+        browser.withTab(AktivitetService.TAB, p -> p.navigate(base() + "/list"));
+        await(run, "DONE", "FAILED");
+        assertThat(saved).hasSize(1);
+    }
+
+    @Test
+    void aRestartFailsWaitingAktivitetAndDocumentRunsButKeepsAWaitingSearchRun() {
+        long aktivitet = jdbc.sql("INSERT INTO pipeline_run (kind, status, step, progress) VALUES ('AKTIVITET', 'WAITING_FOR_USER', 'OPEN', 5) RETURNING id")
+                .query(Long.class).single();
+        long documents = jdbc.sql("INSERT INTO pipeline_run (kind, status, step, progress) VALUES ('DOCUMENTS', 'WAITING_FOR_USER', 'SELECT', 5) RETURNING id")
+                .query(Long.class).single();
+        long search = jdbc.sql("INSERT INTO pipeline_run (kind, status, step, progress) VALUES ('SEARCH', 'WAITING_FOR_USER', 'PROFILE', 5) RETURNING id")
+                .query(Long.class).single();
+
+        new se.caibirch.jobpilot.pipeline.RunRepository(jdbc, mapper).failInterrupted(java.time.Instant.now());
+
+        java.util.function.LongFunction<String> status = id ->
+                jdbc.sql("SELECT status FROM pipeline_run WHERE id = :i").param("i", id).query(String.class).single();
+        assertThat(status.apply(aktivitet)).isEqualTo("FAILED");
+        assertThat(status.apply(documents)).isEqualTo("FAILED");
+        assertThat(status.apply(search)).isEqualTo("WAITING_FOR_USER");
     }
 
     @Test

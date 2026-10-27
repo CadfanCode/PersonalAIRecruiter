@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { AktivitetPage } from './pages/AktivitetPage'
 import { ApplyMonitorPage } from './pages/ApplyMonitorPage'
 import { CvDatabase } from './pages/CvDatabase'
 import { Dashboard } from './pages/Dashboard'
@@ -20,6 +21,7 @@ export function App() {
         <Route path="documents" element={<DocumentsIndexPage />} />
         <Route path="documents/job/:jobId" element={<JobDocumentsPage />} />
         <Route path="apply" element={<ApplyMonitorPage />} />
+        <Route path="aktivitet" element={<AktivitetPage />} />
         <Route path="cv" element={<CvDatabase />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Placeholder title="Not found" milestone={1} description="No such page." />} />

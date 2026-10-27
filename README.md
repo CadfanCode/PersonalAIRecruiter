@@ -32,6 +32,13 @@ JobPilot fills what it can and stops: it never submits, never types passwords or
 consent boxes and never clicks Ansök. Press Submit yourself. `JOBPILOT_BROWSER_HEADLESS=true` runs it without a
 window (tests do this). Port 8080 conflicts: see above.
 
+Aktivitetsrapport (milestone 6): mark a job as applied, select it and choose "Log in aktivitetsrapport". You
+check all seven values first (yrkesroll, employer, omfattning, var, ort, annons, datum), then JobPilot fills the
+form in the JobPilot browser, checks every value, clicks Spara once per job and waits for "Din aktivitet är
+sparad". You must be signed in with BankID in that browser. It never submits the monthly report (Skicka in).
+If the confirmation does not appear, it stops and tells you to check by hand. The page markup of the real site
+is unverified; see docs/adr/0006-aktivitetsrapport.md.
+
 Model and cost: JobPilot runs your own `claude` CLI. Without `JOBPILOT_CLAUDE_MODEL` it uses the
 CLI's default model (Opus on this machine). Measured on 26 Oct 2026: scoring one ad costs about
 $0.04 on Sonnet (`JOBPILOT_CLAUDE_MODEL=sonnet`), and a run scores up to 50 ads by default. The
@@ -50,5 +57,6 @@ Loading your CV data: with the API running, `curl --data-binary @seed/cv_databas
 -H 'Content-Type: application/json' http://127.0.0.1:8080/api/cv/seed` (or use the file picker on
 the CV database page when it is empty). It refuses to run on a non-empty database.
 
-Status: milestones 1 (skeleton), 2 (CV database), 3 (search and ranking), 4 (documents) and 5 (apply) built. The
-real-site acceptance of milestone 5 (Ponty, Workday, Varbi) is yours to run; see docs/adr/0005-apply.md. See `docs/SPEC.md` section 15.
+Status: milestones 1 (skeleton), 2 (CV database), 3 (search and ranking), 4 (documents), 5 (apply) and 6
+(aktivitetsrapport) built. The real-site acceptance of milestones 5 and 6 (Ponty, Workday, Varbi, the
+aktivitetsrapport) is yours to run; see docs/adr/0005-apply.md and 0006. See `docs/SPEC.md` section 15.

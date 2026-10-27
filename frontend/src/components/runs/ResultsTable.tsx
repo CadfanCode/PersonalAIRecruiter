@@ -216,6 +216,7 @@ export function ResultsTable({
   }
 
   const selectedCount = Object.keys(rowSelection).length
+  const appliedSelected = table.getSelectedRowModel().rows.filter((r) => r.original.status === 'APPLIED')
 
   return (
     <div>
@@ -282,6 +283,11 @@ export function ResultsTable({
               onError: (e) => toast(e.message, 'error'),
             })}>
             Open applications
+          </Button>
+          <Button variant="ghost" disabled={appliedSelected.length === 0}
+            title={appliedSelected.length === 0 ? 'Only jobs marked as applied can be logged' : 'Opens the confirmation step; nothing is saved yet'}
+            onClick={() => navigate(`/aktivitet?jobs=${appliedSelected.map((r) => r.original.id).join(',')}`)}>
+            Log in aktivitetsrapport ({appliedSelected.length})
           </Button>
           <Button variant="ghost" onClick={() => setRowSelection({})}>Clear</Button>
         </div>

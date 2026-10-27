@@ -5,6 +5,7 @@ const nav = [
   { to: '/runs', label: 'Runs' },
   { to: '/documents', label: 'Documents' },
   { to: '/apply', label: 'Apply monitor' },
+  { to: '/aktivitet', label: 'Aktivitetsrapport' },
   { to: '/cv', label: 'CV database' },
   { to: '/settings', label: 'Settings' },
 ]

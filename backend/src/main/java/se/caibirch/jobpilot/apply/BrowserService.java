@@ -89,7 +89,8 @@ public class BrowserService implements DisposableBean {
             }
             if (existing == null) {
                 tabs.values().removeIf(Page::isClosed);
-                if (tabs.size() >= config.maxTabs()) {
+                // The aktivitetsrapport tab (negative key) is not an application tab and does not count against the cap.
+                if (jobId >= 0 && tabs.keySet().stream().filter(k -> k >= 0).count() >= config.maxTabs()) {
                     throw new IllegalArgumentException("At most " + config.maxTabs() + " application tabs can be open; close one first");
                 }
                 existing = ctx.newPage();
