@@ -38,3 +38,7 @@ jobpilot:
     taxonomy-url: ${JOBPILOT_TAXONOMY_URL:https://taxonomy.api.jobtechdev.se}
     api-key: ${JOBPILOT_JOBTECH_API_KEY:}
     requests-per-second: 5
+  browser:
+    headless: ${JOBPILOT_BROWSER_HEADLESS:false}
+    max-tabs: 5
+    allow-file-urls: false

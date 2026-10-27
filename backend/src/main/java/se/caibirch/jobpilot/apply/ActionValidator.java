@@ -78,7 +78,7 @@ public final class ActionValidator {
             if (action.equals("skip") || a.needsUser()) {
                 skipped.add(new Skipped(f.id(), label(f), nzOr(a.reason(), "needs your input")));
                 if (a.needsUser()) {
-                    questions.putIfAbsent(f.id(), new Question(f.id(), f.questionText()));
+                    addQuestion(questions, f, f.questionText());
                 }
                 continue;
             }
@@ -100,10 +100,18 @@ public final class ActionValidator {
         for (Question q : mapped.questionsForUser() == null ? List.<Question>of() : mapped.questionsForUser()) {
             FormField f = q.fieldId() == null ? null : byId.get(q.fieldId());
             if (f != null && refusal(f) == null) {
-                questions.putIfAbsent(f.id(), new Question(f.id(), q.question() == null || q.question().isBlank() ? f.questionText() : q.question()));
+                addQuestion(questions, f, q.question() == null || q.question().isBlank() ? f.questionText() : q.question());
             }
         }
         return new Validated(planned, skipped, new ArrayList<>(questions.values()));
+    }
+
+    /** One question per question text: the Ja and Nej buttons of a radio group are one question, not two. */
+    private static void addQuestion(Map<String, Question> questions, FormField f, String text) {
+        if (questions.values().stream().anyMatch(q -> q.fieldId().equals(f.id()))) {
+            return; // the same field asked about twice, in different words
+        }
+        questions.putIfAbsent(AnswerKeys.normalise(f.isChoice() && !f.legend().isBlank() ? f.legend() : text), new Question(f.id(), text));
     }
 
     // ---- per action ----

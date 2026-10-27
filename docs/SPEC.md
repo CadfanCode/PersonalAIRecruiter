@@ -278,7 +278,7 @@ FormActions:
   "actions": [
     {"fieldId": "string", "action": "fill|select|check|uncheck|upload|skip",
      "value": "string", "file": "cv|letter|none", "reason": "string",
-     "needsUser": false}
+     "needsUser": false, "source": "profile|memory|cv|document|none"}
   ],
   "questionsForUser": [{"fieldId": "string", "question": "string"}]
 }
@@ -446,10 +446,29 @@ sv: "brinner för", "passionerad", "drivs av", "inte bara ... utan också", "i d
    `questionsForUser`, and the user's answer is saved to the answers memory.
 7. Multi-step forms: the user clicks Next themselves, then presses "Fill this page" in the UI.
 
+Nothing in the model's answer is trusted (`ActionValidator`). An action runs only if its `fieldId` is
+one of the fields just extracted, it fits the field type (fill only text and textarea, check only
+checkbox and radio, select only an existing option, upload only a file input), the field is not a
+password, hidden, credential or consent field, and the value can be traced: name, email, phone and
+city fields must equal the profile exactly, `source: memory` must equal the stored answer for the
+normalised question (for a radio, the option that matches it), `upload` uses only an approved
+document of that job (an unapproved one is skipped with the reason), and a field that already holds
+a different value is left alone. The Ja and Nej buttons of a radio group are one question. After
+uploads the page is read again; fields that appeared (Ponty's category selects) get one more mapping
+pass, never more. Each pass is stored in `application_form_snapshot`. A job becomes FILLED after a
+fill that left no questions, never APPLIED.
+
 ### 9.3 Guardrails enforced in code
 
-- `ActionExecutor` refuses any action on: `input[type=password]`, buttons or links, and checkboxes
-  whose label matches `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter/i`.
+- `BrowserGuard` is the single choke point for every action on an external page. `ActionExecutor`
+  refuses any action on: `input[type=password]`, buttons or links, and checkboxes and radios (ticking
+  and unticking) whose label, aria-label, title, legend or nearby text matches
+  `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter|godkänn|accept|personuppgift|policy|intyga|marknadsför|marketing|prenumer|subscribe/i`
+  (the last eight alternatives were added in milestone 5 to make the rule stricter).
+- Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY` or
+  `AUTOCOMPLETE_OPTION`; milestone 6 adds `AKTIVITET_SPARA`). Enter is never pressed. `evaluate` runs
+  only the two fixed scripts in `PageScripts`. A test scans `src/main/java` and fails the build if any
+  other class calls a raw click, key press, `evaluate`, `dispatchEvent` or form submit.
 - No code path calls `click()` on elements matching
   `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish/i`. The only allowed clicks
   are cookie "necessary only" buttons and autocomplete options chosen by the executor itself.
@@ -534,8 +553,9 @@ GET      /documents              overview of jobs that have documents
 GET/PUT  /documents/{id}         edit content -> re-render
 POST     /documents/{id}/approve
 GET      /documents/{id}/pdf
-POST     /apply                  {jobIds:[...]} -> opens tabs and fills
-POST     /apply/{jobId}/fill     re-scan and fill the current page
+POST     /apply                  {jobIds:[...]} (at most 5) -> opens tabs and fills
+POST     /apply/{jobId}/focus    bring the tab to the front;  POST /apply/{jobId}/close
+POST     /apply/{jobId}/fill     re-scan and fill the current page (?restart=true reloads the application first)
 GET      /apply/status           per-tab status and questions for the user
 POST     /apply/{jobId}/answers  answers to questionsForUser (stored in answers memory)
 POST     /aktivitet/log          {jobIds:[...]} -> saves activities

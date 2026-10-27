@@ -187,6 +187,12 @@ public class JobRepository {
         jdbc.sql("UPDATE job SET status = 'SHORTLISTED' WHERE id = :id AND status = 'DOCS_READY'").param("id", jobId).update();
     }
 
+    /** A clean fill moves the job to FILLED. Never to APPLIED: only the user decides that (hard rule 1). */
+    public void markFilled(long jobId) {
+        jdbc.sql("UPDATE job SET status = 'FILLED' WHERE id = :id AND status IN ('NEW', 'SHORTLISTED', 'DOCS_READY')")
+                .param("id", jobId).update();
+    }
+
     public void markDocsReady(long jobId) {
         jdbc.sql("UPDATE job SET status = 'DOCS_READY' WHERE id = :id AND status IN ('NEW', 'SHORTLISTED')")
                 .param("id", jobId).update();

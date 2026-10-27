@@ -200,6 +200,20 @@ class ActionValidatorTest {
     }
 
     @Test
+    void theOptionsOfOneRadioGroupAreOneQuestion() {
+        var ja = radio("jp-1", "Har du erfarenhet av Angular?", "Ja");
+        var nej = radio("jp-2", "Har du erfarenhet av Angular?", "Nej");
+        var mapped = new FormActions(List.of(new MappedAction("jp-1", "skip", "", "none", "judgement", true, "none"),
+                new MappedAction("jp-2", "skip", "", "none", "judgement", true, "none")),
+                List.of(new Question("jp-1", "Har du erfarenhet av Angular?"), new Question("jp-2", "Har du erfarenhet av Angular?")));
+
+        var v = ActionValidator.validate(List.of(ja, nej), mapped, ctx(Map.of(), Map.of()));
+
+        assertThat(v.questions()).hasSize(1);
+        assertThat(v.questions().get(0).question()).isEqualTo("Har du erfarenhet av Angular?");
+    }
+
+    @Test
     void questionsForConsentOrPasswordFieldsAreDropped() {
         var fields = List.of(field("jp-1", "input", "password", "Lösenord", "", false), text("jp-2", "Samtycke"));
         var mapped = new FormActions(List.of(), List.of(new Question("jp-1", "Password?"), new Question("jp-2", "Consent?"), new Question("jp-404", "?")));
