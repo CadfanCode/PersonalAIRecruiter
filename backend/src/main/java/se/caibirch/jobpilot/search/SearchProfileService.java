@@ -65,6 +65,12 @@ public class SearchProfileService {
         return repo.insert(prompt, profile);
     }
 
+    /** A copy of a stored profile with a wider age limit (profiles are immutable: this stores a new row). */
+    public long withMaxAgeDays(long id, int days) {
+        SearchProfileRepository.Stored stored = get(id);
+        return repo.insert(stored.prompt(), stored.profile().withMaxAgeDays(days));
+    }
+
     public SearchProfileRepository.Stored get(long id) {
         return repo.find(id).orElseThrow(() -> new NotFoundException("No search profile " + id));
     }

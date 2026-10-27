@@ -19,12 +19,32 @@ public final class JobModel {
                       String employer, String clientEmployer, String location, String municipality,
                       Instant publishedAt, Instant deadline, String language, String employmentType,
                       boolean asksForNewGraduates, String experienceRequiredText, Status status, String notes,
-                      boolean dateUnverified, String evidenceUrl, Instant appliedAt, Score score) {
+                      boolean dateUnverified, String evidenceUrl, Instant appliedAt, Score score,
+                      String roleType, List<String> roleTypes) {
+
+        /** A row of a targeted or manual run: no role types. */
+        public Row(long id, Integer rank, String source, String sourceId, String url, String applyUrl, String title,
+                   String employer, String clientEmployer, String location, String municipality, Instant publishedAt,
+                   Instant deadline, String language, String employmentType, boolean asksForNewGraduates,
+                   String experienceRequiredText, Status status, String notes, boolean dateUnverified,
+                   String evidenceUrl, Instant appliedAt, Score score) {
+            this(id, rank, source, sourceId, url, applyUrl, title, employer, clientEmployer, location, municipality,
+                    publishedAt, deadline, language, employmentType, asksForNewGraduates, experienceRequiredText, status,
+                    notes, dateUnverified, evidenceUrl, appliedAt, score, null, List.of());
+        }
 
         Row withRank(Integer r) {
             return new Row(id, r, source, sourceId, url, applyUrl, title, employer, clientEmployer, location,
                     municipality, publishedAt, deadline, language, employmentType, asksForNewGraduates,
-                    experienceRequiredText, status, notes, dateUnverified, evidenceUrl, appliedAt, score);
+                    experienceRequiredText, status, notes, dateUnverified, evidenceUrl, appliedAt, score, roleType,
+                    roleTypes);
+        }
+
+        /** The role the ad was scored against (primary) and every role that found it. */
+        Row withRoles(String primary, List<String> all) {
+            return new Row(id, rank, source, sourceId, url, applyUrl, title, employer, clientEmployer, location,
+                    municipality, publishedAt, deadline, language, employmentType, asksForNewGraduates,
+                    experienceRequiredText, status, notes, dateUnverified, evidenceUrl, appliedAt, score, primary, all);
         }
     }
 

@@ -33,6 +33,20 @@ public class JobRepository {
                  AND s.scored_at = (SELECT max(scored_at) FROM job_score WHERE job_id = j.id AND search_profile_id = :profile)
             """;
 
+    /** Rows of a Discover run: each ad's score is the one for the role it was scored against (its primary role). */
+    private static final String SELECT_DISCOVER = """
+            SELECT j.*, s.total, s.tech, s.experience AS score_experience, s.eligibility, s.deal_breakers_json,
+                   s.fit_text, s.gaps_text, s.model, s.scored_at, rs.title AS role_title,
+                   (SELECT array_agg(r2.title ORDER BY r2.sort_order, r2.id) FROM run_job_role x
+                      JOIN role_suggestion r2 ON r2.id = x.role_suggestion_id
+                     WHERE x.run_id = rj.run_id AND x.job_id = j.id) AS all_roles
+            FROM job j
+            JOIN run_job rj ON rj.job_id = j.id AND rj.run_id = :run
+            LEFT JOIN role_suggestion rs ON rs.id = rj.role_suggestion_id
+            LEFT JOIN job_score s ON s.job_id = j.id AND s.search_profile_id = rs.search_profile_id
+                 AND s.scored_at = (SELECT max(scored_at) FROM job_score WHERE job_id = j.id AND search_profile_id = rs.search_profile_id)
+            """;
+
     private final JdbcClient jdbc;
     private final ObjectMapper mapper;
 
@@ -112,6 +126,50 @@ public class JobRepository {
             .thenComparing(Row::deadline, Comparator.nullsLast(Comparator.naturalOrder()))
             .thenComparing(Row::publishedAt, Comparator.nullsLast(Comparator.reverseOrder()));
 
+    public List<Row> rowsOfDiscoverRun(long runId) {
+        List<Row> rows = new ArrayList<>(jdbc.sql(SELECT_DISCOVER).param("run", runId).query((rs, n) -> {
+            java.sql.Array all = rs.getArray("all_roles");
+            List<String> titles = all == null ? List.of() : List.of((String[]) all.getArray());
+            return row(rs, n).withRoles(rs.getString("role_title"), titles);
+        }).list());
+        rows.sort(RANKING);
+        List<Row> ranked = new ArrayList<>();
+        int rank = 1;
+        for (Row r : rows) {
+            ranked.add(r.score() == null ? r : r.withRank(rank++));
+        }
+        return ranked;
+    }
+
+    /** The primary role of an ad within a Discover run, and every role that found it. */
+    public void setPrimaryRole(long runId, long jobId, long roleId) {
+        jdbc.sql("UPDATE run_job SET role_suggestion_id = :r WHERE run_id = :run AND job_id = :j")
+                .param("r", roleId).param("run", runId).param("j", jobId).update();
+    }
+
+    public void tagRole(long runId, long jobId, long roleId) {
+        jdbc.sql("INSERT INTO run_job_role (run_id, job_id, role_suggestion_id) VALUES (:run, :j, :r) ON CONFLICT DO NOTHING")
+                .param("run", runId).param("j", jobId).param("r", roleId).update();
+    }
+
+    /** The title of the role an ad was scored against in a Discover run; null for other runs. */
+    public Optional<String> roleTitle(long runId, long jobId) {
+        return jdbc.sql("SELECT rs.title FROM run_job rj JOIN role_suggestion rs ON rs.id = rj.role_suggestion_id WHERE rj.run_id = :run AND rj.job_id = :j")
+                .param("run", runId).param("j", jobId).query(String.class).optional();
+    }
+
+    /**
+     * The search profile an ad is ranked and tailored with inside a run: its role's profile in a Discover run, else the run's own.
+     * The run's base profile of a Discover run has no scores, so every lookup of "the profile of this ad" goes through here.
+     */
+    public Optional<Long> profileIdFor(long jobId, long runId) {
+        return jdbc.sql("""
+                SELECT coalesce(rs.search_profile_id, r.search_profile_id) FROM pipeline_run r
+                LEFT JOIN run_job rj ON rj.run_id = r.id AND rj.job_id = :j
+                LEFT JOIN role_suggestion rs ON rs.id = rj.role_suggestion_id
+                WHERE r.id = :run""").param("j", jobId).param("run", runId).query(Long.class).optional();
+    }
+
     public Optional<Row> findRow(long id, Long searchProfileId) {
         return jdbc.sql(SELECT_ROW + " WHERE j.id = :id").param("profile", searchProfileId == null ? -1L : searchProfileId)
                 .param("id", id).query(this::row).optional();
@@ -180,8 +238,10 @@ public class JobRepository {
     /** The search profile of the newest search run that found this ad. */
     public Optional<Long> latestSearchProfileId(long jobId) {
         return jdbc.sql("""
-                SELECT r.search_profile_id FROM run_job rj JOIN pipeline_run r ON r.id = rj.run_id
-                WHERE rj.job_id = :id AND r.kind = 'SEARCH' AND r.search_profile_id IS NOT NULL
+                SELECT coalesce(rs.search_profile_id, r.search_profile_id) FROM run_job rj
+                JOIN pipeline_run r ON r.id = rj.run_id
+                LEFT JOIN role_suggestion rs ON rs.id = rj.role_suggestion_id
+                WHERE rj.job_id = :id AND r.kind = 'SEARCH' AND coalesce(rs.search_profile_id, r.search_profile_id) IS NOT NULL
                 ORDER BY r.id DESC LIMIT 1""").param("id", jobId).query(Long.class).optional();
     }
 

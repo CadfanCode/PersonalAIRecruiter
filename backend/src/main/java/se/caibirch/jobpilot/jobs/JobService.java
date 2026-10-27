@@ -32,13 +32,14 @@ public class JobService {
         if (run.searchProfileId() == null) {
             return List.of();
         }
-        List<Row> rows = jobs.rowsOfRun(runId, run.searchProfileId()).stream().filter(r -> matches(r, query)).toList();
+        List<Row> all = run.options().discover() ? jobs.rowsOfDiscoverRun(runId) : jobs.rowsOfRun(runId, run.searchProfileId());
+        List<Row> rows = all.stream().filter(r -> matches(r, query)).toList();
         rows = sorted(rows, query.sort());
         return query.top() == null ? rows : rows.stream().limit(query.top()).toList();
     }
 
     public Detail detail(long jobId, Long runId) {
-        Long profileId = runId == null ? null : runs.find(runId).map(r -> r.searchProfileId()).orElse(null);
+        Long profileId = runId == null ? null : jobs.profileIdFor(jobId, runId).orElse(null);
         Row row = jobs.findRow(jobId, profileId).orElseThrow(() -> new NotFoundException("No job " + jobId));
         return new Detail(row, jobs.description(jobId).orElse(""), jobs.rawJson(jobId).orElse("{}"));
     }

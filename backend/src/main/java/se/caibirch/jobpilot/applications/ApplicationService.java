@@ -106,9 +106,9 @@ public class ApplicationService {
         return view(applications.find(jobId).orElseThrow());
     }
 
-    /** Role type of the run's job: set by Discover runs (milestone 7); null for targeted and manual ones. */
+    /** The role the ad was found for in a Discover run (the one it was scored and is tailored against); null otherwise. */
     private String roleTypeOf(long jobId, Long runId) {
-        return null;
+        return runId == null ? null : jobs.roleTitle(runId, jobId).orElse(null);
     }
 
     private JsonNode docsUsed(long jobId) {

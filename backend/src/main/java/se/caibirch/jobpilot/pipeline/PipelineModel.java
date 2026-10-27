@@ -11,9 +11,10 @@ public final class PipelineModel {
 
     public enum Status { QUEUED, RUNNING, WAITING_FOR_USER, DONE, FAILED, CANCELLED }
 
-    /** Steps in order: PROFILE, SEARCH, RANK, DONE. */
+    /** Steps in order: PROFILE, (SUGGEST for Discover runs), SEARCH, RANK, DONE. */
     public static final class Step {
         public static final String PROFILE = "PROFILE";
+        public static final String SUGGEST = "SUGGEST";
         public static final String SEARCH = "SEARCH";
         public static final String RANK = "RANK";
         public static final String DONE = "DONE";

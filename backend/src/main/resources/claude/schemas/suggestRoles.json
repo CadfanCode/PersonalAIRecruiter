@@ -1,0 +1,126 @@
+{
+  "type": "object",
+  "properties": {
+    "roles": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "RELATED",
+              "HYBRID",
+              "OUTSIDE_TECH"
+            ]
+          },
+          "matchScore": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "reasoning": {
+            "type": "string"
+          },
+          "gaps": {
+            "type": "string"
+          },
+          "profile": {
+            "type": "object",
+            "properties": {
+              "roleSummary": {
+                "type": "string"
+              },
+              "titles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "synonyms": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "skillsWanted": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "seniority": {
+                "type": "string",
+                "enum": [
+                  "student",
+                  "graduate",
+                  "junior",
+                  "mid",
+                  "senior",
+                  "any"
+                ]
+              },
+              "acceptExperienceUpToYears": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 30
+              },
+              "exclusions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "yrkesrollForAktivitetsrapport": {
+                "type": "string"
+              },
+              "relevantTags": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "jobtechQueries": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "minItems": 1
+              }
+            },
+            "required": [
+              "roleSummary",
+              "titles",
+              "synonyms",
+              "skillsWanted",
+              "seniority",
+              "acceptExperienceUpToYears",
+              "exclusions",
+              "yrkesrollForAktivitetsrapport",
+              "relevantTags",
+              "jobtechQueries"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "title",
+          "category",
+          "matchScore",
+          "reasoning",
+          "gaps",
+          "profile"
+        ],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": [
+    "roles"
+  ],
+  "additionalProperties": false
+}

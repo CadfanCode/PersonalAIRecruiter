@@ -18,6 +18,8 @@ import org.springframework.stereotype.Service;
 
 import se.caibirch.jobpilot.common.ApiExceptions.ConflictException;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
+import se.caibirch.jobpilot.discovery.RoleDiscoveryService;
+import se.caibirch.jobpilot.discovery.RoleDiscoveryService.ResolvedRole;
 import se.caibirch.jobpilot.jobs.JobPrefilter;
 import se.caibirch.jobpilot.jobs.JobRepository;
 import se.caibirch.jobpilot.jobs.NewJob;
@@ -52,11 +54,19 @@ public class PipelineService {
     private final ExecutorService executor;
     private final Clock clock;
     private final JobPilotProperties props;
+    private final RoleDiscoveryService discovery;
     private final Set<Long> cancelRequested = ConcurrentHashMap.newKeySet();
+
+    /** Ads scored by a Discover run when the user sets no limit: the normal and the aggressive default, and the hard cap. */
+    static final int DISCOVER_LIMIT = 60;
+    static final int DISCOVER_AGGRESSIVE_LIMIT = 150;
+    static final int DISCOVER_MAX_LIMIT = 150;
+    static final int AGGRESSIVE_MAX_AGE_DAYS = 14;
+    static final String DISCOVER_DEFAULT_CONTEXT = "Any suitable job within commuting distance of the candidate's city, full time or part time";
 
     public PipelineService(RunRepository runs, SearchProfileService profiles, CandidateCollector collector,
                            WebDiscoveryService web, JobRepository jobs, CvDigestService digests, ScoreService scorer,
-                           ExecutorService pipelineExecutor, Clock clock, JobPilotProperties props) {
+                           RoleDiscoveryService discovery, ExecutorService pipelineExecutor, Clock clock, JobPilotProperties props) {
         this.runs = runs;
         this.profiles = profiles;
         this.collector = collector;
@@ -64,19 +74,44 @@ public class PipelineService {
         this.jobs = jobs;
         this.digests = digests;
         this.scorer = scorer;
+        this.discovery = discovery;
         this.executor = pipelineExecutor;
         this.clock = clock;
         this.props = props;
     }
 
     public long start(String prompt, RunOptions options) {
-        if (prompt == null || prompt.isBlank()) {
+        boolean discover = options.discover();
+        if (!discover && (prompt == null || prompt.isBlank())) {
             throw new IllegalArgumentException("prompt is required");
         }
         validate(options);
         long id = runs.create(options, clock.instant());
-        submit(id, () -> buildProfile(id, prompt.trim(), options));
+        String text = prompt == null ? "" : prompt.trim();
+        submit(id, () -> {
+            if (discover) {
+                suggestRoles(id, text, options);
+            } else {
+                buildProfile(id, text, options);
+            }
+        });
         return id;
+    }
+
+    /** The role suggestions of a Discover run, kept so the user can revisit them. */
+    public List<RoleDiscoveryService.RoleView> roles(long id) {
+        runs.find(id).orElseThrow(() -> new NotFoundException("No run " + id));
+        return discovery.views(id);
+    }
+
+    /** Applies the user's selection, renames and added roles. Only while the run waits for them. */
+    public List<RoleDiscoveryService.RoleView> saveRoles(long id, List<RoleDiscoveryService.RoleEdit> edits) {
+        Run run = runs.find(id).orElseThrow(() -> new NotFoundException("No run " + id));
+        if (!run.options().discover() || run.status() != Status.WAITING_FOR_USER) {
+            throw new ConflictException("Roles can only be changed while a Discover run waits for your selection");
+        }
+        discovery.saveSelection(id, edits == null ? List.of() : edits);
+        return discovery.views(id);
     }
 
     public RunView view(long id) {
@@ -105,8 +140,17 @@ public class PipelineService {
         if (run.status() != Status.WAITING_FOR_USER) {
             throw new ConflictException("Run " + id + " is not waiting for review (status " + run.status() + ")");
         }
+        if (run.options().discover() && discovery.selected(id).isEmpty()) {
+            throw new ConflictException("Choose at least one role to search for");
+        }
         runs.update(id, Status.QUEUED, Step.SEARCH, 10, "Queued for search");
-        submit(id, () -> searchAndRank(id));
+        submit(id, () -> {
+            if (run.options().discover()) {
+                discoverSearch(id);
+            } else {
+                searchAndRank(id);
+            }
+        });
         return view(id);
     }
 
@@ -133,6 +177,157 @@ public class PipelineService {
                 runs.update(id, Status.WAITING_FOR_USER, Step.PROFILE, 10, "Review the search profile, then continue");
             }
         });
+    }
+
+    // ---- Discover roles ----
+
+    /** PROFILE (the user's own constraints), then SUGGEST (role types from the whole CV), then wait for the user's choice. */
+    private void suggestRoles(long id, String context, RunOptions options) {
+        guarded(id, () -> {
+            runs.update(id, Status.RUNNING, Step.PROFILE, 5, "Reading your constraints");
+            long profileId = profiles.build(context.isBlank() ? DISCOVER_DEFAULT_CONTEXT : context, options, LocalDate.now(clock));
+            if (options.aggressiveSearch() && options.maxAgeDays() == null
+                    && profiles.get(profileId).profile().maxAgeDays() < AGGRESSIVE_MAX_AGE_DAYS) {
+                profileId = profiles.withMaxAgeDays(profileId, AGGRESSIVE_MAX_AGE_DAYS);
+            }
+            runs.setSearchProfile(id, profileId);
+            checkCancelled(id);
+            runs.update(id, Status.RUNNING, Step.SUGGEST, 15, "Reading your whole CV and thinking of roles you would fit");
+            discovery.suggest(id, context, options.aggressiveSearch(), LocalDate.now(clock));
+            runs.update(id, Status.WAITING_FOR_USER, Step.SUGGEST, 40, "Choose the roles to search for, then continue");
+        });
+    }
+
+    private void discoverSearch(long id) {
+        guarded(id, () -> discoverSearchNow(id));
+    }
+
+    /** An ad found by one or more roles: the version with the best relevance, its best role, and every role that found it. */
+    private static final class Candidate {
+        NewJob job;
+        int primary;
+        final Set<Integer> roles = new java.util.LinkedHashSet<>();
+
+        Candidate(NewJob job, int role) {
+            this.job = job;
+            this.primary = role;
+            roles.add(role);
+        }
+    }
+
+    private void discoverSearchNow(long id) {
+        Run run = runs.find(id).orElseThrow();
+        RunOptions options = run.options();
+        SearchProfile base = profiles.get(run.searchProfileId()).profile();
+        runs.update(id, Status.RUNNING, Step.SEARCH, 10, "Preparing the search for your chosen roles");
+        List<ResolvedRole> roles = discovery.resolve(id, base, LocalDate.now(clock));
+        int limit = Math.min(options.limit() != null ? options.limit()
+                : (options.aggressiveSearch() ? DISCOVER_AGGRESSIVE_LIMIT : DISCOVER_LIMIT), DISCOVER_MAX_LIMIT);
+        List<String> notes = new ArrayList<>();
+
+        java.util.Map<String, Candidate> merged = new java.util.LinkedHashMap<>();
+        int found = 0;
+        int failedRoles = 0;
+        for (int i = 0; i < roles.size(); i++) {
+            checkCancelled(id);
+            ResolvedRole role = roles.get(i);
+            runs.progress(id, 10 + 30 * i / roles.size(), "Searching Platsbanken for " + role.title() + " (" + (i + 1) + " of " + roles.size() + ")");
+            CandidateCollector.Collected collected;
+            try {
+                collected = collector.collect(role.profile(), (done, total) -> { });
+            } catch (RuntimeException e) {
+                failedRoles++;
+                notes.add(role.title() + ": " + e.getMessage());
+                continue;
+            }
+            collected.notes().stream().filter(n -> !notes.contains(n)).forEach(notes::add);
+            JobPrefilter.Result filtered = JobPrefilter.apply(collected.jobs(), role.profile(), clock.instant());
+            found += collected.jobs().size();
+            for (NewJob job : filtered.kept()) {
+                Candidate existing = merged.get(job.dedupeKey());
+                if (existing == null) {
+                    merged.put(job.dedupeKey(), new Candidate(job, i));
+                } else {
+                    existing.roles.add(i);
+                    if (job.relevance() > existing.job.relevance()) {
+                        existing.job = job;
+                        existing.primary = i;
+                    }
+                }
+            }
+        }
+        if (failedRoles == roles.size()) {
+            throw new IllegalStateException("Every role search failed: " + String.join("; ", notes));
+        }
+        checkCancelled(id);
+
+        // Store every ad of every role, tagged with the roles that found it.
+        java.util.Map<Candidate, Long> ids = new java.util.LinkedHashMap<>();
+        for (Candidate c : merged.values()) {
+            long jobId = jobs.upsert(c.job, id).id();
+            jobs.linkToRun(id, jobId, c.job.relevance());
+            jobs.setPrimaryRole(id, jobId, roles.get(c.primary).id());
+            c.roles.forEach(r -> jobs.tagRole(id, jobId, roles.get(r).id()));
+            ids.put(c, jobId);
+        }
+
+        // Score at most `limit` ads, taken round-robin from the roles so one broad role cannot use the whole budget.
+        java.util.Map<Integer, java.util.ArrayDeque<Candidate>> perRole = new java.util.TreeMap<>();
+        merged.values().stream().sorted(Comparator.comparingDouble((Candidate c) -> -c.job.relevance()))
+                .forEach(c -> perRole.computeIfAbsent(c.primary, k -> new java.util.ArrayDeque<>()).add(c));
+        java.util.Map<Integer, List<Long>> toScore = new java.util.TreeMap<>();
+        int picked = 0;
+        while (picked < limit && perRole.values().stream().anyMatch(q -> !q.isEmpty())) {
+            for (var entry : perRole.entrySet()) {
+                Candidate next = entry.getValue().poll();
+                if (next != null && picked < limit) {
+                    toScore.computeIfAbsent(entry.getKey(), k -> new ArrayList<>()).add(ids.get(next));
+                    picked++;
+                }
+            }
+        }
+
+        String summary = "Found " + found + " ads for " + roles.size() + " roles, " + merged.size() + " distinct after filters, scoring " + picked;
+        runs.update(id, Status.RUNNING, Step.RANK, 45, summary);
+        checkCancelled(id);
+        CvDigestService.Digest cv = digests.build();
+        int total = picked;
+        int[] doneBefore = {0};
+        int scored = 0;
+        int cached = 0;
+        int failed = 0;
+        String firstError = null;
+        for (var entry : toScore.entrySet()) {
+            checkCancelled(id);
+            ResolvedRole role = roles.get(entry.getKey());
+            int base0 = doneBefore[0];
+            ScoreService.Summary result = scorer.score(entry.getValue(), role.searchProfileId(), role.profile(), cv,
+                    done -> runs.progress(id, 45 + (total == 0 ? 50 : 50 * (base0 + done) / total), "Scored " + (base0 + done) + " of " + total),
+                    () -> cancelRequested.contains(id));
+            doneBefore[0] += entry.getValue().size();
+            scored += result.scored();
+            cached += result.cached();
+            failed += result.failed();
+            if (firstError == null && !result.errors().isEmpty()) {
+                firstError = result.errors().get(0);
+            }
+        }
+        checkCancelled(id);
+        if (total > 0 && failed == total) {
+            throw new IllegalStateException("Every scoring call failed: " + firstError);
+        }
+        StringBuilder message = new StringBuilder(summary).append(". Scored ").append(scored);
+        if (cached > 0) {
+            message.append(", ").append(cached).append(" from cache");
+        }
+        if (failed > 0) {
+            message.append(", ").append(failed).append(" failed");
+        }
+        if (merged.size() > picked) {
+            message.append(". ").append(merged.size() - picked).append(" more ads were found but not scored (limit ").append(limit).append(")");
+        }
+        notes.forEach(n -> message.append(". ").append(n));
+        runs.finish(id, Status.DONE, message.toString(), clock.instant());
     }
 
     private void searchAndRank(long id) {
@@ -251,8 +446,11 @@ public class PipelineService {
         if (o.maxAgeDays() != null && (o.maxAgeDays() < 1 || o.maxAgeDays() > 90)) {
             throw new IllegalArgumentException("maxAgeDays must be between 1 and 90");
         }
-        if (o.limit() != null && (o.limit() < 1 || o.limit() > 200)) {
-            throw new IllegalArgumentException("limit must be between 1 and 200");
+        if (o.limit() != null && (o.limit() < 1 || o.limit() > (o.discover() ? DISCOVER_MAX_LIMIT : 200))) {
+            throw new IllegalArgumentException("limit must be between 1 and " + (o.discover() ? DISCOVER_MAX_LIMIT : 200));
+        }
+        if (!java.util.Set.of("TARGETED", "DISCOVER", "MANUAL").contains(o.modeName())) {
+            throw new IllegalArgumentException("mode must be TARGETED or DISCOVER");
         }
     }
 }

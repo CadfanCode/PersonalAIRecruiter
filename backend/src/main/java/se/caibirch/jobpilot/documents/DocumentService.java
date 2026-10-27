@@ -152,7 +152,7 @@ public class DocumentService {
     /** The search profile that documents for this job are tailored to: the one of the given run, else the newest run that found it. */
     long profileFor(long jobId, Long sourceRunId) {
         Long found = sourceRunId != null
-                ? runs.find(sourceRunId).map(r -> r.searchProfileId()).orElse(null)
+                ? jobs.profileIdFor(jobId, sourceRunId).orElse(null)
                 : jobs.latestSearchProfileId(jobId).orElse(null);
         if (found == null) {
             throw new IllegalArgumentException("No search run found for job " + jobId + "; documents need its search profile");

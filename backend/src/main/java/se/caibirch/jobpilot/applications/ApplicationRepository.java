@@ -24,7 +24,9 @@ public class ApplicationRepository {
     private static final String SELECT = """
             SELECT a.*, j.title, j.employer, j.municipality, j.url, j.apply_url, j.status AS job_status,
                    (SELECT s.total FROM job_score s JOIN pipeline_run r ON r.id = a.run_id
-                     WHERE s.job_id = a.job_id AND s.search_profile_id = r.search_profile_id
+                     LEFT JOIN run_job rj ON rj.run_id = r.id AND rj.job_id = a.job_id
+                     LEFT JOIN role_suggestion rs ON rs.id = rj.role_suggestion_id
+                     WHERE s.job_id = a.job_id AND s.search_profile_id = coalesce(rs.search_profile_id, r.search_profile_id)
                      ORDER BY s.scored_at DESC LIMIT 1) AS score
             FROM application a JOIN job j ON j.id = a.job_id
             """;

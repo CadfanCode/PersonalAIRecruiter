@@ -34,9 +34,9 @@ public class RunRepository {
     public long create(RunOptions options, Instant now) {
         try {
             return jdbc.sql("""
-                    INSERT INTO pipeline_run (status, step, progress, message, started_at, options_json)
-                    VALUES ('QUEUED', 'PROFILE', 0, 'Queued', :now, :o::jsonb) RETURNING id
-                    """).param("now", Timestamp.from(now)).param("o", mapper.writeValueAsString(options))
+                    INSERT INTO pipeline_run (status, step, progress, message, started_at, options_json, mode)
+                    VALUES ('QUEUED', 'PROFILE', 0, 'Queued', :now, :o::jsonb, :mode) RETURNING id
+                    """).param("now", Timestamp.from(now)).param("o", mapper.writeValueAsString(options)).param("mode", options.modeName())
                     .query(Long.class).single();
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);

@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import se.caibirch.jobpilot.discovery.RoleDiscoveryService;
 import se.caibirch.jobpilot.jobs.JobExport;
 import se.caibirch.jobpilot.jobs.JobModel.Row;
 import se.caibirch.jobpilot.jobs.JobModel.Status;
@@ -32,7 +33,7 @@ import se.caibirch.jobpilot.pipeline.PipelineModel.RunView;
 public class RunController {
 
     public record StartRequest(String prompt, Integer maxAgeDays, Integer limit, Boolean includeWeb,
-                               Boolean autoContinue) {
+                               Boolean autoContinue, String mode, Boolean aggressive) {
     }
 
     private final PipelineService pipeline;
@@ -46,7 +47,7 @@ public class RunController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public Map<String, Long> start(@RequestBody StartRequest r) {
-        long id = pipeline.start(r.prompt(), new RunOptions(r.maxAgeDays(), r.limit(), r.includeWeb(), r.autoContinue()));
+        long id = pipeline.start(r.prompt(), new RunOptions(r.maxAgeDays(), r.limit(), r.includeWeb(), r.autoContinue(), r.mode(), r.aggressive()));
         return Map.of("id", id);
     }
 
@@ -58,6 +59,18 @@ public class RunController {
     @GetMapping("/{id}")
     public RunView get(@PathVariable long id) {
         return pipeline.view(id);
+    }
+
+    /** The role types suggested for a Discover run: kept, so the user can revisit them. */
+    @GetMapping("/{id}/roles")
+    public List<RoleDiscoveryService.RoleView> roles(@PathVariable long id) {
+        return pipeline.roles(id);
+    }
+
+    /** The complete list of roles as the user wants it: ticked, renamed, typed in. Then {@code /continue} searches them. */
+    @PutMapping("/{id}/roles")
+    public List<RoleDiscoveryService.RoleView> saveRoles(@PathVariable long id, @RequestBody List<RoleDiscoveryService.RoleEdit> roles) {
+        return pipeline.saveRoles(id, roles);
     }
 
     @PutMapping("/{id}/profile")
