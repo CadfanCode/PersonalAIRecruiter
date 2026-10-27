@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useOpenApplications } from '../../api/apply'
 import { type JobRow, useJobDetail, usePatchJob } from '../../api/runs'
 import { Button, TextArea } from '../Form'
 import { useToast } from '../Toasts'
@@ -13,6 +14,7 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
   const patch = usePatchJob(runId)
   const toast = useToast()
   const navigate = useNavigate()
+  const openApplication = useOpenApplications()
   const row: JobRow | undefined = detail.data?.row
 
   if (jobId === null) return null
@@ -55,7 +57,14 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
             <Button variant="ghost" onClick={() => navigate(`/documents/job/${jobId}?from=${runId}`)}>
               {row.status === 'DOCS_READY' ? 'Open documents' : 'Documents'}
             </Button>
-            <Button variant="ghost" disabled title="Arrives in milestone 5">Open application</Button>
+            <Button variant="ghost" disabled={openApplication.isPending}
+              title="Opens the ad in the JobPilot browser and fills what it can. It never submits."
+              onClick={() => openApplication.mutate([jobId], {
+                onSuccess: () => navigate('/apply'),
+                onError: (e) => toast(e.message, 'error'),
+              })}>
+              Open application
+            </Button>
             <Button variant="ghost" onClick={() => update({ status: 'APPLIED' }, 'Marked as applied')}>Mark applied</Button>
             <Button variant="ghost" disabled title="Arrives in milestone 6">Log in aktivitetsrapport</Button>
             <Button variant="danger" onClick={() => update({ status: 'REJECTED' }, 'Rejected')}>Reject</Button>

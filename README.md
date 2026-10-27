@@ -24,6 +24,14 @@ cd frontend && npm install && npm run dev # UI on http://localhost:5173
 `./mvnw` needs a valid `JAVA_HOME` (Java 21 or newer). If port 8080 is taken, start the API with
 `SERVER_PORT=8081` and the UI with `VITE_API_TARGET=http://127.0.0.1:8081`.
 
+Applying (milestone 5): install Chromium once with
+`cd backend && ./mvnw exec:java -Dexec.mainClass=com.microsoft.playwright.CLI -Dexec.args="install chromium"`.
+"Open application" starts a separate Chromium with its own profile in `~/.jobpilot/browser-profile` (never
+your everyday browser). Sign in to Varbi, Jobshark and similar sites there; the profile keeps the session.
+JobPilot fills what it can and stops: it never submits, never types passwords or handles BankID, never ticks
+consent boxes and never clicks Ansök. Press Submit yourself. `JOBPILOT_BROWSER_HEADLESS=true` runs it without a
+window (tests do this). Port 8080 conflicts: see above.
+
 Model and cost: JobPilot runs your own `claude` CLI. Without `JOBPILOT_CLAUDE_MODEL` it uses the
 CLI's default model (Opus on this machine). Measured on 26 Oct 2026: scoring one ad costs about
 $0.04 on Sonnet (`JOBPILOT_CLAUDE_MODEL=sonnet`), and a run scores up to 50 ads by default. The
@@ -42,4 +50,5 @@ Loading your CV data: with the API running, `curl --data-binary @seed/cv_databas
 -H 'Content-Type: application/json' http://127.0.0.1:8080/api/cv/seed` (or use the file picker on
 the CV database page when it is empty). It refuses to run on a non-empty database.
 
-Status: milestones 1 (skeleton), 2 (CV database), 3 (search and ranking) and 4 (documents) done. See `docs/SPEC.md` section 15.
+Status: milestones 1 (skeleton), 2 (CV database), 3 (search and ranking), 4 (documents) and 5 (apply) built. The
+real-site acceptance of milestone 5 (Ponty, Workday, Varbi) is yours to run; see docs/adr/0005-apply.md. See `docs/SPEC.md` section 15.

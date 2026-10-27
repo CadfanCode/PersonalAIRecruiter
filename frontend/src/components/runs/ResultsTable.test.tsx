@@ -18,6 +18,7 @@ function renderTable(jobs: JobRow[], topN = 10) {
         <Routes>
           <Route path="/runs/7" element={<ResultsTable runId={7} jobs={jobs} topN={topN} now={NOW} />} />
           <Route path="/documents/job/:jobId" element={<p>Documents page</p>} />
+          <Route path="/apply" element={<p>Apply page</p>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -145,11 +146,42 @@ describe('results table', () => {
     const drawer = await screen.findByRole('dialog', { name: 'Job details' })
     expect(await within(drawer).findByText('Vi söker en utvecklare.')).toBeInTheDocument()
     expect(within(drawer).getByRole('link', { name: 'Apply link' })).toHaveAttribute('href', bravo.url)
-    expect(within(drawer).getByRole('button', { name: 'Open application' })).toBeDisabled()
     await userEvent.click(within(drawer).getByRole('button', { name: 'Mark applied' }))
 
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ status: 'APPLIED' })
+  })
+
+  it('opens the application from the drawer and goes to the apply monitor', async () => {
+    const all = rows()
+    const bravo = all[1]
+    const calls = mockApi({
+      [`GET /api/jobs/${bravo.id}?run=7`]: { row: bravo, description: 'x' },
+      'POST /api/apply': [],
+    })
+    renderTable(all)
+
+    await userEvent.click(screen.getByText('Bravo'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Open application' }))
+
+    expect(await screen.findByText('Apply page')).toBeInTheDocument()
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ jobIds: [bravo.id] })
+  })
+
+  it('opens the selected rows as applications, up to five at a time', async () => {
+    const many = Array.from({ length: 7 }, (_, i) => job({ title: `Row ${i + 1}`, rank: i + 1, total: 90 - i }))
+    const calls = mockApi({ 'POST /api/apply': [] })
+    renderTable(many, 10)
+
+    for (let i = 1; i <= 6; i++) await userEvent.click(screen.getByLabelText(`Select Row ${i}`))
+    const open = screen.getByRole('button', { name: 'Open applications' })
+    expect(open).toBeDisabled()
+    expect(open).toHaveAttribute('title', expect.stringContaining('At most 5'))
+    await userEvent.click(screen.getByLabelText('Select Row 6'))
+    await userEvent.click(screen.getByRole('button', { name: 'Open applications' }))
+
+    expect(await screen.findByText('Apply page')).toBeInTheDocument()
+    expect((calls.find((c) => c.method === 'POST')!.body as { jobIds: number[] }).jobIds).toHaveLength(5)
   })
 
   it('opens the documents page from the drawer without generating anything', async () => {

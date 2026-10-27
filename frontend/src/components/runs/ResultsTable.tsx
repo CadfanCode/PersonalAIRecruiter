@@ -12,6 +12,7 @@ import {
 } from '@tanstack/react-table'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useOpenApplications } from '../../api/apply'
 import { JOB_STATUSES, type JobRow, type JobStatus, usePatchJob } from '../../api/runs'
 import { Button } from '../Form'
 import { useToast } from '../Toasts'
@@ -29,6 +30,7 @@ interface SavedView {
 }
 
 const VIEWS_KEY = 'jobpilot.views'
+const MAX_TABS = 5
 
 function loadViews(): SavedView[] {
   try {
@@ -74,6 +76,7 @@ export function ResultsTable({
   const patch = usePatchJob(runId)
   const toast = useToast()
   const navigate = useNavigate()
+  const openApplications = useOpenApplications()
 
   const filtering = globalFilter !== '' || columnFilters.length > 0
   // The default view is the top N by score; any filter or "show all" widens it (SPEC 7.4).
@@ -272,6 +275,14 @@ export function ResultsTable({
             table.getSelectedRowModel().rows.forEach((r) => setStatus(r.original.id, 'SHORTLISTED'))
             setRowSelection({})
           }}>Shortlist selected</Button>
+          <Button variant="ghost" disabled={selectedCount > MAX_TABS || openApplications.isPending}
+            title={selectedCount > MAX_TABS ? `At most ${MAX_TABS} applications can be opened at once` : 'Opens the selected ads in the JobPilot browser. Nothing is submitted.'}
+            onClick={() => openApplications.mutate(table.getSelectedRowModel().rows.map((r) => r.original.id), {
+              onSuccess: () => { setRowSelection({}); navigate('/apply') },
+              onError: (e) => toast(e.message, 'error'),
+            })}>
+            Open applications
+          </Button>
           <Button variant="ghost" onClick={() => setRowSelection({})}>Clear</Button>
         </div>
       )}

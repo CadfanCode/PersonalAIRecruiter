@@ -1,5 +1,6 @@
 import { Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
+import { ApplyMonitorPage } from './pages/ApplyMonitorPage'
 import { CvDatabase } from './pages/CvDatabase'
 import { Dashboard } from './pages/Dashboard'
 import { DocumentsIndexPage } from './pages/DocumentsIndexPage'
@@ -18,7 +19,7 @@ export function App() {
         <Route path="runs/:id" element={<RunPage />} />
         <Route path="documents" element={<DocumentsIndexPage />} />
         <Route path="documents/job/:jobId" element={<JobDocumentsPage />} />
-        <Route path="apply" element={<Placeholder title="Apply monitor" milestone={5} description="One card per open application tab." />} />
+        <Route path="apply" element={<ApplyMonitorPage />} />
         <Route path="cv" element={<CvDatabase />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="*" element={<Placeholder title="Not found" milestone={1} description="No such page." />} />
