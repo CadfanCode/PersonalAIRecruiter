@@ -90,6 +90,17 @@ class DocumentRendererTest {
     }
 
     @Test
+    void theLanguagesLineIsTheLastSkillsBulletOrStandsAloneWithoutASkillsSection() throws IOException {
+        String withSkills = text(renderer.renderCv(cv("sv", sections()), profile).pdf());
+        assertThat(withSkills).containsOnlyOnce("Språk: Svenska (flytande)");
+        assertThat(withSkills.indexOf("Språk:")).isLessThan(withSkills.indexOf("ARBETSLIVSERFARENHET"));
+
+        String without = text(renderer.renderCv(cv("sv", sections().subList(1, 3)), profile).pdf());
+        assertThat(without).containsOnlyOnce("Språk: Svenska (flytande)");
+        assertThat(without.indexOf("Språk:")).isGreaterThan(without.indexOf("UTBILDNING"));
+    }
+
+    @Test
     void englishCvUsesEnglishLabels() throws IOException {
         var rendered = renderer.renderCv(cv("en", sections()), profile);
 

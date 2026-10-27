@@ -42,4 +42,4 @@ Loading your CV data: with the API running, `curl --data-binary @seed/cv_databas
 -H 'Content-Type: application/json' http://127.0.0.1:8080/api/cv/seed` (or use the file picker on
 the CV database page when it is empty). It refuses to run on a non-empty database.
 
-Status: milestones 1 (skeleton), 2 (CV database) and 3 (search and ranking) done. See `docs/SPEC.md` section 15.
+Status: milestones 1 (skeleton), 2 (CV database), 3 (search and ranking) and 4 (documents) done. See `docs/SPEC.md` section 15.

@@ -238,7 +238,9 @@ JobScore (same rubric used by hand on 26 Oct 2026):
   language, driving licence and similar hard requirements.
 - `total` is computed in Java (sum), never by Claude. Rank by total, then by deadline.
 - `asksForNewGraduates` is true only if the ad explicitly targets new graduates
-  (nyexaminerad, graduate programme, "recently graduated"). "Junior" alone is not enough.
+  (nyexaminerad, graduate programme, "recently graduated"). "Junior" alone is not enough. Java
+  also sets the flag when the ad text matches `NewGraduatePhrases`, the same list the style
+  validator uses (the scorer missed "i början av din karriär" in the Comstream ad).
 
 CvContent:
 ```json
@@ -342,11 +344,15 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 
 `selectFacts` chooses entries and facts by relevance to the ad and the SearchProfile's
 `relevantTags`. Rules:
-- Always include contact details, education entries the ad requires, and languages.
+- Always include contact details, all education entries (unless the user excluded one), and
+  languages. Education facts are the ones Claude picked; an education entry Claude left out is
+  added without bullets. Entries marked "letter" only (for example leisure facts) stay out of the CV.
 - Prefer recent and relevant entries; omit unrelated ones. A teaching CV drops Spring Boot; a
   developer CV keeps teaching only as a short line that shows communication skills.
 - Keep employment gaps honest: an omitted job can be summarised as one line ("Other employment
   2019-2021, available on request") if omitting it would create a gap of more than 6 months.
+  Java builds the line from database dates (`GapNote`); separate periods are listed separately
+  ("2018-2021 and 2025-2026"), never merged into one range.
 - The user can pin or exclude entries per job in the UI before generation.
 
 ### 8.2 Generation
@@ -354,6 +360,12 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 `writeCv` and `writeLetter` receive only the selected facts. Language = the ad's language. The
 example letter (the user's Knowit letter, in `seed/`) is passed as a structure example, never as
 text to copy.
+
+Java owns every factual header field of the CV. After `writeCv` (and after a rewrite) it overwrites
+each item's `title`, `meta` (organisation), `location` and `dateLabel` from the CV database (years
+only, plain hyphens), and builds the languages line from the profile. Claude writes prose only: the
+headline, the profile paragraphs, bullets and section headings. This removes two failure modes:
+invented employers or dates, and en-dashes in date ranges.
 
 ### 8.3 Validation (`DocumentStyleValidator`, `FactCitationValidator`)
 
@@ -365,8 +377,16 @@ text to copy.
 - Fail if the letter opens with "Jag heter" or "My name is".
 - Warn (rewrite once) on banned AI phrasing (8.4).
 - Fail on bullets without valid fact citations.
+- Fail when `content.language` differs from the ad's language, and when a letter names an employer
+  that only appears in an example letter (Knowit, Ravion) and is not the target employer.
+- Warn (rewrite once, never block approval) on: a number in a bullet or letter paragraph that the
+  cited facts do not contain, a skill in the skills section that is in neither the skill table nor
+  the selected facts, a bullet citing a fact of another entry, and a CV or letter over its page
+  limit. Calibration on 26 Oct 2026: the style rules found nothing in the ten documents that were
+  sent; the skills check flags descriptive phrases in them, which is why it only warns.
 - On failure, call `rewriteForViolations` once with the report; if it still fails, show the
-  document with highlighted violations for manual editing. Never auto-approve.
+  document with highlighted violations for manual editing. Never auto-approve: `approve`
+  re-validates the stored content and answers 409 with the report while any FAIL remains.
 
 ### 8.4 Banned or discouraged phrasing (configurable list, case-insensitive)
 
@@ -388,7 +408,12 @@ sv: "brinner för", "passionerad", "drivs av", "inte bara ... utan också", "i d
 - File names: `CV_Cai_Birch_<Employer>.pdf` and `Personligt_brev_Cai_Birch_<Employer>.pdf`
   (or `Cover_letter_...` for English), ASCII-safe.
 - Documents are editable in the UI (paragraph-level text areas) before approval. Re-render on
-  save and bump the version.
+  save and bump the version. There is one current document per (job, kind); a save or a
+  regeneration replaces it, bumps `version` and clears `approved`. The job becomes DOCS_READY when
+  both documents are approved. Generation runs as a `DOCUMENTS` pipeline run (UI polls
+  `/api/runs/{id}`) and uses the search profile of the run the ad came from.
+- Example letters (`resources/claude/examples`): the Knowit letter for Swedish ads, the Ravion
+  letter for English ads. They show shape only.
 
 ## 9. Applying in the browser
 
@@ -502,7 +527,10 @@ GET      /runs/{id}/jobs?q=&status=&language=&minScore=&sort=rank|deadline|publi
 GET      /runs/{id}/jobs.csv  /runs/{id}/jobs.xlsx   export of the full ranked table
 GET      /jobs/{id}?run={runId}  full ad text and the score for that run's search profile
 PATCH    /jobs/{id}             status, notes (pinned/excluded entries arrive with milestone 4)
-POST     /jobs/{id}/documents    generate CV and letter
+POST     /jobs/{id}/documents    generate CV and letter ({runId?}) -> {runId} of a DOCUMENTS run
+GET      /jobs/{id}/documents    both documents, the last selection, pinned and excluded entries
+PATCH    /jobs/{id}/selection    {pinned:[entryId], excluded:[entryId]}
+GET      /documents              overview of jobs that have documents
 GET/PUT  /documents/{id}         edit content -> re-render
 POST     /documents/{id}/approve
 GET      /documents/{id}/pdf

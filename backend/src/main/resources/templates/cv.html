@@ -4,7 +4,7 @@
     <meta charset="UTF-8"/>
     <title th:text="${name}">CV</title>
 </head>
-<body class="cv">
+<body class="cv" th:with="hasSkills=${!cv.sections.{? #this.kind == 'SKILLS'}.isEmpty()}">
 <div class="header">
     <h1 class="name" th:text="${name}">CAI BIRCH</h1>
     <p class="headline" th:if="${cv.headline != null and !cv.headline.isEmpty()}" th:text="${cv.headline}">Headline</p>
@@ -20,6 +20,7 @@
     <h2 th:text="${section.heading}">HEADING</h2>
     <ul class="bullets skills" th:if="${section.kind == 'SKILLS'}">
         <li th:each="item : ${section.items}"><span class="skill-label" th:if="${item.title != null and !item.title.isEmpty()}" th:text="${item.title + ': '}">Group: </span><span th:text="${item.meta}">Java, Spring Boot</span></li>
+        <li th:if="${cv.languagesLine != null and !cv.languagesLine.isEmpty()}"><span class="skill-label" th:text="${labels.languages + ' '}">Språk: </span><span th:text="${cv.languagesLine}">Svenska</span></li>
     </ul>
     <th:block th:if="${section.kind != 'SKILLS'}">
         <div class="item" th:each="item : ${section.items}">
@@ -38,7 +39,7 @@
     <p class="gapnote" th:if="${section.kind == 'EXPERIENCE' and cv.gapNote != null and !cv.gapNote.isEmpty()}" th:text="${cv.gapNote}">Other employment</p>
 </div>
 
-<ul class="bullets skills languages" th:if="${cv.languagesLine != null and !cv.languagesLine.isEmpty()}">
+<ul class="bullets skills languages" th:if="${!hasSkills and cv.languagesLine != null and !cv.languagesLine.isEmpty()}">
     <li><span class="skill-label" th:text="${labels.languages + ' '}">Språk: </span><span th:text="${cv.languagesLine}">Svenska</span></li>
 </ul>
 </body>
