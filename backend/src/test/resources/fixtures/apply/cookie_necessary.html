@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Cookies</title></head><body>
+<div id="cookie-banner" class="cookie-consent">
+  <p>Vi använder cookies.</p>
+  <button id="all" onclick="window.__cookie='all'; document.getElementById('cookie-banner').remove()">Acceptera alla</button>
+  <button id="necessary" onclick="window.__cookie='necessary'; document.getElementById('cookie-banner').remove()">Endast nödvändiga</button>
+  <button id="confirm" onclick="window.__cookie='confirm'">Bekräfta val</button>
+</div>
+<form onsubmit="return false"><label for="m">Meddelande</label><input id="m"><button type="submit">Skicka</button></form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

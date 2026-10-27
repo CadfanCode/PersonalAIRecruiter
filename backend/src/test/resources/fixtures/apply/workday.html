@@ -1,0 +1,40 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Workday: My Information</title></head><body>
+<h1>My Information</h1>
+<a href="#">Apply Manually</a>
+<form onsubmit="return false">
+<fieldset><legend>Legal Name</legend>
+  <label for="fn">First Name</label><input id="fn" name="firstName">
+  <label for="ln">Last Name</label><input id="ln" name="lastName">
+</fieldset>
+  <label for="em">Email</label><input id="em" type="email">
+  <label for="ph">Phone Number</label><input id="ph" type="tel">
+  <label for="co">Country</label><select id="co"><option value="">Select</option><option value="SE">Sweden</option><option value="NO">Norway</option></select>
+  <label for="sk">Skills</label>
+  <div style="position:relative"><input id="sk" role="combobox" aria-autocomplete="list" aria-expanded="false" autocomplete="off">
+  <ul id="lb" role="listbox" style="display:none;position:absolute;margin:0;padding:0;list-style:none;background:#fff;border:1px solid #888"></ul></div>
+  <label><input type="checkbox" id="tc"> Join our talent community to hear about future roles</label>
+  <button type="button">Save and Continue</button>
+  <button type="button">Next</button>
+</form>
+<script>
+var skills = ["Java", "JavaScript", "Kotlin", "Spring Boot"];
+var sk = document.getElementById("sk"), lb = document.getElementById("lb");
+sk.addEventListener("input", function () {
+  var q = sk.value.toLowerCase(); lb.innerHTML = "";
+  skills.filter(function (s) { return q && s.toLowerCase().indexOf(q) === 0; }).forEach(function (s) {
+    var li = document.createElement("li"); li.setAttribute("role", "option"); li.textContent = s; li.style.padding = "4px 8px";
+    li.addEventListener("click", function () { sk.value = s; lb.style.display = "none"; window.__picked = s; });
+    lb.appendChild(li);
+  });
+  lb.style.display = lb.children.length ? "block" : "none";
+});
+</script>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

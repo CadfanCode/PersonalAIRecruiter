@@ -25,6 +25,7 @@
         <!-- the io.github fork is the one built on PDFBox 3 (com.openhtmltopdf is dormant on PDFBox 2) -->
         <openhtmltopdf.version>1.1.100</openhtmltopdf.version>
         <jsoup.version>1.21.2</jsoup.version>
+        <playwright.version>1.64.0</playwright.version>
     </properties>
 
     <dependencies>
@@ -63,6 +64,11 @@
             <groupId>io.github.openhtmltopdf</groupId>
             <artifactId>openhtmltopdf-pdfbox</artifactId>
             <version>${openhtmltopdf.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>com.microsoft.playwright</groupId>
+            <artifactId>playwright</artifactId>
+            <version>${playwright.version}</version>
         </dependency>
         <dependency>
             <groupId>org.thymeleaf</groupId>

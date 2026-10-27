@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Varbi: Logga in</title></head><body>
+<h1>Logga in för att ansöka</h1>
+<p>Använd Mobilt BankID eller ditt Varbi-konto.</p>
+<form onsubmit="return false">
+  <label for="u">E-post</label><input id="u" type="email">
+  <label for="pw">Lösenord</label><input id="pw" type="password">
+  <button type="submit">Logga in</button>
+</form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

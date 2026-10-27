@@ -1,0 +1,33 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Ponty: Software Developer</title></head><body>
+<h1>Ansök: Software Developer</h1>
+<a href="#" id="applynow">Apply now</a>
+<form onsubmit="return false">
+  <label for="n">Namn</label><input id="n" name="name">
+  <label for="e">E-post</label><input id="e" name="email" type="email">
+  <label for="p">Telefon</label><input id="p" name="phone" type="tel">
+  <label for="u">Länk (LinkedIn eller portfolio)</label><input id="u" name="url" type="url">
+  <label for="f">Dokument</label><input id="f" name="files" type="file" multiple>
+  <div id="cats"></div>
+  <label><input type="checkbox" id="c" name="consent"> Jag samtycker till att Friday behandlar mina personuppgifter</label>
+  <button type="submit">Skicka ansökan</button>
+</form>
+<script>
+document.getElementById("f").addEventListener("change", function (ev) {
+  var box = document.getElementById("cats"); box.innerHTML = "";
+  Array.prototype.forEach.call(ev.target.files, function (file, i) {
+    var l = document.createElement("label"); l.textContent = "Kategori för " + file.name + " ";
+    var s = document.createElement("select"); s.name = "cat" + i;
+    ["Välj kategori", "CV", "Portfolio", "Personligt brev"].forEach(function (o) { var op = document.createElement("option"); op.value = i === 0 && o === "Välj kategori" ? "" : o; op.textContent = o; s.appendChild(op); });
+    l.appendChild(s); box.appendChild(l);
+  });
+});
+</script>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

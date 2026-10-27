@@ -1,0 +1,15 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>Cookies</title></head><body>
+<div id="consent-banner">
+  <button id="all" onclick="window.__cookie='all'; document.getElementById('consent-banner').remove()">Accept all</button>
+  <button id="settings" onclick="window.__cookie='settings'">Cookie settings</button>
+</div>
+<form onsubmit="return false"><label for="m">Message</label><input id="m"><button type="submit">Send</button></form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>
