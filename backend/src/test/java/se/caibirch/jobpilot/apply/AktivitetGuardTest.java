@@ -166,6 +166,19 @@ class AktivitetGuardTest extends PlaywrightTest {
     }
 
     @Test
+    void aClosedListFromAnotherFieldDoesNotMaskTheOpenOne() {
+        openAkt("form.html");
+        BrowserGuard g = guardFor("form.html");
+        assertThat(g.typeAndPick(field("Yrkesroll"), "Systemutvecklare/Prog", "Systemutvecklare/Programmerare", false).done()).isTrue();
+        // the yrkesroll items are still in the page, hidden, ahead of the ort list in document order
+
+        Outcome o = g.typeAndPick(field("Sök och välj ort"), "Solna", "Solna", true);
+
+        assertThat(o.done()).as(o.reason()).isTrue();
+        assertThat(eval("document.getElementById('ort').value")).isEqualTo("Solna");
+    }
+
+    @Test
     void worksWhenTheItemsAreRoleLessListItemsUnderAriaControls() {
         openAkt("form_li.html");
 

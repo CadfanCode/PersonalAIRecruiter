@@ -28,7 +28,7 @@ class JobExportTest {
         Score score = new Score(83, 40, 25, 18, List.of(), fit, "No Angular", "m", Instant.EPOCH);
         return new Row(1, 1, "JOBTECH", "1", "https://platsbanken/1", null, title, employer, "Taxi Stockholm", "Solna",
                 "Solna", Instant.parse("2026-10-26T10:00:00Z"), Instant.parse("2026-11-20T10:00:00Z"), "sv", null,
-                false, "2 års erfarenhet", Status.NEW, null, false, null, score);
+                false, "2 års erfarenhet", Status.NEW, null, false, null, null, score);
     }
 
     @Test

@@ -18,7 +18,7 @@ class JobRankingTest {
         Score score = total == null ? null : new Score(total, 0, 0, 0, List.of(), "", "", "m", Instant.EPOCH);
         return new Row(title.hashCode(), null, "JOBTECH", "id", null, null, title, "E", null, null, null,
                 published == null ? null : Instant.parse(published), deadline == null ? null : Instant.parse(deadline),
-                "sv", null, false, null, Status.NEW, null, false, null, score);
+                "sv", null, false, null, Status.NEW, null, false, null, null, score);
     }
 
     @Test

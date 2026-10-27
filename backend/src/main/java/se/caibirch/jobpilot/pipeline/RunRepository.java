@@ -77,6 +77,13 @@ public class RunRepository {
         return jdbc.sql(SELECT + " WHERE r.kind = 'SEARCH' ORDER BY r.id DESC LIMIT :n").param("n", limit).query(this::map).list();
     }
 
+    public long createAktivitetRun(Instant now) {
+        return jdbc.sql("""
+                INSERT INTO pipeline_run (kind, status, step, progress, message, started_at)
+                VALUES ('AKTIVITET', 'QUEUED', 'OPEN', 0, 'Queued', :now) RETURNING id
+                """).param("now", Timestamp.from(now)).query(Long.class).single();
+    }
+
     public long createDocumentsRun(long jobId, long searchProfileId, Instant now) {
         return jdbc.sql("""
                 INSERT INTO pipeline_run (kind, job_id, search_profile_id, status, step, progress, message, started_at)

@@ -215,8 +215,10 @@ public final class BrowserGuard {
     private Outcome pickSuggestion(FormField f, Locator input, String text, boolean arrowDown) {
         Frame frame = frame(f);
         String listId = listIdOf(input);
+        // Only visible items count: a closed list from another field must not look like this field's suggestions.
         Locator options = frame.locator(listId == null ? "[role=option], [role=listbox] li"
-                : "[role=option], [role=listbox] li, [id=\"" + listId + "\"] li");
+                : "[role=option], [role=listbox] li, [id=\"" + listId + "\"] li")
+                .filter(new Locator.FilterOptions().setVisible(true));
         boolean open = appears(options);
         if (!open && arrowDown) {
             try {

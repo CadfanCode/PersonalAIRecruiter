@@ -19,12 +19,12 @@ public final class JobModel {
                       String employer, String clientEmployer, String location, String municipality,
                       Instant publishedAt, Instant deadline, String language, String employmentType,
                       boolean asksForNewGraduates, String experienceRequiredText, Status status, String notes,
-                      boolean dateUnverified, String evidenceUrl, Score score) {
+                      boolean dateUnverified, String evidenceUrl, Instant appliedAt, Score score) {
 
         Row withRank(Integer r) {
             return new Row(id, r, source, sourceId, url, applyUrl, title, employer, clientEmployer, location,
                     municipality, publishedAt, deadline, language, employmentType, asksForNewGraduates,
-                    experienceRequiredText, status, notes, dateUnverified, evidenceUrl, score);
+                    experienceRequiredText, status, notes, dateUnverified, evidenceUrl, appliedAt, score);
         }
     }
 

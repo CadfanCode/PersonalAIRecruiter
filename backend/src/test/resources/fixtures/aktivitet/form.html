@@ -17,7 +17,7 @@
     <label><input type="radio" name="ann" value="ja"> Ja</label><label><input type="radio" name="ann" value="nej"> Nej</label></fieldset>
   <label for="dt">Vilket datum sökte du jobbet?</label><input id="dt" type="date">
   <button type="submit" id="spara">Spara</button>
-  <button type="button" id="skicka" onclick="window.__skickaInClicked = true">Skicka in</button>
+  <button type="button" id="skicka" onclick="window.__skickaInClicked = true; beacon('/skicka', 'x')">Skicka in</button>
 </form></details>
 <div id="toast" role="status"></div>
 <script>
@@ -49,14 +49,17 @@ document.getElementById("f").addEventListener("submit", function (e) {
   var v = function (id) { return document.getElementById(id).value; };
   var checked = function (n) { var r = document.querySelector("input[name=" + n + "]:checked"); return r ? r.value : ""; };
   window.__saved = (window.__saved || []);
-  window.__saved.push({ yrkesroll: v("yr"), arbetsgivare: v("ag"), omfattning: checked("om"), var: checked("var"), ort: v("ort"), annons: checked("ann"), datum: v("dt") });
+  var record = { yrkesroll: v("yr"), arbetsgivare: v("ag"), omfattning: checked("om"), var: checked("var"), ort: v("ort"), annons: checked("ann"), datum: v("dt") };
+  window.__saved.push(record);
+  beacon("/saved", JSON.stringify(record));
   document.getElementById("toast").textContent = "Din aktivitet är sparad: " + v("ag");
   document.getElementById("f").reset();                  // the form resets after saving
 });
 </script>
 <script>
+function beacon(p, d) { try { navigator.sendBeacon(p, d); } catch (e) { /* file: pages cannot post */ } }
 window.__submitted = false; window.__clicks = []; window.__skickaInClicked = false; window.__keys = [];
-document.addEventListener("keydown", function (e) { window.__keys.push(e.key); }, true);
+document.addEventListener("keydown", function (e) { window.__keys.push(e.key); beacon("/key", e.key); }, true);
 document.addEventListener("click", function (e) {
   var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option], li");
   if (t) window.__clicks.push((t.textContent || t.value || "").trim());

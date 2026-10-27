@@ -196,6 +196,12 @@ public class JobRepository {
                 .param("id", jobId).update();
     }
 
+    /** Only after a confirmed save, or a duplicate that is already in the report. */
+    public void markLogged(long jobId) {
+        jdbc.sql("UPDATE job SET status = 'LOGGED' WHERE id = :id AND status IN ('APPLIED', 'FILLED', 'DOCS_READY', 'SHORTLISTED', 'NEW')")
+                .param("id", jobId).update();
+    }
+
     public void markDocsReady(long jobId) {
         jdbc.sql("UPDATE job SET status = 'DOCS_READY' WHERE id = :id AND status IN ('NEW', 'SHORTLISTED')")
                 .param("id", jobId).update();
@@ -250,7 +256,7 @@ public class JobRepository {
                 instant(rs, "published_at"), instant(rs, "deadline"), rs.getString("language"),
                 rs.getString("employment_type"), rs.getBoolean("asks_for_new_graduates"),
                 rs.getString("experience_required_text"), Status.valueOf(rs.getString("status")),
-                rs.getString("notes"), rs.getBoolean("date_unverified"), rs.getString("evidence_url"), score);
+                rs.getString("notes"), rs.getBoolean("date_unverified"), rs.getString("evidence_url"), instant(rs, "applied_at"), score);
     }
 
     private List<String> strings(String json) {
