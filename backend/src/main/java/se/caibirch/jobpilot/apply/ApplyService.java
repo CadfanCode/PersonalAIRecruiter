@@ -66,7 +66,7 @@ public class ApplyService {
     private final Map<Long, TabState> tabs = new ConcurrentHashMap<>();
 
     public ApplyService(BrowserService browser, ClaudeRunner claude, JobRepository jobs, CvService cv, CvDigestService digests,
-                        DocumentRepository documents, SnapshotRepository snapshots, ExecutorService pipelineExecutor,
+                        DocumentRepository documents, SnapshotRepository snapshots, ExecutorService applyExecutor,
                         ObjectMapper mapper, JobPilotProperties props) {
         this.browser = browser;
         this.claude = claude;
@@ -75,7 +75,7 @@ public class ApplyService {
         this.digests = digests;
         this.documents = documents;
         this.snapshots = snapshots;
-        this.executor = pipelineExecutor;
+        this.executor = applyExecutor;
         this.mapper = mapper;
         this.props = props;
     }
@@ -454,7 +454,7 @@ public class ApplyService {
         }
         for (TabState state : tabs.values()) {
             Status s = state.status();
-            boolean hasPage = s != Status.QUEUED && s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.OPENING;
+            boolean hasPage = s != Status.QUEUED && s != Status.FILLING && s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.OPENING;
             if (!hasPage || state.busy.get()) {
                 continue;
             }

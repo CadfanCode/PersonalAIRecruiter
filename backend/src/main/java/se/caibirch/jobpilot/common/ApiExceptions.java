@@ -43,6 +43,12 @@ public class ApiExceptions {
         return body(HttpStatus.CONFLICT, e);
     }
 
+    /** A malformed id or enum in the URL (for example {@code ?status=NOPE} or {@code /jobs/abc}) is the caller's mistake. */
+    @ExceptionHandler(org.springframework.beans.TypeMismatchException.class)
+    ResponseEntity<Map<String, String>> typeMismatch(org.springframework.beans.TypeMismatchException e) {
+        return body(HttpStatus.BAD_REQUEST, new RuntimeException("Invalid value for " + (e.getPropertyName() == null ? "a parameter" : e.getPropertyName())));
+    }
+
     @ExceptionHandler(IllegalArgumentException.class)
     ResponseEntity<Map<String, String>> badRequest(IllegalArgumentException e) {
         return body(HttpStatus.BAD_REQUEST, e);

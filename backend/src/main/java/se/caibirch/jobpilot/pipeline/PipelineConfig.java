@@ -32,6 +32,21 @@ public class PipelineConfig {
         return new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(10), factory);
     }
 
+    /**
+     * Form filling has its own small pool: a long documents batch or a discovery run must not leave "Fill all" sitting in
+     * OPENING behind it. The browser itself is single-threaded anyway (BrowserService), so two threads is plenty.
+     */
+    @Bean(destroyMethod = "shutdownNow")
+    public ExecutorService applyExecutor() {
+        AtomicInteger n = new AtomicInteger();
+        ThreadFactory factory = r -> {
+            Thread t = new Thread(r, "apply-" + n.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        };
+        return new ThreadPoolExecutor(2, 2, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(20), factory);
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     public void failInterruptedRuns(ApplicationReadyEvent event) {
         RunRepository runs = event.getApplicationContext().getBean(RunRepository.class);

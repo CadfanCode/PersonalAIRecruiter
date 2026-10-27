@@ -71,6 +71,15 @@ class ApiIT {
     }
 
     @Test
+    void badInputGetsAJsonErrorNotAnInternalServerError() throws Exception {
+        mvc.perform(get("/api/runs/abc/jobs")).andExpect(status().isBadRequest()).andExpect(jsonPath("$.error").exists());
+        mvc.perform(get("/api/runs/1/jobs").param("status", "NOPE")).andExpect(status().isBadRequest());
+        mvc.perform(get("/api/jobs/999999")).andExpect(status().isNotFound()).andExpect(jsonPath("$.error").exists());
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/applications")
+                .contentType("application/json").content("{not json")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void jobDedupeKeyIsUnique() {
         jdbc.sql("INSERT INTO job (source, title, dedupe_key) VALUES ('JOBTECH', 'Dev', 'acme|dev|stockholm')").update();
         org.assertj.core.api.Assertions.assertThatThrownBy(() ->

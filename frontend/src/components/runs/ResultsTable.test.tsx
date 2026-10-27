@@ -195,6 +195,22 @@ describe('results table', () => {
     expect(body.jobIds).toEqual([many[0].id, many[2].id])
   })
 
+  it('remembers the ticked rows of a run when the user leaves and comes back, and forgets them on Clear', async () => {
+    mockApi({})
+    const list = rows()
+    const first = renderTable(list)
+    await userEvent.click(screen.getByLabelText('Select Alpha'))
+    await userEvent.click(screen.getByLabelText('Select Bravo'))
+    first.unmount()
+
+    renderTable(list)
+    expect(screen.getByLabelText('Select Alpha')).toBeChecked()
+    expect(screen.getByLabelText('Select Bravo')).toBeChecked()
+    expect(screen.getByLabelText('Select Charlie')).not.toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    expect(localStorage.getItem('jobpilot.selection.7')).toBeNull()
+  })
+
   it('says "job" for a single selection', async () => {
     mockApi({})
     renderTable(rows())

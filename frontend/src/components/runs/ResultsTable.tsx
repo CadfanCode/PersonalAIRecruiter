@@ -39,6 +39,29 @@ function loadViews(): SavedView[] {
   }
 }
 
+const selectionKey = (runId: number) => `jobpilot.selection.${runId}`
+
+/** The ticked rows of a run are remembered in this browser, so leaving the page and coming back keeps them. */
+function loadSelection(runId: number, jobs: JobRow[]): RowSelectionState {
+  try {
+    const ids = JSON.parse(localStorage.getItem(selectionKey(runId)) ?? '[]') as number[]
+    const known = new Set(jobs.map((j) => j.id))
+    return Object.fromEntries(ids.filter((id) => known.has(id)).map((id) => [String(id), true]))
+  } catch {
+    return {}
+  }
+}
+
+function storeSelection(runId: number, selection: RowSelectionState) {
+  try {
+    const ids = Object.keys(selection).filter((k) => selection[k]).map(Number)
+    if (ids.length === 0) localStorage.removeItem(selectionKey(runId))
+    else localStorage.setItem(selectionKey(runId), JSON.stringify(ids))
+  } catch {
+    // private window or blocked storage: the selection simply is not remembered
+  }
+}
+
 function storeViews(views: SavedView[]) {
   try {
     localStorage.setItem(VIEWS_KEY, JSON.stringify(views))
@@ -67,7 +90,7 @@ export function ResultsTable({
   const [sorting, setSorting] = useState<SortingState>([{ id: 'rank', desc: false }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [globalFilter, setGlobalFilter] = useState('')
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>(() => loadSelection(runId, jobs))
   const [showAll, setShowAll] = useState(false)
   const [openId, setOpenId] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -157,7 +180,12 @@ export function ResultsTable({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: (updater) =>
+      setRowSelection((old) => {
+        const next = typeof updater === 'function' ? updater(old) : updater
+        storeSelection(runId, next)
+        return next
+      }),
     globalFilterFn: textMatch,
     getRowId: (r) => String(r.id),
     getCoreRowModel: getCoreRowModel(),
@@ -277,7 +305,7 @@ export function ResultsTable({
               title="Writes a tailored CV and cover letter for each selected job, then takes you to them"
               onClick={() => createDocuments.mutate(
                 { jobIds: table.getSelectedRowModel().rows.map((r) => r.original.id), runId },
-                { onSuccess: () => { setRowSelection({}); navigate('/documents?new=1') }, onError: (e) => toast(e.message, 'error') },
+                { onSuccess: () => { table.resetRowSelection(true); navigate('/documents?new=1') }, onError: (e) => toast(e.message, 'error') },
               )}>
               {createDocuments.isPending
                 ? 'Starting...'
@@ -287,14 +315,14 @@ export function ResultsTable({
             <span className="ml-auto flex items-center gap-2">
               <Button variant="ghost" onClick={() => {
                 table.getSelectedRowModel().rows.forEach((r) => setStatus(r.original.id, 'SHORTLISTED'))
-                setRowSelection({})
+                table.resetRowSelection(true)
               }}>Shortlist selected</Button>
               <Button variant="ghost" disabled={appliedSelected.length === 0}
                 title={appliedSelected.length === 0 ? 'Only jobs marked as applied can be logged' : 'Opens the confirmation step; nothing is saved yet'}
                 onClick={() => navigate(`/aktivitet?jobs=${appliedSelected.map((r) => r.original.id).join(',')}`)}>
                 Log in aktivitetsrapport ({appliedSelected.length})
               </Button>
-              <Button variant="ghost" onClick={() => setRowSelection({})}>Clear</Button>
+              <Button variant="ghost" onClick={() => table.resetRowSelection(true)}>Clear</Button>
             </span>
           </div>
           <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Jobs to continue with">
