@@ -106,7 +106,7 @@ describe('run page', () => {
   it('starts a run from the dashboard prompt box and opens it', async () => {
     const calls = mockApi({
       'GET /api/runs': [],
-      'GET /api/claude/usage': { totals: { calls: 0, failures: 0, costUsd: 0 }, byTask: [] },
+      'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
       'POST /api/runs': { id: 7 },
       'GET /api/runs/7': { run: run({ status: 'QUEUED', step: 'PROFILE', progress: 0, message: 'Queued' }), profile: null },
     })
@@ -125,7 +125,7 @@ describe('run page', () => {
   })
 
   it('cannot start a run with an empty prompt', () => {
-    mockApi({ 'GET /api/runs': [], 'GET /api/claude/usage': { totals: { calls: 0, failures: 0, costUsd: 0 }, byTask: [] } })
+    mockApi({ 'GET /api/runs': [], 'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] } })
     renderRun('/')
 
     expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()

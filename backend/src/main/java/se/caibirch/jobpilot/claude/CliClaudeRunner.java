@@ -69,6 +69,79 @@ public class CliClaudeRunner implements ClaudeRunner {
         }
     }
 
+    /**
+     * One tiny call in stream-json mode: the CLI emits a {@code rate_limit_event} with the 5-hour and 7-day windows
+     * of the signed-in subscription. Nothing but that event is read.
+     */
+    @Override
+    public java.util.Optional<UsageLimits> limits() {
+        try {
+            concurrency.acquire();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ClaudeCallException("Interrupted while waiting for a Claude slot");
+        }
+        try {
+            List<String> command = new ArrayList<>(List.of(config.path(), "-p", "ok", "--output-format", "stream-json", "--verbose",
+                    "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "project",
+                    "--tools", ""));
+            if (config.model() != null && !config.model().isBlank()) {
+                command.addAll(List.of("--model", config.model()));
+            }
+            Files.createDirectories(workDir.toPath());
+            ProcessBuilder pb = new ProcessBuilder(command).directory(workDir).redirectInput(ProcessBuilder.Redirect.from(DEV_NULL));
+            Process process = pb.start();
+            AtomicReference<String> stdout = new AtomicReference<>("");
+            Thread outReader = Thread.ofVirtual().start(() -> stdout.set(readAll(process.getInputStream())));
+            Thread errReader = Thread.ofVirtual().start(() -> readAll(process.getErrorStream()));
+            if (!process.waitFor(config.timeoutSeconds(), TimeUnit.SECONDS)) {
+                process.destroyForcibly();
+                throw new ClaudeCallException("Reading the usage limits timed out");
+            }
+            outReader.join();
+            errReader.join();
+            return parseLimits(stdout.get(), mapper);
+        } catch (IOException e) {
+            throw new ClaudeCallException("Cannot start '" + config.path() + "': " + e.getMessage(), null, e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ClaudeCallException("Interrupted while reading the usage limits");
+        } finally {
+            concurrency.release();
+        }
+    }
+
+    /** Finds the {@code rate_limit_event} line in stream-json output; empty when there is none. Package-private for tests. */
+    static java.util.Optional<UsageLimits> parseLimits(String streamJson, ObjectMapper mapper) {
+        UsageLimits found = null;
+        for (String line : streamJson.split("\\R")) {
+            if (!line.contains("rate_limit_event")) {
+                continue;
+            }
+            try {
+                JsonNode event = mapper.readTree(line);
+                JsonNode windows = event.path("rate_limit_info").path("unifiedWindows");
+                UsageLimits.Window session = window(windows.path("five_hour"));
+                UsageLimits.Window week = window(windows.path("seven_day"));
+                if (session != null || week != null) {
+                    // Later events are newer; keep the last one that has anything.
+                    found = new UsageLimits(session, week, null);
+                }
+            } catch (JsonProcessingException ignored) {
+                // a partial line: skip it
+            }
+        }
+        return java.util.Optional.ofNullable(found);
+    }
+
+    private static UsageLimits.Window window(JsonNode w) {
+        if (!w.has("utilization")) {
+            return null;
+        }
+        return new UsageLimits.Window(w.get("utilization").asDouble(),
+                w.has("resetsAt") ? java.time.Instant.ofEpochSecond(w.get("resetsAt").asLong()) : null, w.path("status").asText(null));
+    }
+
     private <T> T runLocked(ClaudeTask<T> task) {
         long started = System.nanoTime();
         JsonNode envelope = null;

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useClaudeUsage } from '../api/claude'
 import { type BannedPhrase, type StyleRule, useBannedPhrases, usePhraseActions, useSaveRule, useStyleRules } from '../api/settings'
 import { Button, Field, TextArea, TextInput } from '../components/Form'
+import { LimitMeters } from '../components/LimitMeters'
 import { PageTitle, Panel } from '../components/Panel'
 
 export function SettingsPage() {
@@ -27,21 +28,24 @@ export function SettingsPage() {
 function UsagePanel() {
   const usage = useClaudeUsage()
   return (
-    <Panel title="Claude usage (list price)">
+    <Panel title="Claude usage">
       {usage.isError && <p role="alert" className="text-sm text-red-600">Cannot reach the JobPilot API.</p>}
+      <div className="mb-4">
+        <LimitMeters />
+      </div>
       {usage.data && (
         <>
           <p className="mb-3 text-sm">
-            {usage.data.totals.calls} calls, {usage.data.totals.failures} failed, ${Number(usage.data.totals.costUsd).toFixed(2)} in total
+            JobPilot has made {usage.data.totals.calls} calls, {usage.data.totals.failures} failed.
           </p>
           <table className="w-full text-left text-sm">
             <thead className="text-xs uppercase text-[var(--muted)]">
-              <tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Cost</th></tr>
+              <tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Tokens</th></tr>
             </thead>
             <tbody>
               {usage.data.byTask.map((t) => (
                 <tr key={t.task} className="border-t border-[var(--line)]">
-                  <td className="py-1">{t.task}</td><td>{t.calls}</td><td>${Number(t.costUsd).toFixed(3)}</td>
+                  <td className="py-1">{t.task}</td><td>{t.calls}</td><td>{Number(t.tokens).toLocaleString('en-GB')}</td>
                 </tr>
               ))}
             </tbody>

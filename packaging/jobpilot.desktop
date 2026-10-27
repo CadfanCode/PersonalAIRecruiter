@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=JobPilot
+GenericName=Job application assistant
+Comment=Search, tailor, apply and log job applications
+Exec=@BIN@
+Icon=@ICON@
+Terminal=false
+Categories=Office;Utility;
+StartupWMClass=JobPilot
+StartupNotify=false

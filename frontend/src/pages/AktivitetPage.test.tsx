@@ -187,7 +187,7 @@ describe('reminder banner', () => {
   function renderDashboard(reminder: unknown) {
     mockApi({
       'GET /api/runs': [],
-      'GET /api/claude/usage': { totals: { calls: 0, failures: 0, costUsd: 0 }, byTask: [] },
+      'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
       'GET /api/aktivitet/reminder': reminder,
     })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })

@@ -6,15 +6,24 @@ import { afterEach, beforeEach, vi } from 'vitest'
 import { App } from './App'
 
 const usage = {
-  totals: { calls: 3, failures: 1, costUsd: 0.5, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, durationMs: 1 },
+  totals: { calls: 3, failures: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, durationMs: 1 },
   byTask: [],
+}
+
+const limits = {
+  limits: {
+    session: { utilization: 0.07, resetsAt: '2026-10-27T14:30:00Z', status: 'allowed' },
+    week: { utilization: 0.96, resetsAt: '2026-10-30T18:00:00Z', status: 'allowed_warning' },
+    checkedAt: '2026-10-27T12:00:00Z',
+  },
+  error: null,
 }
 
 function mockApi(health: unknown) {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string) => {
-      const body = url.includes('/health') ? health : url.includes('/usage') ? usage : []
+      const body = url.includes('/health') ? health : url.includes('/usage') ? usage : url.includes('/limits') ? limits : []
       return new Response(JSON.stringify(body), { status: 200 })
     }),
   )
@@ -53,7 +62,9 @@ describe('app shell', () => {
 describe('Claude health card', () => {
   it('shows usage totals without calling the model', async () => {
     renderApp()
-    expect(await screen.findByText('$0.500')).toBeInTheDocument()
+    expect(await screen.findByText('96% used')).toBeInTheDocument()
+    expect(screen.getByText('7% used')).toBeInTheDocument()
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
     const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])
     expect(calls).not.toContain('/api/claude/health')
   })

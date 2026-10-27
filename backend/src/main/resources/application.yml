@@ -19,9 +19,13 @@ server:
 
 jobpilot:
   data-dir: ${JOBPILOT_DATA_DIR:${user.home}/.jobpilot}
+  # Set by the installed desktop app: the built UI is served from here.
+  web-dir: ${JOBPILOT_WEB_DIR:}
   allowed-origins:
     - http://localhost:5173
     - http://127.0.0.1:5173
+    - http://127.0.0.1:18080
+    - http://localhost:18080
   claude:
     path: ${JOBPILOT_CLAUDE_PATH:claude}
     model: ${JOBPILOT_CLAUDE_MODEL:}

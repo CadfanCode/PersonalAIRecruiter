@@ -1,0 +1,24 @@
+# Installed copy of the project's docker-compose.yml. The project name and volume match the development setup,
+# so the installed app and `docker compose up` in the repository use the same data.
+name: personalairecruiter
+services:
+  postgres:
+    image: postgres:16
+    container_name: jobpilot-postgres
+    restart: "no"
+    environment:
+      POSTGRES_DB: jobpilot
+      POSTGRES_USER: jobpilot
+      POSTGRES_PASSWORD: jobpilot
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - jobpilot-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobpilot -d jobpilot"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  jobpilot-pgdata:

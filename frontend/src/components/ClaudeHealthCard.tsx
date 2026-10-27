@@ -1,4 +1,5 @@
 import { useClaudeHealth, useClaudeUsage } from '../api/claude'
+import { LimitMeters } from './LimitMeters'
 import { Panel } from './Panel'
 
 export function ClaudeHealthCard() {
@@ -33,11 +34,13 @@ export function ClaudeHealthCard() {
         </p>
       )}
 
+      <div className="mt-4">
+        <LimitMeters />
+      </div>
       {usage.data && (
         <dl className="mt-4 grid grid-cols-3 gap-4 text-sm">
-          <Stat label="Calls" value={String(usage.data.totals.calls)} />
+          <Stat label="JobPilot calls" value={String(usage.data.totals.calls)} />
           <Stat label="Failures" value={String(usage.data.totals.failures)} />
-          <Stat label="Cost (list price)" value={`$${Number(usage.data.totals.costUsd).toFixed(3)}`} />
         </dl>
       )}
     </Panel>

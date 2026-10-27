@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+# JobPilot desktop launcher: starts PostgreSQL (docker) and the backend, shows the UI in its own app window, and
+# stops both when the window is closed. Installed by packaging/install.sh; nothing here needs a terminal.
+set -u
+
+APP="${JOBPILOT_HOME:-@APP@}"
+PORT="${JOBPILOT_PORT:-18080}"
+URL="http://127.0.0.1:$PORT"
+DATA="$HOME/.jobpilot"
+LOGS="$DATA/logs"
+PROFILE="$DATA/app-window"
+mkdir -p "$LOGS" "$PROFILE"
+
+# Optional per-user settings, e.g. JOBPILOT_CLAUDE_MODEL=opus or JOBPILOT_BROWSER=chromium.
+[ -f "$HOME/.config/jobpilot/env" ] && . "$HOME/.config/jobpilot/env"
+
+say() { notify-send -a JobPilot -i jobpilot "JobPilot" "$1" 2>/dev/null || echo "JobPilot: $1" >&2; }
+fail() { say "$1"; exit 1; }
+
+find_browser() {
+  [ -n "${JOBPILOT_BROWSER:-}" ] && { echo "$JOBPILOT_BROWSER"; return; }
+  for b in brave brave-browser chromium chromium-browser google-chrome-stable google-chrome; do
+    command -v "$b" >/dev/null 2>&1 && { echo "$b"; return; }
+  done
+}
+
+BROWSER="$(find_browser)"
+[ -n "$BROWSER" ] || fail "No Brave, Chromium or Chrome found. Install one, or set JOBPILOT_BROWSER in ~/.config/jobpilot/env."
+
+window() {
+  "$BROWSER" --app="$URL" --class=JobPilot --user-data-dir="$PROFILE" --no-first-run --no-default-browser-check \
+    --window-size=1440,900 >/dev/null 2>&1
+  # A browser that hands the window to an already running instance returns at once: wait until it is really gone.
+  while pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1; do sleep 1; done
+}
+
+up() { curl -fs -m 3 -o /dev/null "$URL/api/runs"; }
+
+# Already running (second click on the icon): just open another window, and leave shutdown to the first launcher.
+if up; then window; exit 0; fi
+
+exec 9>"$DATA/launcher.lock"
+flock -n 9 || { sleep 5; up && { window; exit 0; }; fail "JobPilot is already starting."; }
+
+JAVA_BIN="${JOBPILOT_JAVA:-}"
+if [ -z "$JAVA_BIN" ]; then
+  for c in java /usr/lib/jvm/java-21-openjdk/bin/java /usr/lib/jvm/java-25-openjdk/bin/java /usr/lib/jvm/default/bin/java; do
+    if command -v "$c" >/dev/null 2>&1 && [ "$("$c" -version 2>&1 | sed -n '/version/{s/[^"]*"\([0-9]*\).*/\1/p;q}')" -ge 21 ] 2>/dev/null; then JAVA_BIN="$c"; break; fi
+  done
+fi
+[ -n "$JAVA_BIN" ] || fail "Java 21 or newer is needed (for example: sudo pacman -S jdk21-openjdk)."
+
+docker info >/dev/null 2>&1 || fail "Docker is not running. Start it (sudo systemctl start docker) and open JobPilot again."
+
+JAVA_PID=""
+cleanup() {
+  trap - EXIT INT TERM HUP
+  if [ -n "$JAVA_PID" ] && kill -0 "$JAVA_PID" 2>/dev/null; then
+    kill -TERM "$JAVA_PID" 2>/dev/null
+    for _ in $(seq 1 25); do kill -0 "$JAVA_PID" 2>/dev/null || break; sleep 1; done
+    kill -KILL "$JAVA_PID" 2>/dev/null
+  fi
+  docker compose -f "$APP/docker-compose.yml" stop >>"$LOGS/docker.log" 2>&1
+}
+trap cleanup EXIT INT TERM HUP
+
+docker compose -f "$APP/docker-compose.yml" up -d --wait >>"$LOGS/docker.log" 2>&1 \
+  || fail "The database did not start. Details: $LOGS/docker.log (port 5432 busy?)."
+
+SERVER_PORT="$PORT" JOBPILOT_WEB_DIR="$APP/web" JOBPILOT_CLAUDE_MODEL="${JOBPILOT_CLAUDE_MODEL:-sonnet}" \
+  "$JAVA_BIN" -jar "$APP/jobpilot.jar" >>"$LOGS/backend.log" 2>&1 &
+JAVA_PID=$!
+
+for _ in $(seq 1 120); do
+  up && break
+  kill -0 "$JAVA_PID" 2>/dev/null || fail "JobPilot stopped while starting. Details: $LOGS/backend.log"
+  sleep 1
+done
+up || fail "JobPilot did not start within two minutes. Details: $LOGS/backend.log"
+
+window

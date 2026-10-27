@@ -13,7 +13,20 @@ table -> tailored CV and cover letter PDFs from your CV database -> pre-filled a
 - `seed`: your CV database seed, the original CV and Knowit letter, and the PDFs sent on
   26 Oct 2026 as references
 
-## Running it
+## Install as a desktop app (Linux)
+
+```
+packaging/install.sh
+```
+
+This builds JobPilot and installs a launcher named **JobPilot** in your application menu (pin it to the taskbar like
+any other app). Opening it starts PostgreSQL (docker) and the backend and shows the UI in its own window (Brave, or
+another Chromium-based browser); closing the window stops both. It needs Java 21+, Docker, Node.js (only to build)
+and the `claude` CLI. Re-run the script to update; `packaging/uninstall.sh` removes it and keeps your data. Logs are
+in `~/.jobpilot/logs`; optional settings such as `JOBPILOT_CLAUDE_MODEL=opus` go in `~/.config/jobpilot/env`. The app
+listens on `127.0.0.1:18080` (change with `JOBPILOT_PORT`). The development setup below still works.
+
+## Running it (development)
 
 ```
 docker compose up -d                      # PostgreSQL 16 on 127.0.0.1:5432
@@ -39,7 +52,10 @@ sparad". You must be signed in with BankID in that browser. It never submits the
 If the confirmation does not appear, it stops and tells you to check by hand. The page markup of the real site
 is unverified; see docs/adr/0006-aktivitetsrapport.md.
 
-Model and cost: JobPilot runs your own `claude` CLI. Without `JOBPILOT_CLAUDE_MODEL` it uses the
+Usage: the dashboard and settings show your Claude subscription's session (5 hour) and weekly usage with reset times,
+as reported by the CLI itself (one tiny call per reading, cached for two minutes). No dollar amounts are shown.
+
+Model: JobPilot runs your own `claude` CLI. Without `JOBPILOT_CLAUDE_MODEL` it uses the
 CLI's default model (Opus on this machine). Measured on 26 Oct 2026: scoring one ad costs about
 $0.04 on Sonnet (`JOBPILOT_CLAUDE_MODEL=sonnet`), and a run scores up to 50 ads by default. The
 cost at the default model has not been measured but is several times higher, so set the variable

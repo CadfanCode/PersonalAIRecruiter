@@ -19,7 +19,7 @@ public class ClaudeCallLog {
                          long cacheReadTokens, long cacheCreationTokens, long durationMs) {
     }
 
-    public record TaskTotals(String task, long calls, BigDecimal costUsd) {
+    public record TaskTotals(String task, long calls, long tokens) {
     }
 
     private final JdbcClient jdbc;
@@ -68,10 +68,11 @@ public class ClaudeCallLog {
 
     public List<TaskTotals> totalsByTask() {
         return jdbc.sql("""
-                SELECT task, count(*) AS calls, coalesce(sum(cost_usd), 0) AS cost
-                FROM claude_call GROUP BY task ORDER BY cost DESC, task
+                SELECT task, count(*) AS calls,
+                       coalesce(sum(coalesce(input_tokens, 0) + coalesce(output_tokens, 0) + coalesce(cache_creation_tokens, 0)), 0) AS tokens
+                FROM claude_call GROUP BY task ORDER BY tokens DESC, task
                 """)
-                .query((rs, n) -> new TaskTotals(rs.getString("task"), rs.getLong("calls"), rs.getBigDecimal("cost")))
+                .query((rs, n) -> new TaskTotals(rs.getString("task"), rs.getLong("calls"), rs.getLong("tokens")))
                 .list();
     }
 }

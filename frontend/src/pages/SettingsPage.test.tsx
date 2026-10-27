@@ -13,11 +13,20 @@ const phrases = [
   { id: 1, language: 'sv', phrase: 'brinner för', enabled: true },
   { id: 2, language: 'en', phrase: 'leverage', enabled: false },
 ]
-const usage = { totals: { calls: 29, failures: 0, costUsd: 1.82 }, byTask: [{ task: 'scoreJob', calls: 17, costUsd: 0.6 }] }
+const usage = { totals: { calls: 29, failures: 0 }, byTask: [{ task: 'scoreJob', calls: 17, tokens: 123456 }] }
+const limits = {
+  limits: {
+    session: { utilization: 0.07, resetsAt: '2026-10-27T14:30:00Z', status: 'allowed' },
+    week: { utilization: 0.96, resetsAt: '2026-10-30T18:00:00Z', status: 'allowed_warning' },
+    checkedAt: '2026-10-27T12:00:00Z',
+  },
+  error: null,
+}
 
 function setup(extra: Record<string, unknown> = {}) {
   const calls = mockApi({
     'GET /api/claude/usage': usage,
+    'GET /api/claude/limits': limits,
     'GET /api/settings/style-rules': rules,
     'GET /api/settings/banned-phrases': phrases,
     ...extra,
@@ -33,8 +42,12 @@ describe('settings page', () => {
   it('shows usage per task and explains where the CLI model is set', async () => {
     setup()
 
-    expect(await screen.findByText('29 calls, 0 failed, $1.82 in total')).toBeInTheDocument()
+    expect(await screen.findByText('JobPilot has made 29 calls, 0 failed.')).toBeInTheDocument()
     expect(screen.getByText('scoreJob')).toBeInTheDocument()
+    expect(screen.getByText('123,456')).toBeInTheDocument()
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument() // the subscription has no per-call price
+    expect(await screen.findByRole('progressbar', { name: 'Session (5 hours)' })).toHaveAttribute('aria-valuenow', '7')
+    expect(screen.getByRole('progressbar', { name: 'Week (7 days)' })).toHaveAttribute('aria-valuenow', '96')
     expect(screen.getByText(/JOBPILOT_CLAUDE_MODEL/)).toBeInTheDocument()
   })
 
