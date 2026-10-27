@@ -214,6 +214,37 @@ describe('documents page', () => {
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({})
   })
 
+  it('asks before regenerating documents that have approvals or edits, and keeps them when declined', async () => {
+    const calls = mockApi({
+      ...base(),
+      'GET /api/jobs/1/documents': jobDocs({ cv: cvDoc({ approved: true }) }),
+      'POST /api/jobs/1/documents': { runId: 12 },
+      'GET /api/runs/12': { run: run({ id: 12, kind: 'DOCUMENTS', jobId: 1, status: 'RUNNING', step: 'SELECT', progress: 10, message: 'Choosing the facts' }), profile: null },
+    })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Regenerate both' }))
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('replaces both documents'))
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
+
+    confirm.mockReturnValue(true)
+    await userEvent.click(screen.getByRole('button', { name: 'Regenerate both' }))
+    expect(await screen.findByText('Choosing the facts')).toBeInTheDocument()
+    confirm.mockRestore()
+  })
+
+  it('also asks when a document was edited (version above 1)', async () => {
+    mockApi({ ...base(), 'GET /api/jobs/1/documents': jobDocs({ letter: jobDocs().letter && { ...jobDocs().letter!, version: 3 } }) })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Regenerate both' }))
+
+    expect(confirm).toHaveBeenCalled()
+    confirm.mockRestore()
+  })
+
   it('offers to generate when a job has no documents yet', async () => {
     const calls = mockApi({
       ...base(),
@@ -221,12 +252,12 @@ describe('documents page', () => {
       'POST /api/jobs/1/documents': { runId: 5 },
       'GET /api/runs/5': { run: run({ id: 5, kind: 'DOCUMENTS', status: 'QUEUED', step: 'SELECT', progress: 0, message: 'Queued' }), profile: null },
     })
-    renderPage()
+    renderPage('/documents/job/1?from=7')
 
     await userEvent.click(await screen.findByRole('button', { name: 'Generate documents' }))
 
     expect(await screen.findByText('Queued')).toBeInTheDocument()
-    expect(calls.some((c) => c.method === 'POST')).toBe(true)
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ runId: 7 })
   })
 
   it('lists documents on the overview page', async () => {

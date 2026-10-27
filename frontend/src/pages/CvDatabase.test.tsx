@@ -196,3 +196,42 @@ describe('import wizard', () => {
     expect(commit.entries.map((e) => e.title)).toEqual(['Idrottslärare'])
   })
 })
+
+describe('preview selection', () => {
+  it('shows which facts would be chosen for a pasted ad', async () => {
+    const calls = mockApi({
+      ...baseRoutes(),
+      'POST /api/cv/preview-selection': {
+        language: 'sv',
+        entries: [{ entryId: 1, title: 'Software Developer (intern)', kind: 'INTERNSHIP', use: 'both', reason: 'Matches the Java requirement',
+          facts: [{ id: 10, text: 'Byggde mikrotjänster.' }] }],
+      },
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Preview selection' }))
+    expect(screen.getByRole('button', { name: 'Preview selection' })).toBeDisabled()
+    await userEvent.type(screen.getByLabelText('Pasted ad'), 'Vi söker en Javautvecklare.')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview selection' }))
+
+    expect(await screen.findByText('Matches the Java requirement')).toBeInTheDocument()
+    expect(screen.getByText('Byggde mikrotjänster.')).toBeInTheDocument()
+    expect(screen.getByText('Ad language: Swedish')).toBeInTheDocument()
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ ad: 'Vi söker en Javautvecklare.' })
+  })
+
+  it('shows the API error, for example when no search has run yet', async () => {
+    mockApi({
+      ...baseRoutes(),
+      'POST /api/cv/preview-selection': () =>
+        new Response(JSON.stringify({ error: 'Run a search first: the selection uses the newest search profile' }), { status: 400 }),
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Preview selection' }))
+    await userEvent.type(screen.getByLabelText('Pasted ad'), 'text')
+    await userEvent.click(screen.getByRole('button', { name: 'Preview selection' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Run a search first')
+  })
+})

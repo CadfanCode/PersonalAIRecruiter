@@ -32,7 +32,8 @@ Write the CV as JSON with these parts:
   1. kind SKILLS, heading in {{languageName}} (for example "Tekniska kunskaper"): one item per group, with
      entryId 0, "title" the group label in {{languageName}} (for example "Java och backend"), "meta" a comma
      separated list of skills from the skill list, "bullets" empty. Choose the skills that matter for this ad.
-  2. kind EXPERIENCE: one item per work or internship entry, newest first.
+  2. kind EXPERIENCE: one item per work or internship entry, in the order the entries appear in the facts
+     list above (most relevant first).
   3. kind PROJECTS: one item per project or own-business entry.
   4. kind EDUCATION: one item per education or certification entry.
   5. kind ACHIEVEMENTS: one item per award or conference entry.

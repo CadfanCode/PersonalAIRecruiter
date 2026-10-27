@@ -152,31 +152,38 @@ describe('results table', () => {
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ status: 'APPLIED' })
   })
 
-  it('starts document generation from the drawer and opens the documents page', async () => {
+  it('opens the documents page from the drawer without generating anything', async () => {
     const all = rows()
     const bravo = all[1]
-    const calls = mockApi({
-      [`GET /api/jobs/${bravo.id}?run=7`]: { row: bravo, description: 'x' },
-      [`POST /api/jobs/${bravo.id}/documents`]: { runId: 42 },
-    })
+    const calls = mockApi({ [`GET /api/jobs/${bravo.id}?run=7`]: { row: bravo, description: 'x' } })
     renderTable(all)
 
     await userEvent.click(screen.getByText('Bravo'))
-    await userEvent.click(await screen.findByRole('button', { name: 'Generate documents' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Documents' }))
 
     expect(await screen.findByText('Documents page')).toBeInTheDocument()
-    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ runId: 7 })
+    expect(calls.some((c) => c.method === 'POST')).toBe(false)
   })
 
-  it('generates documents for the active row with the g key', async () => {
+  it('labels the drawer button "Open documents" once the documents are ready', async () => {
+    const ready = job({ title: 'Ready', rank: 1, total: 80, status: 'DOCS_READY' })
+    mockApi({ [`GET /api/jobs/${ready.id}?run=7`]: { row: ready, description: 'x' } })
+    renderTable([ready])
+
+    await userEvent.click(screen.getByText('Ready'))
+
+    expect(await screen.findByRole('button', { name: 'Open documents' })).toBeInTheDocument()
+  })
+
+  it('opens the documents of the active row with the g key and never generates', async () => {
     const all = rows()
-    const calls = mockApi({ [`POST /api/jobs/${all[0].id}/documents`]: { runId: 43 } })
+    const calls = mockApi({})
     renderTable(all)
 
     await userEvent.keyboard('g')
 
     expect(await screen.findByText('Documents page')).toBeInTheDocument()
-    expect(calls[0].url).toBe(`/api/jobs/${all[0].id}/documents`)
+    expect(calls).toHaveLength(0)
   })
 
   it('saves notes from the drawer', async () => {

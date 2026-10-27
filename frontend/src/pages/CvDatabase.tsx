@@ -2,12 +2,13 @@ import { useState } from 'react'
 import { useEntries, useProfile, useTags } from '../api/cv'
 import { EntryList } from '../components/cv/EntryList'
 import { ImportWizard } from '../components/cv/ImportWizard'
+import { PreviewSelection } from '../components/cv/PreviewSelection'
 import { ProfileForm } from '../components/cv/ProfileForm'
 import { SeedLoader } from '../components/cv/SeedLoader'
 import { SkillsAndGaps } from '../components/cv/SkillsAndGaps'
 import { PageTitle } from '../components/Panel'
 
-const TABS = ['Entries', 'Profile', 'Skills and gaps', 'Import'] as const
+const TABS = ['Entries', 'Profile', 'Skills and gaps', 'Import', 'Preview selection'] as const
 
 export function CvDatabase() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Entries')
@@ -56,6 +57,7 @@ export function CvDatabase() {
         {tab === 'Profile' && <ProfileForm key={profile.data.id ?? 'new'} profile={profile.data} />}
         {tab === 'Skills and gaps' && <SkillsAndGaps />}
         {tab === 'Import' && <ImportWizard />}
+        {tab === 'Preview selection' && <PreviewSelection />}
       </div>
     </>
   )

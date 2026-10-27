@@ -287,6 +287,8 @@ public class DocumentService {
             throw new IllegalStateException("Cannot write " + file + ": " + e.getMessage(), e);
         }
         documents.upsert(jobId, kind, language, write(content), rendered.html(), file.toString(), write(withPages), searchProfileId);
+        jobs.revertDocsReady(jobId); // the upsert cleared the approval
+
     }
 
     private Path pdfPath(long jobId, Kind kind, String language, Profile profile, String employer) {

@@ -32,6 +32,10 @@ public class SearchProfileRepository {
         }
     }
 
+    public Optional<Long> latestId() {
+        return jdbc.sql("SELECT id FROM search_profile ORDER BY id DESC LIMIT 1").query(Long.class).optional();
+    }
+
     public Optional<Stored> find(long id) {
         return jdbc.sql("SELECT id, prompt, profile_json FROM search_profile WHERE id = :id").param("id", id)
                 .query((rs, n) -> {

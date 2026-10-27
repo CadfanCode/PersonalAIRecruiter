@@ -540,7 +540,10 @@ GET      /apply/status           per-tab status and questions for the user
 POST     /apply/{jobId}/answers  answers to questionsForUser (stored in answers memory)
 POST     /aktivitet/log          {jobIds:[...]} -> saves activities
 GET      /aktivitet/log
-GET/PUT  /settings               claude path, model, timeouts, data dir, banned phrases, rules
+GET/PUT  /settings/style-rules  writing rules (PUT /settings/style-rules/{id}: ruleText, enabled)
+GET/POST /settings/banned-phrases  PUT .../{id} {enabled}, DELETE .../{id}
+POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would choose (nothing stored)
+         (Claude CLI path, model and the other SPEC 13 values are still environment variables, not editable in the UI)
 GET      /claude/health          GET /claude/usage
 ```
 

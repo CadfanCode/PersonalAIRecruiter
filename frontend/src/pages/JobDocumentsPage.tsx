@@ -28,6 +28,7 @@ export function JobDocumentsPage() {
   const [search, setSearch] = useSearchParams()
   const [tab, setTab] = useState<Tab>('CV')
   const runId = search.get('run') ? Number(search.get('run')) : null
+  const fromRun = search.get('from') ? Number(search.get('from')) : undefined // the search run the ad came from
   const docs = useJobDocuments(jobId)
   const job = useJob(jobId)
   const start = useStartDocuments()
@@ -41,8 +42,16 @@ export function JobDocumentsPage() {
     if (runState && !working) void client.invalidateQueries({ queryKey: ['job-documents', jobId] })
   }, [runState, working, client, jobId])
 
-  const regenerate = () =>
-    start.mutate({ jobId }, { onSuccess: ({ runId: id }) => setSearch({ run: String(id) }) })
+  const generate = () =>
+    start.mutate({ jobId, runId: fromRun }, { onSuccess: ({ runId: id }) => setSearch({ run: String(id) }) })
+
+  // Regenerating replaces both documents, so ask first when that would throw away edits or an approval.
+  const regenerate = () => {
+    const existing = [docs.data?.cv, docs.data?.letter]
+    const atRisk = existing.some((d) => d && (d.approved || d.version > 1))
+    if (atRisk && !window.confirm('Regenerating replaces both documents, including your edits and approvals. Continue?')) return
+    generate()
+  }
 
   const title = job.data?.row.title
   const doc = tab === 'CV' ? docs.data?.cv : docs.data?.letter
@@ -72,7 +81,7 @@ export function JobDocumentsPage() {
       {docs.data && !docs.data.cv && !docs.data.letter && !working && (
         <Panel>
           <p className="mb-3 text-sm text-[var(--muted)]">No documents yet for this job.</p>
-          <Button onClick={regenerate} disabled={start.isPending}>Generate documents</Button>
+          <Button onClick={generate} disabled={start.isPending}>Generate documents</Button>
         </Panel>
       )}
 

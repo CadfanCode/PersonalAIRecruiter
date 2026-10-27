@@ -367,6 +367,26 @@ class DocumentIT {
     }
 
     @Test
+    void editingOrRegeneratingRevokesApprovalAndTheJobLeavesDocsReady() throws Exception {
+        generate(jobId);
+        long cvId = docs(jobId).get("cv").get("id").asLong();
+        long letterId = docs(jobId).get("letter").get("id").asLong();
+        call(post("/api/documents/" + cvId + "/approve"), null, 200);
+        call(post("/api/documents/" + letterId + "/approve"), null, 200);
+        assertThat(jdbc.sql("SELECT status FROM job WHERE id = :id").param("id", jobId).query(String.class).single()).isEqualTo("DOCS_READY");
+
+        ObjectNode edited = (ObjectNode) docs(jobId).get("cv").get("content").deepCopy();
+        edited.put("headline", "Backendutvecklare | Java");
+        call(put("/api/documents/" + cvId), edited.toString(), 200);
+        assertThat(jdbc.sql("SELECT status FROM job WHERE id = :id").param("id", jobId).query(String.class).single()).isEqualTo("SHORTLISTED");
+
+        call(post("/api/documents/" + cvId + "/approve"), null, 200);
+        assertThat(jdbc.sql("SELECT status FROM job WHERE id = :id").param("id", jobId).query(String.class).single()).isEqualTo("DOCS_READY");
+        generate(jobId);
+        assertThat(jdbc.sql("SELECT status FROM job WHERE id = :id").param("id", jobId).query(String.class).single()).isEqualTo("SHORTLISTED");
+    }
+
+    @Test
     void regeneratingBumpsTheVersionAndReplacesApproval() throws Exception {
         generate(jobId);
         call(post("/api/documents/" + docs(jobId).get("cv").get("id").asLong() + "/approve"), null, 200);
