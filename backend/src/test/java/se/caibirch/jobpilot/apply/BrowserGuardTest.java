@@ -183,6 +183,18 @@ class BrowserGuardTest extends PlaywrightTest {
     }
 
     @Test
+    void aDeclineButtonInAModalAboutSomethingElseIsNotACookieButton() {
+        open("modal_decline.html");
+
+        assertThat(guard().dismissCookieBanner()).isFalse();
+        Outcome o = guard().click(page.locator("#no"), ClickPurpose.COOKIE_NECESSARY);
+
+        assertThat(o.done()).isFalse();
+        assertThat(o.reason()).isEqualTo("not inside a cookie notice");
+        assertThat(clicks()).isEmpty();
+    }
+
+    @Test
     void refusesUnsafeFieldIds() {
         FormField evil = new FormField("jp-1\"], body, [x=\"", 0, "input", "text", "", "Namn", "", "", "", "", "", "", "", false, false, true, "",
                 false, false, "", false, List.of());

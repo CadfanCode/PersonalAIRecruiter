@@ -46,7 +46,7 @@ final class FakeFormMapper {
                     actions.add(act(id, "fill", "Cai", "none", "profile"));
                 } else if (text.contains("efternamn") || text.contains("last name")) {
                     actions.add(act(id, "fill", "Birch", "none", "profile"));
-                } else if (text.trim().equals("namn")) {
+                } else if (f.get("label").asText().trim().equalsIgnoreCase("namn")) {
                     actions.add(act(id, "fill", "Cai Birch", "none", "profile"));
                 } else if (type.equals("url")) {
                     actions.add(act(id, "fill", "https://www.caibirch.com", "none", "profile"));

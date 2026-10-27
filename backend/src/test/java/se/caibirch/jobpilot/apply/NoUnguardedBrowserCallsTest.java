@@ -24,7 +24,11 @@ class NoUnguardedBrowserCallsTest {
     /** Raw Playwright operations nobody may use outside the two allowed classes. */
     static final Pattern RAW_ACTIONS = Pattern.compile(
             "\\.(click|dblclick|press|pressSequentially|keyboard|mouse|touchscreen|dispatchEvent|requestSubmit|tap|dragTo|setChecked"
-                    + "|evaluate|evaluateHandle|addInitScript|exposeFunction|route|hover|focus)\\s*\\(");
+                    + "|evaluate|evaluateHandle|evaluateAll|evalOnSelector\\w*|addInitScript|addScriptTag|exposeFunction|route|hover|focus"
+                    + "|waitForFunction|setContent|locator|getBy(Role|Text|Label|Placeholder|AltText|Title|TestId)|frameLocator|querySelector\\w*|selectOption|uncheck|setInputFiles)\\s*\\(");
+
+    /** fill and check are fine on the guard (BrowserGuard.fill, guard.check) but nowhere else, including Page.fill and Page.check. */
+    static final Pattern GUARDED_ONLY = Pattern.compile("(?<!guard)(?<!Guard)\\.(fill|check)\\s*\\(");
 
     /** Types that give element-level access. */
     static final Pattern ELEMENT_TYPES = Pattern.compile(
@@ -57,6 +61,10 @@ class NoUnguardedBrowserCallsTest {
             String code = code(file);
             if (RAW_ACTIONS.matcher(code).find()) {
                 offenders.add(file + " calls a raw browser action: " + RAW_ACTIONS.matcher(code).results().findFirst().orElseThrow().group());
+            }
+            // fill and check only matter in files that can reach a page at all
+            if (code.contains("com.microsoft.playwright") && GUARDED_ONLY.matcher(code).find()) {
+                offenders.add(file + " calls fill or check on something that is not the guard");
             }
             if (ELEMENT_TYPES.matcher(code).find()) {
                 offenders.add(file + " imports an element-level Playwright type");
@@ -108,6 +116,17 @@ class NoUnguardedBrowserCallsTest {
         assertThat(RAW_ACTIONS.matcher("guard.fill(field, value)").find()).isFalse();
         assertThat(FORM_SUBMIT.matcher("page.locator(\"form\").submit()").find()).isFalse(); // caught by RAW_ACTIONS.. locator(...)
         assertThat(FORM_SUBMIT.matcher("form.submit()").find()).isTrue();
+        for (String call : new String[] {"page.locator(\"#gdpr\").check()", "page.getByRole(role)", "page.frameLocator(f)", "page.querySelector(s)",
+                "page.waitForFunction(js)", "page.setContent(html)", "page.addScriptTag(o)", "locator.evaluateAll(js)", "page.evalOnSelector(s, js)",
+                "x.selectOption(\"a\")", "x.setInputFiles(p)", "x.uncheck()"}) {
+            assertThat(RAW_ACTIONS.matcher(call).find()).as(call).isTrue();
+        }
+        for (String call : new String[] {"page.check(\"#gdpr\")", "page.fill(\"#n\", \"x\")", "locator.fill(v)", "locator.check()"}) {
+            assertThat(GUARDED_ONLY.matcher(call).find()).as(call).isTrue();
+        }
+        for (String call : new String[] {"guard.fill(f, v)", "guard.check(f, true)"}) {
+            assertThat(GUARDED_ONLY.matcher(call).find()).as(call).isFalse();
+        }
         assertThat(ELEMENT_TYPES.matcher("import com.microsoft.playwright.Locator;").find()).isTrue();
         assertThat(ELEMENT_TYPES.matcher("import com.microsoft.playwright.Page;").find()).isFalse();
     }

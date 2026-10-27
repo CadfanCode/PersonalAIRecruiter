@@ -57,6 +57,26 @@ class ActionExecutorTest extends PlaywrightTest {
     }
 
     @Test
+    void aPersonuppgifterHeadingAndAFileFormatNoteDoNotBlockOrdinaryFields() throws IOException {
+        open("personuppgifter.html");
+        var fields = PageScripts.extract(page);
+        Path cv = tempPdf("CV_Cai_Birch_Acme.pdf");
+        var ctx = new ApplyContext(PROFILE, Map.of(), Map.of("cv", cv));
+
+        var result = run(fields, ctx, act(byLabel(fields, "Namn"), "fill", "Cai Birch", "none", "profile"),
+                act(byLabel(fields, "E-post"), "fill", "caibirch@proton.me", "none", "profile"),
+                act(byLabel(fields, "Telefon"), "fill", "076-185 95 27", "none", "profile"),
+                act(byLabel(fields, "Ladda upp CV"), "upload", "", "cv", "document"),
+                act(byLabel(fields, "samtycker"), "check", "", "none", "cv"));
+
+        assertThat(result.done()).extracting(ActionExecutor.Done::action).containsExactly("fill", "fill", "fill", "upload");
+        assertThat(validated.skipped()).extracting(s -> s.reason()).containsExactly("left for you: consent, terms and privacy choices");
+        assertThat(page.locator("#n").inputValue()).isEqualTo("Cai Birch");
+        assertThat(page.locator("#gdpr").isChecked()).isFalse();
+        assertThat(submitted()).isFalse();
+    }
+
+    @Test
     void aSecondPassFillsTheCategorySelectThatAppearedAfterTheUpload() throws IOException {
         open("ponty.html");
         var fields = PageScripts.extract(page);

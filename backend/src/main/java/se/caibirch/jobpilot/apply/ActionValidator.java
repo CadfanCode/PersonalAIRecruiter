@@ -121,10 +121,10 @@ public final class ActionValidator {
         if (NEVER.contains(type)) {
             return "refused: " + type + " fields are never touched";
         }
-        if (GuardPatterns.CREDENTIAL.matcher(f.allText()).find()) {
+        if (GuardPatterns.CREDENTIAL.matcher(f.ownText()).find()) {
             return "refused: looks like a login or BankID field";
         }
-        if (GuardPatterns.isConsent(f.allText())) {
+        if (GuardPatterns.isConsent(f.consentText())) {
             return "left for you: consent, terms and privacy choices";
         }
         if (f.disabled()) {

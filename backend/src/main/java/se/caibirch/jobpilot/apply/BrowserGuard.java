@@ -36,6 +36,7 @@ public final class BrowserGuard {
         }
     }
 
+    private static final Pattern COOKIE_WORDS = Pattern.compile("cookie|kakor|spårning|tracking", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     static final Pattern SAFE_ID = Pattern.compile("^(f\\d+-)?jp-\\d+$");
     private static final int CLICK_TIMEOUT_MS = 3_000;
     private static final int SUGGESTION_WAIT_MS = 1_500;
@@ -226,6 +227,13 @@ public final class BrowserGuard {
                     if (!GuardPatterns.COOKIE_NECESSARY.matcher(label).find()) {
                         return Outcome.refused("not a necessary-only cookie button");
                     }
+                    // "Neka" in a modal about something else (cancel the application?) is not a cookie button
+                    String container = nz(target.locator("xpath=ancestor::*[self::div or self::section or self::aside or self::dialog "
+                            + "or @role='dialog' or @role='alertdialog' or @aria-modal='true'][1]").first()
+                            .innerText(new Locator.InnerTextOptions().setTimeout(1_500)));
+                    if (!COOKIE_WORDS.matcher(container).find()) {
+                        return Outcome.refused("not inside a cookie notice");
+                    }
                 }
                 case AUTOCOMPLETE_OPTION -> {
                     boolean option = role.equals("option") || target.locator("xpath=ancestor::*[@role='listbox']").count() > 0;
@@ -251,10 +259,10 @@ public final class BrowserGuard {
         if (List.of("password", "hidden", "submit", "button", "image", "reset").contains(type)) {
             return Outcome.refused("refused: " + type + " fields are never touched");
         }
-        if (GuardPatterns.CREDENTIAL.matcher(f.allText()).find()) {
+        if (GuardPatterns.CREDENTIAL.matcher(f.ownText()).find()) {
             return Outcome.refused("refused: looks like a login or BankID field");
         }
-        if (GuardPatterns.isConsent(f.allText())) {
+        if (GuardPatterns.isConsent(f.consentText())) {
             return Outcome.refused("refused: consent, terms and privacy choices are left for you");
         }
         if (f.disabled()) {

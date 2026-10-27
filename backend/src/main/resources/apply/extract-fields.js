@@ -64,7 +64,8 @@
       required: el.required || el.getAttribute('aria-required') === 'true',
       disabled: el.disabled || el.readOnly,
       visible: shown,
-      value: type === 'checkbox' || type === 'radio' ? (el.getAttribute('value') || '') : (el.value || ''),
+      // a password is never read, so it can never reach a snapshot or a prompt
+      value: type === 'password' ? '' : type === 'checkbox' || type === 'radio' ? (el.getAttribute('value') || '') : (el.value || ''),
       checked: !!el.checked,
       multiple: !!el.multiple,
       accept: el.getAttribute('accept') || '',

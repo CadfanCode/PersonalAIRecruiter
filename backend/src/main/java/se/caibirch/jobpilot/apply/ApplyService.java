@@ -89,15 +89,26 @@ public class ApplyService {
         if (jobIds.size() > props.browser().maxTabs()) {
             throw new IllegalArgumentException("At most " + props.browser().maxTabs() + " applications can be opened at once");
         }
-        List<TabState.View> out = new ArrayList<>();
+        // Resolve and validate every target first, so a bad third job cannot leave two tabs half started.
+        record Plan(long jobId, Row row, Target target) {
+        }
+        List<Plan> plans = new ArrayList<>();
         for (long jobId : jobIds.stream().distinct().toList()) {
             Row row = jobs.findRow(jobId, null).orElseThrow(() -> new NotFoundException("No job " + jobId));
-            Target target = target(jobId, row);
-            TabState state = new TabState(jobId, row.title(), row.employer(), target.url());
-            tabs.put(jobId, state);
-            if (target.url() == null) {
-                state.set(target.email() ? Status.EMAIL_ONLY : Status.NO_APPLY_LINK,
-                        target.email() ? "This ad is applied for by email, so there is nothing to open. Use the cover letter and CV PDFs."
+            plans.add(new Plan(jobId, row, target(jobId, row)));
+        }
+        List<TabState.View> out = new ArrayList<>();
+        for (Plan plan : plans) {
+            TabState current = tabs.get(plan.jobId());
+            if (current != null && (current.status() == Status.OPENING || current.status() == Status.FILLING || current.busy.get())) {
+                out.add(current.view()); // a second click must not start a second fill on the same page
+                continue;
+            }
+            TabState state = new TabState(plan.jobId(), plan.row().title(), plan.row().employer(), plan.target().url());
+            tabs.put(plan.jobId(), state);
+            if (plan.target().url() == null) {
+                state.set(plan.target().email() ? Status.EMAIL_ONLY : Status.NO_APPLY_LINK,
+                        plan.target().email() ? "This ad is applied for by email, so there is nothing to open. Use the cover letter and CV PDFs."
                                 : "The ad has no application link. Open the ad itself and apply from there.");
             } else {
                 background(state, () -> openAndFill(state));
@@ -235,6 +246,15 @@ public class ApplyService {
         List<FormField> fields = first.fields();
         int pass = 0;
         while (!fields.isEmpty() && pass < MAX_PASSES) {
+            if (pass > 0) {
+                // An upload can bring up a login or account wall; look again before mapping anything more.
+                Kind kind = browser.withTab(jobId, page -> PageClassifier.classify(PageScripts.detect(page)));
+                if (kind == Kind.WAITING_FOR_SIGN_IN) {
+                    state.result(done, skipped, new ArrayList<>(questions.values()), pass);
+                    state.set(Status.WAITING_FOR_SIGN_IN, "A sign-in or account page appeared. Waiting for you; JobPilot never types passwords or handles BankID.");
+                    return;
+                }
+            }
             pass++;
             state.set(Status.FILLING, pass == 1 ? "Working out what to fill" : "Filling the fields that appeared after the upload");
             final List<FormField> current = fields;
@@ -274,7 +294,7 @@ public class ApplyService {
     private static List<Map<String, Object>> promptFields(List<FormField> fields) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (FormField f : fields) {
-            if ("password".equals(f.type()) || GuardPatterns.CREDENTIAL.matcher(f.allText()).find()) {
+            if ("password".equals(f.type()) || GuardPatterns.CREDENTIAL.matcher(f.ownText()).find()) {
                 continue;
             }
             Map<String, Object> m = new LinkedHashMap<>();

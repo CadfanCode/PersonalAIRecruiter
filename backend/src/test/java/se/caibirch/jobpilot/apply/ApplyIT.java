@@ -292,6 +292,71 @@ class ApplyIT {
     }
 
     @Test
+    void aLoginWallThatAppearsAfterAnUploadStopsThePassesAndNeverReadsThePassword() throws Exception {
+        long id = job("Upload then account", url("password_after_upload.html"), null);
+        approvedDoc(id, "CV", true);
+
+        open(id);
+        JsonNode view = awaitStatus(id, "WAITING_FOR_SIGN_IN", "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
+
+        assertThat(view.get("status").asText()).as(view.get("message").asText()).isEqualTo("WAITING_FOR_SIGN_IN");
+        assertThat(claude.calls()).as("only the first pass reached the model").hasSize(1);
+        assertThat(value(id, "#cv")).contains("CV_Cai_Birch_Acme.pdf");
+        assertThat(value(id, "#pw")).as("the page's own prefilled password is untouched").isEqualTo("prefilled-secret");
+        assertThat(value(id, "#note")).isEmpty();
+        assertThat(jdbc.sql("SELECT fields_json::text FROM application_form_snapshot").query(String.class).list().toString())
+                .doesNotContain("prefilled-secret");
+    }
+
+    @Test
+    void personuppgifterOnTheFormDoNotStopTheFillingButConsentStillDoes() throws Exception {
+        long id = job("Personuppgifter ad", url("personuppgifter.html"), null);
+        approvedDoc(id, "CV", true);
+
+        open(id);
+        JsonNode view = awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
+
+        assertThat(view.get("status").asText()).as(view.get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(value(id, "#n")).isEqualTo("Cai Birch");
+        assertThat(value(id, "#e")).isEqualTo("caibirch@proton.me");
+        assertThat(value(id, "#p")).isEqualTo("076-185 95 27");
+        assertThat(value(id, "#cv")).contains("CV_Cai_Birch_Acme.pdf");
+        assertThat(checked(id, "#gdpr")).isFalse();
+        assertThat(submitted(id)).isFalse();
+    }
+
+    @Test
+    void aSecondClickWhileFillingDoesNotStartASecondFill() throws Exception {
+        claude.respond("mapFormFields", task -> {
+            try {
+                Thread.sleep(700);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            return FakeFormMapper.answer(task);
+        });
+        long id = job("Screening", url("screening.html"), null);
+
+        open(id);
+        open(id);
+        awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
+        Thread.sleep(1_500);
+
+        assertThat(claude.calls().stream().filter(c -> c.name().equals("mapFormFields")).count()).isEqualTo(1);
+    }
+
+    @Test
+    void aBadTargetAnywhereInTheListStartsNothing() throws Exception {
+        long ok = job("Fine", url("empty.html"), null);
+        long bad = job("Bad", "ftp://example.com/apply", null);
+
+        call(post("/api/apply"), "{\"jobIds\":[" + ok + "," + bad + "]}", 400);
+
+        assertThat(currentTabs()).isEmpty();
+        assertThat(browser.openTabCount().orElse(0)).isZero();
+    }
+
+    @Test
     void anAdPageWithOnlyAnAnsokButtonIsLeftToTheUser() throws Exception {
         long id = job("Platsbanken ad", url("platsbanken_ad.html"), null);
 

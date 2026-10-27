@@ -96,6 +96,17 @@ class FormExtractorTest extends PlaywrightTest {
     }
 
     @Test
+    void aPasswordValueIsNeverReadEvenWhenTheBrowserPrefilledIt() {
+        page.setContent("<label for=pw>Lösenord</label><input id=pw type=password value='hunter2'><label for=a>Namn</label><input id=a value='Cai'>");
+
+        var fields = PageScripts.extract(page);
+
+        assertThat(byLabel(fields, "Lösenord").value()).isEmpty();
+        assertThat(byLabel(fields, "Namn").value()).isEqualTo("Cai");
+        assertThat(fields.toString()).doesNotContain("hunter2");
+    }
+
+    @Test
     void thePageStateTellsLoginFromFormFromAdFromError() {
         open("varbi_login.html");
         assertThat(PageClassifier.classify(PageScripts.detect(page))).isEqualTo(PageClassifier.Kind.WAITING_FOR_SIGN_IN);

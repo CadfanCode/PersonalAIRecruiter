@@ -23,6 +23,21 @@ public record FormField(String id, int frame, String tag, String type, String na
                 .filter(s -> s != null && !s.isBlank()).collect(Collectors.joining(" | "));
     }
 
+    /** The control's own words: its label, aria-label, title, placeholder and name. Not the headings around it. */
+    public String ownText() {
+        return Stream.of(label, ariaLabel, title, placeholder, name)
+                .filter(s -> s != null && !s.isBlank()).collect(Collectors.joining(" | "));
+    }
+
+    /**
+     * The text the consent rule reads. A checkbox, radio or select is judged by everything around it (legend,
+     * nearby text, option label). A text or file field is judged only by its own words: "Personuppgifter" as a
+     * section heading or "Accepterade filformat: PDF" next to an upload must not block ordinary fields.
+     */
+    public String consentText() {
+        return isChoice() || "select".equals(tag) ? allText() : ownText();
+    }
+
     /** The question as the user would read it, used as the answers-memory key text. */
     public String questionText() {
         for (String s : new String[] {legend, label, ariaLabel, nearbyText, placeholder, name}) {
