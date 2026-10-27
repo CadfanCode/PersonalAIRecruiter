@@ -1,0 +1,12 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><title>Jobshark</title></head><body>
+<h1>Comstream: Taxi Stockholm</h1><button type="button" id="open">Apply for Job</button>
+<div role="dialog" id="modal" style="display:none"><label for="docs">Upload documents</label><input id="docs" type="file" multiple><button>Apply Now</button></div>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

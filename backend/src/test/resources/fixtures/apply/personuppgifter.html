@@ -1,0 +1,23 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Personuppgifter</title></head><body>
+<form onsubmit="return false">
+<h2>Personuppgifter</h2>
+<fieldset><legend>Personuppgifter</legend>
+  <label for="n">Namn</label><input id="n">
+  <label for="e">E-post</label><input id="e" type="email">
+  <label for="p">Telefon</label><input id="p" type="tel">
+</fieldset>
+<h2>Samtycke och villkor</h2>
+<small>Accepterade filformat: PDF, Word</small>
+<input id="cv" type="file" aria-label="Ladda upp CV">
+<label><input type="checkbox" id="gdpr"> Jag samtycker till behandling av mina personuppgifter</label>
+<button type="submit">Skicka ansökan</button>
+</form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

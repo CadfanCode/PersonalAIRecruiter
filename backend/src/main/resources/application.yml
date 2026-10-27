@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: jobpilot
+  datasource:
+    url: ${JOBPILOT_DB_URL:jdbc:postgresql://127.0.0.1:5432/jobpilot}
+    username: ${JOBPILOT_DB_USER:jobpilot}
+    password: ${JOBPILOT_DB_PASSWORD:jobpilot}
+  flyway:
+    enabled: true
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 40MB
+
+server:
+  # Local single-user app: never listen on anything but loopback.
+  address: 127.0.0.1
+  port: ${SERVER_PORT:8080}
+
+jobpilot:
+  data-dir: ${JOBPILOT_DATA_DIR:${user.home}/.jobpilot}
+  # Set by the installed desktop app: the built UI is served from here.
+  web-dir: ${JOBPILOT_WEB_DIR:}
+  allowed-origins:
+    - http://localhost:5173
+    - http://127.0.0.1:5173
+    - http://127.0.0.1:18080
+    - http://localhost:18080
+  claude:
+    path: ${JOBPILOT_CLAUDE_PATH:claude}
+    model: ${JOBPILOT_CLAUDE_MODEL:}
+    timeout-seconds: 180
+    web-timeout-seconds: 600
+    concurrency: 2
+  search:
+    default-max-age-days: 7
+    default-limit: 50
+    results-top-n: 10
+    default-yrkesroll: Systemutvecklare/Programmerare
+  jobtech:
+    base-url: ${JOBPILOT_JOBTECH_URL:https://jobsearch.api.jobtechdev.se}
+    taxonomy-url: ${JOBPILOT_TAXONOMY_URL:https://taxonomy.api.jobtechdev.se}
+    api-key: ${JOBPILOT_JOBTECH_API_KEY:}
+    requests-per-second: 5
+  browser:
+    headless: ${JOBPILOT_BROWSER_HEADLESS:false}
+    max-tabs: 5
+    allow-file-urls: false
+    suggestion-wait-millis: 5000
+  aktivitet:
+    form-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet
+    list-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera

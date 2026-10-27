@@ -1,0 +1,36 @@
+
+Application: Software Developer
+
+Ravion Nordic AB, Stockholm
+
+Hello,
+I'm a Java developer focused on Spring Boot back-end services, with experience building,
+containerising and deploying microservices in a health-tech environment and three years of
+earlier software development in research. Your Software Developer role matches the core of
+my work: Java and Spring, RESTful APIs, and getting Java applications running reliably in the
+cloud.
+The clearest example of how I work is Skepparklar, an e-learning platform for Swedish boating
+licence courses that I built from scratch. The back end is a REST API in Java 21 and Spring
+Boot 4 on PostgreSQL, the front end is React and TypeScript, and payments run through
+Stripe with webhooks. Every change goes through a GitHub Actions pipeline and is deployed
+automatically to a Linux server behind nginx and Cloudflare. Because I run it on my own, I've
+had to own the whole chain, from design to fixing things in production.
+
+During my internship at Braive I built and deployed Spring Boot microservices in Java and
+Kotlin, containerised them with Docker and shipped them through Kubernetes-based
+pipelines. I also tracked down and fixed race conditions in the logging flows. At Omika Health I
+built a peer-to-peer video chat with WebRTC and secure authentication. I haven't worked with
+J2EE or NoSQL databases such as MongoDB or Cosmos DB yet, but my relational database
+and Spring background is solid, and I'd be glad to learn them on the job.
+
+I like working in teams where people help each other and talk openly about problems. Working
+as a prison officer and as a lab teacher taught me to stay calm and careful under pressure,
+and I have passed a security vetting under the Swedish Protective Security Act. English is my
+native language and I speak and write Swedish fluently. When I'm not coding I'm usually out
+on the water, which may explain why my biggest side project is about boats.
+
+Thank you for considering my application. I hope to hear from you.
+
+Kind regards,
+
+Cai Birch

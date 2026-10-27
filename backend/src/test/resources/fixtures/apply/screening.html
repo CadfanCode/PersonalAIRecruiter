@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Screening</title></head><body>
+<form onsubmit="return false">
+  <label for="fn">Förnamn</label><input id="fn">
+  <label for="ln">Efternamn</label><input id="ln">
+  <label for="em">E-post</label><input id="em" type="email">
+  <label for="ph">Telefon</label><input id="ph" type="tel">
+  <fieldset><legend>Har du erfarenhet av Angular?</legend>
+    <label><input type="radio" name="ng" value="ja"> Ja</label><label><input type="radio" name="ng" value="nej"> Nej</label></fieldset>
+  <fieldset><legend>Tidigare anställd på Saab?</legend>
+    <label><input type="radio" name="saab" value="ja"> Ja</label><label><input type="radio" name="saab" value="nej"> Nej</label></fieldset>
+  <label for="why">Varför vill du jobba hos oss?</label><textarea id="why"></textarea>
+  <label for="cvf">Ladda upp CV</label><input id="cvf" type="file">
+  <label><input type="checkbox" id="news"> Prenumerera på vårt nyhetsbrev</label>
+  <button type="submit">Skicka ansökan</button>
+</form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

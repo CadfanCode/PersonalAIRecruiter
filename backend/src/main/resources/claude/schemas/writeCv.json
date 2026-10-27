@@ -1,0 +1,48 @@
+{
+  "type": "object",
+  "properties": {
+    "language": { "type": "string", "enum": ["sv", "en"] },
+    "headline": { "type": "string" },
+    "profileParagraphs": { "type": "array", "items": { "type": "string" } },
+    "sections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "heading": { "type": "string" },
+          "kind": { "type": "string", "enum": ["SKILLS", "EXPERIENCE", "PROJECTS", "EDUCATION", "ACHIEVEMENTS", "LANGUAGES"] },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "entryId": { "type": "integer" },
+                "title": { "type": "string" },
+                "meta": { "type": "string" },
+                "dateLabel": { "type": "string" },
+                "bullets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "text": { "type": "string" },
+                      "factIds": { "type": "array", "items": { "type": "integer" } }
+                    },
+                    "required": ["text", "factIds"],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": ["entryId", "title", "meta", "dateLabel", "bullets"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["heading", "kind", "items"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["language", "headline", "profileParagraphs", "sections"],
+  "additionalProperties": false
+}

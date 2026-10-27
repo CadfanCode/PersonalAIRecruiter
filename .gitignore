@@ -37,3 +37,7 @@ build/
 
 ### Mac OS ###
 .DS_Store
+### JobPilot ###
+node_modules/
+frontend/dist/
+*.log

@@ -1,0 +1,56 @@
+{
+  "type": "object",
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["EDUCATION", "WORK", "INTERNSHIP", "PROJECT", "OWN_BUSINESS", "VOLUNTEER", "CERTIFICATION",
+                     "AWARD", "PUBLICATION", "CONFERENCE", "LANGUAGE", "OTHER"]
+          },
+          "title": { "type": "string" },
+          "titleEn": { "type": ["string", "null"] },
+          "organisation": { "type": ["string", "null"] },
+          "location": { "type": ["string", "null"] },
+          "startYm": { "type": ["string", "null"], "pattern": "^\\d{4}(-(0[1-9]|1[0-2]))?$" },
+          "endYm": { "type": ["string", "null"], "pattern": "^\\d{4}(-(0[1-9]|1[0-2]))?$" },
+          "ongoing": { "type": "boolean" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "facts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "textEn": { "type": ["string", "null"] },
+                "textSv": { "type": ["string", "null"] },
+                "evidence": { "type": ["string", "null"] },
+                "tags": { "type": "array", "items": { "type": "string" } }
+              },
+              "required": ["textEn", "textSv", "tags"],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": ["kind", "title", "ongoing", "tags", "facts"],
+        "additionalProperties": false
+      }
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "category": { "type": ["string", "null"] }
+        },
+        "required": ["name"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["entries", "skills"],
+  "additionalProperties": false
+}

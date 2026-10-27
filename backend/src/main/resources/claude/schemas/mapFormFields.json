@@ -1,0 +1,36 @@
+{
+  "type": "object",
+  "properties": {
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fieldId": { "type": "string" },
+          "action": { "type": "string", "enum": ["fill", "select", "check", "uncheck", "upload", "skip"] },
+          "value": { "type": "string" },
+          "file": { "type": "string", "enum": ["cv", "letter", "none"] },
+          "reason": { "type": "string" },
+          "needsUser": { "type": "boolean" },
+          "source": { "type": "string", "enum": ["profile", "memory", "cv", "document", "none"] }
+        },
+        "required": ["fieldId", "action", "value", "file", "reason", "needsUser", "source"],
+        "additionalProperties": false
+      }
+    },
+    "questionsForUser": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "fieldId": { "type": "string" },
+          "question": { "type": "string" }
+        },
+        "required": ["fieldId", "question"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["actions", "questionsForUser"],
+  "additionalProperties": false
+}

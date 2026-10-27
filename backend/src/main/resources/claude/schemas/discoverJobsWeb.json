@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "jobs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string" },
+          "title": { "type": "string" },
+          "employer": { "type": "string" },
+          "publishedDate": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "dateVerifiedOnAdPage": { "type": "boolean" },
+          "deadline": { "type": ["string", "null"], "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "location": { "type": ["string", "null"] },
+          "language": { "type": "string", "enum": ["sv", "en"] },
+          "description": { "type": "string" }
+        },
+        "required": ["url", "title", "employer", "publishedDate", "dateVerifiedOnAdPage", "language", "description"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["jobs"],
+  "additionalProperties": false
+}

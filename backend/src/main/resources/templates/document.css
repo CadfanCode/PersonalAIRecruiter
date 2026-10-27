@@ -1,0 +1,38 @@
+@page { size: A4; margin: 15mm 17mm 14mm 17mm; }
+
+body { font-family: 'Inter', sans-serif; color: #1c2430; margin: 0; }
+p { margin: 0; }
+
+.name { font-size: 20pt; font-weight: 700; letter-spacing: 0.08em; margin: 0 0 2pt 0; text-transform: uppercase; color: #111a27; }
+.headline { font-size: 11pt; font-weight: 600; color: #1F3A5F; margin: 0 0 3pt 0; }
+.contact { font-size: 8.5pt; color: #6b7482; margin: 0; }
+.header { margin-bottom: 9pt; }
+
+/* CV */
+body.cv { font-size: 9.5pt; line-height: 1.38; }
+.cv h2 { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #1F3A5F;
+         margin: 10pt 0 5pt 0; padding-bottom: 2pt; border-bottom: 0.6pt solid #1F3A5F; page-break-after: avoid; }
+.cv .item { margin-bottom: 6pt; page-break-inside: avoid; }
+.cv .para { margin: 0 0 3pt 0; }
+.cv .para.tight { margin: 1pt 0 0 0; color: #3a4452; }
+.cv table.line { width: 100%; border-collapse: collapse; margin: 0 0 1.5pt 0; }
+.cv table.line td { padding: 0; vertical-align: top; }
+.cv td.l { text-align: left; }
+.cv td.r { text-align: right; white-space: nowrap; color: #6b7482; padding-left: 8pt; font-size: 8.5pt; }
+.cv .title { font-weight: 600; }
+.cv .meta { font-weight: 400; }
+.cv ul.bullets { margin: 0; padding-left: 11pt; }
+.cv ul.bullets li { margin: 0 0 1.5pt 0; padding-left: 1pt; }
+.cv .skill-label { font-weight: 600; }
+.cv .gapnote { margin-top: 3pt; color: #3a4452; font-style: italic; }
+.cv ul.languages { margin-top: 6pt; }
+
+/* Letter */
+body.letter { font-size: 11pt; line-height: 1.5; }
+.letter .header { margin-bottom: 16pt; }
+.letter .subject { font-weight: 700; font-size: 12pt; margin: 0 0 1pt 0; }
+.letter .subline { color: #6b7482; margin: 0 0 14pt 0; }
+.letter .greeting { margin: 0 0 8pt 0; }
+.letter .para { margin: 0 0 8pt 0; }
+.letter .closing { margin: 12pt 0 18pt 0; }
+.letter .signature { font-weight: 600; }

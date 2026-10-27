@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "tech": { "type": "integer" },
+    "techMax": { "type": "integer" },
+    "experience": { "type": "integer" },
+    "experienceMax": { "type": "integer" },
+    "eligibility": { "type": "integer" },
+    "eligibilityMax": { "type": "integer" },
+    "asksForNewGraduates": { "type": "boolean" },
+    "experienceRequiredText": { "type": "string" },
+    "language": { "type": "string", "enum": ["sv", "en"] },
+    "fit": { "type": "string" },
+    "gaps": { "type": "string" },
+    "dealBreakers": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["tech", "techMax", "experience", "experienceMax", "eligibility", "eligibilityMax",
+               "asksForNewGraduates", "experienceRequiredText", "language", "fit", "gaps", "dealBreakers"],
+  "additionalProperties": false
+}

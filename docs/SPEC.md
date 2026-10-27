@@ -102,7 +102,21 @@ application_form_snapshot(id, job_id, url, fields_json, actions_json, created_at
 
 aktivitet_log(id, job_id, yrkesroll, employer_label, municipality, omfattning,
               answered_ad, applied_date, saved_at, result, message)
+
+-- added in V2 (milestone 2), to hold the whole seed:
+--   profile: phone_international, work_authorisation, security_vetting
+--   cv_entry: title_en, note (note is an owner to-do, internal only, never sent to a prompt)
+--   start_ym / end_ym hold "YYYY-MM", or "YYYY" when the month is unknown
+known_gap(id, text, sort_order)
+answers_memory(id, question_key UNIQUE, question, answer, updated_at)
+  -- question_key = lowercase, punctuation stripped, whitespace collapsed
+
+claude_call(id, task, model, started_at, duration_ms, cost_usd, input_tokens, output_tokens,
+            cache_read_tokens, cache_creation_tokens, success, error_message)
+  -- one row per Claude CLI call (5.1)
 ```
+
+Tables for settings and the answers memory are added by the milestones that need them.
 
 `dedupe_key` = lowercase(employer + "|" + normalised title + "|" + municipality). Keep the
 source with the richest description when duplicates collide.
@@ -119,7 +133,8 @@ claude -p <prompt>
   --json-schema <schema-json>
   --tools ""                          # no tools for pure text tasks
   --no-session-persistence
-  [--allowedTools WebSearch WebFetch] # only for web discovery (6.2)
+  --disable-slash-commands --strict-mcp-config --setting-sources project
+  [--tools WebSearch,WebFetch --allowedTools WebSearch WebFetch]   # only for web discovery (6.2)
   [--model <settings.claude.model>]
 ```
 
@@ -128,16 +143,22 @@ prints one JSON object whose `structured_output` field holds the schema-valid re
 `is_error`, `subtype` (expect `"success"`), `result`, `total_cost_usd`, `usage` and
 `duration_ms`. Redirect stdin from `/dev/null` (otherwise the CLI waits 3 s for stdin).
 
+The last three flags (decided in milestone 1) stop the CLI from loading the user's plugins,
+skills, MCP servers and user-level settings. Measured on 26 Oct 2026: a tiny call dropped from
+about $0.40 (50k cache tokens) to about $0.03 (3k tokens) when run by the app. The process runs in `<data.dir>/claude-work/`, which
+has no CLAUDE.md or project settings, so nothing else is loaded.
+
 Implementation requirements:
 - `ProcessBuilder` with an argument list (never a shell string). Prompt via an argument, or via
   stdin with `--input-format text` if it exceeds the argument length limit (use stdin when the
   prompt is over 100 kB).
 - Configurable binary path (`settings.claude.path`, default `claude` on PATH), timeout (default
-  180 s, web discovery 600 s), and max concurrency (default 2, a `Semaphore`).
+  180 s, web discovery and CV import 600 s), and max concurrency (default 2, a `Semaphore`).
 - Parse with Jackson. If `is_error` is true, `subtype` is not success, the exit code is not
   zero, or `structured_output` is missing, throw `ClaudeCallException` with stderr attached.
 - Validate `structured_output` against the same schema again (networknt json-schema-validator).
-- Log every call (task name, duration, cost, tokens, success) to the `claude_call` table and show
+- Log every call (task name, duration, cost, tokens, success) to the `claude_call` table (added
+  to the V1 migration; it is not in section 4's list) and show
   totals on the Settings page so the user can see usage against his subscription.
 - Health check endpoint `/api/claude/health` runs `claude --version` and a tiny schema call.
 - Interface `ClaudeRunner { <T> T run(ClaudeTask<T> task) }` with a `FakeClaudeRunner` for
@@ -187,6 +208,10 @@ SearchProfile:
 }
 ```
 
+`locations` holds one entry per municipality the candidate could commute to: `buildSearchProfile`
+expands a city such as Stockholm into its neighbours (Solna, Järfälla, Nacka and so on), because
+ads sit in those municipalities. The user can edit the list before the search runs.
+
 `relevantTags` drives fact selection. A PE teacher profile might give
 `["teaching", "sport-science", "coaching", "pedagogy"]`; a developer profile gives
 `["software", "java", "security", "devops"]`. `yrkesrollForAktivitetsrapport` defaults from the
@@ -213,7 +238,9 @@ JobScore (same rubric used by hand on 26 Oct 2026):
   language, driving licence and similar hard requirements.
 - `total` is computed in Java (sum), never by Claude. Rank by total, then by deadline.
 - `asksForNewGraduates` is true only if the ad explicitly targets new graduates
-  (nyexaminerad, graduate programme, "recently graduated"). "Junior" alone is not enough.
+  (nyexaminerad, graduate programme, "recently graduated"). "Junior" alone is not enough. Java
+  also sets the flag when the ad text matches `NewGraduatePhrases`, the same list the style
+  validator uses (the scorer missed "i början av din karriär" in the Comstream ad).
 
 CvContent:
 ```json
@@ -251,7 +278,7 @@ FormActions:
   "actions": [
     {"fieldId": "string", "action": "fill|select|check|uncheck|upload|skip",
      "value": "string", "file": "cv|letter|none", "reason": "string",
-     "needsUser": false}
+     "needsUser": false, "source": "profile|memory|cv|document|none"}
   ],
   "questionsForUser": [{"fieldId": "string", "question": "string"}]
 }
@@ -263,17 +290,26 @@ FormActions:
 
 - Base URL `https://jobsearch.api.jobtechdev.se`, endpoints `GET /search` and `GET /ad/{id}`.
   Docs: https://jobsearch.api.jobtechdev.se and https://jobtechdev.se.
-- Parameters used: `q` (free text, one request per entry in `jobtechQueries`),
-  `published-after` (ISO date-time = now minus maxAgeDays), `limit` (100), `offset` (paging),
-  and location filtering (municipality or region concept ids via the JobTech Taxonomy API, or
-  free-text location in `q` with client-side filtering on `workplace_address.municipality`).
-- Before implementing, fetch the live OpenAPI spec and confirm the exact parameter names and
-  whether an `api-key` header is currently required. Support an optional key in settings either
-  way.
+- Verified against the live OpenAPI spec (`/swagger.json`, there is no `/openapi.json`) on
+  26 Oct 2026: **no api-key header is required**; the spec declares no security scheme and
+  anonymous calls succeed. An optional key from settings is still sent as `api-key` when set.
+- Parameters used: `q` (free text, one request per entry in `jobtechQueries`), `published-after`
+  (accepts `YYYY-MM-DDTHH:MM:SS` without zone, or a number of minutes; we send minutes =
+  maxAgeDays x 1440 so no time zone is involved), `limit` (max 100), `offset` (0-2000, paging),
+  `sort=pubdate-desc`, `municipality` (repeatable; takes a taxonomy concept id such as
+  `AvNB_uwa_6n6` for Stockholm, or the 4-digit municipality code), and `remote=true` for the
+  second pass when `remoteOk` is set. `resdet=full` is the default. Search results come back in
+  `hits[]` with `total.value`.
+- Municipality names are resolved to concept ids through the JobTech Taxonomy API,
+  `GET https://taxonomy.api.jobtechdev.se/v1/taxonomy/main/concepts?type=municipality&limit=400`
+  (no key; entries have `taxonomy/id` and `taxonomy/preferred-label`). Names that do not resolve
+  are searched nationwide and removed by the Java location pre-filter. `radiusKm` is not applied
+  to the API call in v1 (it would need coordinates); only the municipality list is used.
 - Map fields: `id`, `headline`, `employer.name`, `workplace_address.municipality`,
   `publication_date`, `application_deadline`, `description.text`, `webpage_url`,
   `application_details.url` / `.email`, `employment_type.label`, `working_hours_type.label`,
-  `must_have` / `nice_to_have` (skills, languages, work experiences) when present.
+  `must_have` / `nice_to_have` (skills, languages, work experiences) when present, plus
+  `workplace_address.municipality_code`, `experience_required` (boolean) and `removed`.
 - Respect rate limits: at most 5 requests per second and exponential backoff on 429 and 5xx.
 
 ### 6.2 Company career pages (secondary, optional per run)
@@ -290,11 +326,16 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 ## 7. Ranking
 
 1. Pre-filter in Java: drop ads older than maxAgeDays, past deadline, matching exclusions, or
-   outside locations (unless remote is allowed).
+   outside locations (unless remote is allowed). Exclusions are whole-word, case-insensitive
+   matches against the ad title and employer name only (matching the description would drop
+   almost every ad that mentions "senior colleagues"). Location compares the ad's municipality
+   with the profile's municipality list; an ad without a municipality is kept.
 2. Build a compact CV digest (entries, facts and skills as JSON, at most around 8k tokens) once
    per run.
 3. Call `scoreJob` per remaining ad (concurrency 2). Cache by (job id, CV database version,
-   SearchProfile id).
+   SearchProfile id). The run option `limit` (default 50) is the number of ads scored, best JobTech
+   relevance first, unverified web dates last; other ads that passed the filters are stored and
+   listed unscored. Measured 26 Oct 2026 on Sonnet: about $0.04 per scored ad.
 4. Default results view: top 10 by total, with a toggle to show all.
 
 ## 8. Documents
@@ -303,11 +344,15 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 
 `selectFacts` chooses entries and facts by relevance to the ad and the SearchProfile's
 `relevantTags`. Rules:
-- Always include contact details, education entries the ad requires, and languages.
+- Always include contact details, all education entries (unless the user excluded one), and
+  languages. Education facts are the ones Claude picked; an education entry Claude left out is
+  added without bullets. Entries marked "letter" only (for example leisure facts) stay out of the CV.
 - Prefer recent and relevant entries; omit unrelated ones. A teaching CV drops Spring Boot; a
   developer CV keeps teaching only as a short line that shows communication skills.
 - Keep employment gaps honest: an omitted job can be summarised as one line ("Other employment
   2019-2021, available on request") if omitting it would create a gap of more than 6 months.
+  Java builds the line from database dates (`GapNote`); separate periods are listed separately
+  ("2018-2021 and 2025-2026"), never merged into one range.
 - The user can pin or exclude entries per job in the UI before generation.
 
 ### 8.2 Generation
@@ -315,6 +360,12 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 `writeCv` and `writeLetter` receive only the selected facts. Language = the ad's language. The
 example letter (the user's Knowit letter, in `seed/`) is passed as a structure example, never as
 text to copy.
+
+Java owns every factual header field of the CV. After `writeCv` (and after a rewrite) it overwrites
+each item's `title`, `meta` (organisation), `location` and `dateLabel` from the CV database (years
+only, plain hyphens), and builds the languages line from the profile. Claude writes prose only: the
+headline, the profile paragraphs, bullets and section headings. This removes two failure modes:
+invented employers or dates, and en-dashes in date ranges.
 
 ### 8.3 Validation (`DocumentStyleValidator`, `FactCitationValidator`)
 
@@ -326,8 +377,16 @@ text to copy.
 - Fail if the letter opens with "Jag heter" or "My name is".
 - Warn (rewrite once) on banned AI phrasing (8.4).
 - Fail on bullets without valid fact citations.
+- Fail when `content.language` differs from the ad's language, and when a letter names an employer
+  that only appears in an example letter (Knowit, Ravion) and is not the target employer.
+- Warn (rewrite once, never block approval) on: a number in a bullet or letter paragraph that the
+  cited facts do not contain, a skill in the skills section that is in neither the skill table nor
+  the selected facts, a bullet citing a fact of another entry, and a CV or letter over its page
+  limit. Calibration on 26 Oct 2026: the style rules found nothing in the ten documents that were
+  sent; the skills check flags descriptive phrases in them, which is why it only warns.
 - On failure, call `rewriteForViolations` once with the report; if it still fails, show the
-  document with highlighted violations for manual editing. Never auto-approve.
+  document with highlighted violations for manual editing. Never auto-approve: `approve`
+  re-validates the stored content and answers 409 with the report while any FAIL remains.
 
 ### 8.4 Banned or discouraged phrasing (configurable list, case-insensitive)
 
@@ -349,7 +408,12 @@ sv: "brinner för", "passionerad", "drivs av", "inte bara ... utan också", "i d
 - File names: `CV_Cai_Birch_<Employer>.pdf` and `Personligt_brev_Cai_Birch_<Employer>.pdf`
   (or `Cover_letter_...` for English), ASCII-safe.
 - Documents are editable in the UI (paragraph-level text areas) before approval. Re-render on
-  save and bump the version.
+  save and bump the version. There is one current document per (job, kind); a save or a
+  regeneration replaces it, bumps `version` and clears `approved`. The job becomes DOCS_READY when
+  both documents are approved. Generation runs as a `DOCUMENTS` pipeline run (UI polls
+  `/api/runs/{id}`) and uses the search profile of the run the ad came from.
+- Example letters (`resources/claude/examples`): the Knowit letter for Swedish ads, the Ravion
+  letter for English ads. They show shape only.
 
 ## 9. Applying in the browser
 
@@ -382,10 +446,29 @@ sv: "brinner för", "passionerad", "drivs av", "inte bara ... utan också", "i d
    `questionsForUser`, and the user's answer is saved to the answers memory.
 7. Multi-step forms: the user clicks Next themselves, then presses "Fill this page" in the UI.
 
+Nothing in the model's answer is trusted (`ActionValidator`). An action runs only if its `fieldId` is
+one of the fields just extracted, it fits the field type (fill only text and textarea, check only
+checkbox and radio, select only an existing option, upload only a file input), the field is not a
+password, hidden, credential or consent field, and the value can be traced: name, email, phone and
+city fields must equal the profile exactly, `source: memory` must equal the stored answer for the
+normalised question (for a radio, the option that matches it), `upload` uses only an approved
+document of that job (an unapproved one is skipped with the reason), and a field that already holds
+a different value is left alone. The Ja and Nej buttons of a radio group are one question. After
+uploads the page is read again; fields that appeared (Ponty's category selects) get one more mapping
+pass, never more. Each pass is stored in `application_form_snapshot`. A job becomes FILLED after a
+fill that left no questions, never APPLIED.
+
 ### 9.3 Guardrails enforced in code
 
-- `ActionExecutor` refuses any action on: `input[type=password]`, buttons or links, and checkboxes
-  whose label matches `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter/i`.
+- `BrowserGuard` is the single choke point for every action on an external page. `ActionExecutor`
+  refuses any action on: `input[type=password]`, buttons or links, and checkboxes and radios (ticking
+  and unticking) whose label, aria-label, title, legend or nearby text matches
+  `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter|godkänn|accept|personuppgift|policy|intyga|marknadsför|marketing|prenumer|subscribe/i`
+  (the last eight alternatives were added in milestone 5 to make the rule stricter).
+- Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY` or
+  `AUTOCOMPLETE_OPTION`; milestone 6 adds `AKTIVITET_SPARA`). Enter is never pressed. `evaluate` runs
+  only the two fixed scripts in `PageScripts`. A test scans `src/main/java` and fails the build if any
+  other class calls a raw click, key press, `evaluate`, `dispatchEvent` or form submit.
 - No code path calls `click()` on elements matching
   `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish/i`. The only allowed clicks
   are cookie "necessary only" buttons and autocomplete options chosen by the executor itself.
@@ -436,6 +519,31 @@ Per job (verified by hand on 26 Oct 2026):
    "Din aktivitet är sparad" and the employer name. Record the result in `aktivitet_log`.
 10. The form resets after saving; repeat for the next job.
 
+Milestone 6 decisions (see ADR 0006):
+- No model is used. The form is fixed, so the seven fields are located by label or legend and mapped in Java.
+  If a field is missing or ambiguous the form "looks different" and nothing is saved.
+- Plan, then confirm: the UI shows all seven values per job (editable) and the server writes exactly what was
+  confirmed. Only jobs with status APPLIED are eligible; the default date is the day the job was marked applied
+  (`job.applied_at`). The employer label is "Employer (end client)" only when the ad names someone else.
+- A job is saved only when every field was filled and read back correctly (yrkesroll, employer, ort and date as
+  exact text, one radio chosen in each group). Any refusal or mismatch means that job is not saved and the next
+  one is tried. Spara is clicked once per job and never retried.
+- Spara is clicked only if the guard was given the configured form address, the page is exactly that address,
+  exactly one visible control reads exactly "Spara", and it passes the submit-like deny list. "Skicka in" is
+  refused for every purpose. The only key ever pressed is one ArrowDown to open the ort list; Enter never.
+- Autocomplete lists: items with `role=option`, or list items under a `role=listbox` or under the list the input
+  points at with `aria-controls` or `aria-owns`. Only visible items count and the text must match exactly.
+- The confirmation toast must contain "Din aktivitet är sparad" and the employer. No toast: the result is
+  UNCONFIRMED and the whole batch stops; the user checks by hand. An unreadable saved list or a different form
+  also stops the batch. Remaining jobs are logged as SKIPPED with the reason.
+- Duplicates: a third fixed read-only script reads the saved activities (ISO or Swedish dates). The same
+  employer on the same date is a DUPLICATE: skipped, and the job stays APPLIED (it may be a second application
+  there; the user logs it by hand if so). Only a job JobPilot itself saved earlier counts as LOGGED.
+- LOGGED only after a confirmed save (or a job JobPilot itself saved earlier). The run is an `AKTIVITET` run; a login or BankID wall
+  puts it in WAITING_FOR_USER and a read-only poll continues when the wall is gone. Only the two configured
+  addresses (`jobpilot.aktivitet.form-url` and `list-url`) are ever opened. Real Arbetsförmedlingen markup is
+  unverified: tests use fixtures only.
+
 Never click anything that submits the monthly report ("Skicka in"). The report opens 1-16 of the
 following month; show a reminder banner in the UI during that window.
 
@@ -449,26 +557,40 @@ duplicates.
 GET/PUT  /profile
 GET/POST /cv/entries            GET/PUT/DELETE /cv/entries/{id}
 POST     /cv/entries/{id}/facts  PUT/DELETE /cv/facts/{id}
-GET/POST /cv/tags  GET/POST /cv/skills
+GET/POST /cv/tags  GET/POST /cv/skills   DELETE /cv/skills/{id}
+GET/PUT  /cv/gaps               known gaps (PUT replaces the list)
+GET/PUT  /cv/answers            answers memory (PUT upserts one answer by normalised question)
+POST     /cv/seed               body = seed/cv_database_seed.json; 409 unless the CV database is empty
 POST     /cv/import              (multipart: PDF/DOCX/TXT files) -> import preview
 POST     /cv/import/{previewId}/commit
 POST     /runs                   {prompt, maxAgeDays?, limit?, includeWeb?} -> run id
 GET      /runs/{id}              status, step, progress, message
 PUT      /runs/{id}/profile      edit the SearchProfile before search continues
 POST     /runs/{id}/continue     | /cancel
-GET      /runs/{id}/jobs?sort=&filter=
-GET/PATCH /jobs/{id}             status, notes, pinned/excluded entries
-POST     /jobs/{id}/documents    generate CV and letter
+GET      /runs/{id}/jobs?q=&status=&language=&minScore=&sort=rank|deadline|published&top=
+GET      /runs/{id}/jobs.csv  /runs/{id}/jobs.xlsx   export of the full ranked table
+GET      /jobs/{id}?run={runId}  full ad text and the score for that run's search profile
+PATCH    /jobs/{id}             status, notes (pinned/excluded entries arrive with milestone 4)
+POST     /jobs/{id}/documents    generate CV and letter ({runId?}) -> {runId} of a DOCUMENTS run
+GET      /jobs/{id}/documents    both documents, the last selection, pinned and excluded entries
+PATCH    /jobs/{id}/selection    {pinned:[entryId], excluded:[entryId]}
+GET      /documents              overview of jobs that have documents
 GET/PUT  /documents/{id}         edit content -> re-render
 POST     /documents/{id}/approve
 GET      /documents/{id}/pdf
-POST     /apply                  {jobIds:[...]} -> opens tabs and fills
-POST     /apply/{jobId}/fill     re-scan and fill the current page
+POST     /apply                  {jobIds:[...]} (at most 5) -> opens tabs and fills
+POST     /apply/{jobId}/focus    bring the tab to the front;  POST /apply/{jobId}/close
+POST     /apply/{jobId}/fill     re-scan and fill the current page (?restart=true reloads the application first)
 GET      /apply/status           per-tab status and questions for the user
 POST     /apply/{jobId}/answers  answers to questionsForUser (stored in answers memory)
-POST     /aktivitet/log          {jobIds:[...]} -> saves activities
-GET      /aktivitet/log
-GET/PUT  /settings               claude path, model, timeouts, data dir, banned phrases, rules
+GET      /aktivitet/plan?jobIds= what would be written for these jobs (all seven values), or why a job cannot be logged
+POST     /aktivitet/log          {entries:[...]} exactly what the user confirmed -> {runId} of an AKTIVITET run
+GET      /aktivitet/log          every attempt: SAVED, DUPLICATE, SKIPPED, UNCONFIRMED or FAILED, with a message
+GET      /aktivitet/reminder     whether the report window (days 1 to 16) is open, from the injected clock
+GET/PUT  /settings/style-rules  writing rules (PUT /settings/style-rules/{id}: ruleText, enabled)
+GET/POST /settings/banned-phrases  PUT .../{id} {enabled}, DELETE .../{id}
+POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would choose (nothing stored)
+         (Claude CLI path, model and the other SPEC 13 values are still environment variables, not editable in the UI)
 GET      /claude/health          GET /claude/usage
 ```
 

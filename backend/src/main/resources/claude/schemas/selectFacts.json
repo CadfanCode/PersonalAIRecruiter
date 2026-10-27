@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entryId": { "type": "integer" },
+          "factIds": { "type": "array", "items": { "type": "integer" } },
+          "use": { "type": "string", "enum": ["cv", "letter", "both"] },
+          "reason": { "type": "string" }
+        },
+        "required": ["entryId", "factIds", "use", "reason"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["entries"],
+  "additionalProperties": false
+}

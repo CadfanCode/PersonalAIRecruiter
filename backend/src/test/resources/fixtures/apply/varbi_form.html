@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Varbi: Ansökan</title></head><body>
+<header><a href="#">Logga ut</a> <a href="#">Min profil</a></header>
+<h1>Ansökan: Junior Frontendutvecklare</h1>
+<form onsubmit="return false">
+  <label for="cv">Ladda upp – CV</label><input id="cv" type="file">
+  <label for="other">Övriga filer</label><input id="other" type="file" multiple>
+  <a href="#" id="remove" onclick="if (confirm('Ta bort filen?')) { window.__removed = true; } return false;">Ta bort</a>
+  <fieldset><legend>Har du rätt att arbeta i Sverige?</legend>
+    <label><input type="radio" name="work" value="ja"> Ja</label><label><input type="radio" name="work" value="nej"> Nej</label></fieldset>
+  <fieldset><legend>Tidigare anställd på Arbetsförmedlingen?</legend>
+    <label><input type="radio" name="prev" value="ja"> Ja</label><label><input type="radio" name="prev" value="nej"> Nej</label></fieldset>
+  <label for="msg">Personligt brev (valfritt)</label><textarea id="msg"></textarea>
+  <label><input type="checkbox" id="gdpr"> Jag godkänner att mina personuppgifter behandlas enligt GDPR</label>
+  <button type="submit">Skicka in ansökan</button>
+</form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>
