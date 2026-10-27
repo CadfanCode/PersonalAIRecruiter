@@ -1,11 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useCancelRun, useContinueRun, useEditProfile, useRun, useRunJobs } from '../api/runs'
+import { type SearchProfile, useCancelRun, useContinueRun, useEditProfile, useRun, useRunJobs } from '../api/runs'
 import { Button } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
 import { ResultsTable } from '../components/runs/ResultsTable'
-import { SearchProfileCard } from '../components/runs/SearchProfileCard'
+import { ProfileSection } from '../components/runs/ProfileSection'
 import { StepTracker } from '../components/runs/StepTracker'
 import { useToast } from '../components/Toasts'
 
@@ -38,6 +38,8 @@ export function RunPage() {
   if (!view.data) return <PageTitle>Run {runId}</PageTitle>
 
   const { run, profile } = view.data
+  const save = (p: SearchProfile) =>
+    edit.mutate(p, { onSuccess: () => toast('Search profile saved'), onError: (e) => toast(e.message, 'error') })
   const waiting = run.status === 'WAITING_FOR_USER'
   const working = WORKING.includes(run.status)
   const failed = run.status === 'FAILED' || run.status === 'CANCELLED'
@@ -69,19 +71,15 @@ export function RunPage() {
 
       {profile && (
         <div className="mb-6 max-w-4xl">
-          <SearchProfileCard
-            key={JSON.stringify(profile)}
-            profile={profile}
-            editable={waiting}
-            saving={edit.isPending}
-            onSave={(p) => edit.mutate(p, { onSuccess: () => toast('Search profile saved'), onError: (e) => toast(e.message, 'error') })}
-          />
-          {edit.isError && <p role="alert" className="mt-2 text-sm text-red-600">{edit.error.message}</p>}
-          {waiting && (
-            <div className="mt-4 flex items-center gap-3">
-              <Button onClick={() => proceed.mutate()} disabled={proceed.isPending}>Continue to search</Button>
-              <span className="text-sm text-[var(--muted)]">Check the titles, municipalities and queries first: they decide what is found.</span>
-            </div>
+          {waiting ? (
+            <ProfileSection profile={profile} waiting saving={edit.isPending} error={edit.isError ? edit.error.message : null}
+              onSave={save} onContinue={() => proceed.mutate()} continuing={proceed.isPending} />
+          ) : (
+            // After the review the profile is reference material; the results come first.
+            <details>
+              <summary className="mb-2 cursor-pointer text-sm font-medium text-[var(--muted)]">Search profile used for this run</summary>
+              <ProfileSection profile={profile} waiting={false} saving={false} error={null} onSave={save} onContinue={() => {}} continuing={false} />
+            </details>
           )}
         </div>
       )}

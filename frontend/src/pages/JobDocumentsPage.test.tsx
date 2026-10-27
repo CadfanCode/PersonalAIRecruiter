@@ -70,6 +70,15 @@ describe('documents page', () => {
     expect(screen.getByText('2 of 2 pages used')).toBeInTheDocument()
   })
 
+  it('does not ask for a run when there is none to follow', async () => {
+    const calls = mockApi(base())
+    renderPage()
+
+    await screen.findByDisplayValue('Javautvecklare | Spring Boot')
+
+    expect(calls.map((c) => c.url).filter((u) => u.startsWith('/api/runs'))).toEqual([])
+  })
+
   it('saves edited text as the whole content and then re-renders the preview', async () => {
     const calls = mockApi({ ...base(), 'PUT /api/documents/100': cvDoc({ version: 2 }) })
     renderPage()

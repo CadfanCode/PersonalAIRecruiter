@@ -96,10 +96,11 @@ const ACTIVE: RunStatus[] = ['QUEUED', 'RUNNING']
 export const useRuns = () => useQuery({ queryKey: ['runs'], queryFn: () => api<Run[]>('/api/runs') })
 
 /** Polls every 2 s while the run is working (SPEC 3). */
-export const useRun = (id: number) =>
+export const useRun = (id: number, enabled = true) =>
   useQuery({
     queryKey: ['runs', id],
     queryFn: () => api<RunView>(`/api/runs/${id}`),
+    enabled,
     refetchInterval: (q) => (q.state.data && ACTIVE.includes(q.state.data.run.status) ? 2000 : false),
   })
 

@@ -33,7 +33,7 @@ export function JobDocumentsPage() {
   const job = useJob(jobId)
   const start = useStartDocuments()
   const client = useQueryClient()
-  const run = useRun(runId ?? 0)
+  const run = useRun(runId ?? 0, runId !== null) // no run to follow, no request
   const runState = runId !== null ? run.data?.run : undefined
   const working = runState?.status === 'QUEUED' || runState?.status === 'RUNNING'
 
