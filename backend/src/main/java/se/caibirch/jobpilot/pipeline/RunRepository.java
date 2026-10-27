@@ -104,6 +104,22 @@ public class RunRepository {
                 """).param("now", Timestamp.from(now)).update();
     }
 
+    public Optional<String> mode(long runId) {
+        return jdbc.sql("SELECT mode FROM pipeline_run WHERE id = :id").param("id", runId).query(String.class).optional();
+    }
+
+    /** The newest documents run of a job, whatever its state. */
+    public Optional<Run> latestDocumentsRun(long jobId) {
+        return jdbc.sql(SELECT + " WHERE r.kind = 'DOCUMENTS' AND r.job_id = :j ORDER BY r.id DESC LIMIT 1")
+                .param("j", jobId).query(this::map).optional();
+    }
+
+    /** The documents run of a job that is still queued or running, if any. */
+    public Optional<Long> activeDocumentsRun(long jobId) {
+        return jdbc.sql("SELECT id FROM pipeline_run WHERE kind = 'DOCUMENTS' AND job_id = :j AND status IN ('QUEUED', 'RUNNING') ORDER BY id DESC LIMIT 1")
+                .param("j", jobId).query(Long.class).optional();
+    }
+
     /** True while a run of this kind is queued, running or waiting for the user. */
     public boolean hasActive(String kind) {
         return jdbc.sql("SELECT count(*) FROM pipeline_run WHERE kind = :k AND status IN ('QUEUED', 'RUNNING', 'WAITING_FOR_USER')")

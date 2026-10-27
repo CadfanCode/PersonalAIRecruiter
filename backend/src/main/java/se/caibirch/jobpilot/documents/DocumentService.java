@@ -97,13 +97,7 @@ public class DocumentService {
     /** Starts generation for a job and returns the id of the DOCUMENTS run the UI polls. */
     public long start(long jobId, Long sourceRunId) {
         Row row = jobs.findRow(jobId, null).orElseThrow(() -> new NotFoundException("No job " + jobId));
-        Long found = sourceRunId != null
-                ? runs.find(sourceRunId).map(r -> r.searchProfileId()).orElse(null)
-                : jobs.latestSearchProfileId(jobId).orElse(null);
-        if (found == null) {
-            throw new IllegalArgumentException("No search run found for job " + jobId + "; documents need its search profile");
-        }
-        long searchProfileId = found;
+        long searchProfileId = profileFor(jobId, sourceRunId);
         long runId = runs.createDocumentsRun(jobId, searchProfileId, clock.instant());
         try {
             executor.submit(() -> guarded(runId, () -> generate(runId, row.id(), searchProfileId)));
@@ -112,6 +106,58 @@ public class DocumentService {
             throw new ConflictException("Too many runs in progress; try again shortly");
         }
         return runId;
+    }
+
+    public record BatchItem(long jobId, long runId) {
+    }
+
+    /**
+     * Generates documents for several jobs as ONE task on the pipeline executor (one thread, not N queue slots), job by job.
+     * Every job has its own DOCUMENTS run, so one failure is recorded on that job and the rest carry on. A job that already
+     * has a generation in progress is not started twice.
+     */
+    public List<BatchItem> startBatch(List<Long> jobIds, Long sourceRunId) {
+        record Plan(long jobId, long profileId) {
+        }
+        List<Plan> plans = new ArrayList<>();
+        for (long jobId : jobIds.stream().distinct().toList()) {
+            jobs.findRow(jobId, null).orElseThrow(() -> new NotFoundException("No job " + jobId));
+            plans.add(new Plan(jobId, profileFor(jobId, sourceRunId)));
+        }
+        List<BatchItem> items = new ArrayList<>();
+        List<Runnable> work = new ArrayList<>();
+        List<Long> created = new ArrayList<>();
+        for (Plan plan : plans) {
+            var active = runs.activeDocumentsRun(plan.jobId());
+            if (active.isPresent()) {
+                items.add(new BatchItem(plan.jobId(), active.get()));
+                continue;
+            }
+            long runId = runs.createDocumentsRun(plan.jobId(), plan.profileId(), clock.instant());
+            created.add(runId);
+            items.add(new BatchItem(plan.jobId(), runId));
+            work.add(() -> guarded(runId, () -> generate(runId, plan.jobId(), plan.profileId())));
+        }
+        if (!work.isEmpty()) {
+            try {
+                executor.submit(() -> work.forEach(Runnable::run));
+            } catch (RejectedExecutionException e) {
+                created.forEach(id -> runs.finish(id, Status.FAILED, "Too many runs in progress; try again shortly", clock.instant()));
+                throw new ConflictException("Too many runs in progress; try again shortly");
+            }
+        }
+        return items;
+    }
+
+    /** The search profile that documents for this job are tailored to: the one of the given run, else the newest run that found it. */
+    long profileFor(long jobId, Long sourceRunId) {
+        Long found = sourceRunId != null
+                ? runs.find(sourceRunId).map(r -> r.searchProfileId()).orElse(null)
+                : jobs.latestSearchProfileId(jobId).orElse(null);
+        if (found == null) {
+            throw new IllegalArgumentException("No search run found for job " + jobId + "; documents need its search profile");
+        }
+        return found;
     }
 
     private void guarded(long runId, Runnable body) {

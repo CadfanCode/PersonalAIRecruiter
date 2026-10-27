@@ -28,6 +28,13 @@ public class ApplyController {
         return service.open(request.jobIds());
     }
 
+    /** "Run all": opens every job, at most the tab limit at once; the rest are queued and start by themselves. */
+    @PostMapping("/batch")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public List<TabState.View> openBatch(@RequestBody OpenRequest request) {
+        return service.openBatch(request.jobIds());
+    }
+
     @GetMapping("/status")
     public List<TabState.View> status() {
         return service.status();

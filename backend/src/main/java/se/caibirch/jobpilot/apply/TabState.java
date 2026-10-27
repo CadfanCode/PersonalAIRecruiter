@@ -12,7 +12,7 @@ import se.caibirch.jobpilot.apply.FormActions.Question;
 public final class TabState {
 
     public enum Status {
-        OPENING, FILLING, WAITING_FOR_SIGN_IN, NEEDS_MANUAL_APPLY, NEEDS_ANSWERS, READY_FOR_USER, SESSION_EXPIRED,
+        QUEUED, OPENING, FILLING, WAITING_FOR_SIGN_IN, NEEDS_MANUAL_APPLY, NEEDS_ANSWERS, READY_FOR_USER, SESSION_EXPIRED,
         EMAIL_ONLY, NO_APPLY_LINK, CLOSED, ERROR
     }
 
@@ -32,6 +32,8 @@ public final class TabState {
     private List<Question> questions = List.of();
     private int passes;
     final AtomicBoolean busy = new AtomicBoolean();
+    private static final java.util.concurrent.atomic.AtomicLong SEQUENCE = new java.util.concurrent.atomic.AtomicLong();
+    private final long seq = SEQUENCE.incrementAndGet();
 
     TabState(long jobId, String title, String employer, String url) {
         this.jobId = jobId;
@@ -72,6 +74,11 @@ public final class TabState {
 
     synchronized String url() {
         return url;
+    }
+
+    /** Creation order: queued applications start in the order they were added. */
+    long seq() {
+        return seq;
     }
 
     long jobId() {

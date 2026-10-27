@@ -83,11 +83,23 @@ public class ApplyService {
     // ---- API ----
 
     public List<TabState.View> open(List<Long> jobIds) {
+        if (jobIds != null && jobIds.size() > props.browser().maxTabs()) {
+            throw new IllegalArgumentException("At most " + props.browser().maxTabs() + " applications can be opened at once");
+        }
+        return start(jobIds, false);
+    }
+
+    /**
+     * Finalize Applications "Run all": every job is accepted, at most {@code maxTabs} tabs are open at once and the rest
+     * wait as QUEUED until a tab is closed or its application is marked as submitted.
+     */
+    public List<TabState.View> openBatch(List<Long> jobIds) {
+        return start(jobIds, true);
+    }
+
+    private synchronized List<TabState.View> start(List<Long> jobIds, boolean queue) {
         if (jobIds == null || jobIds.isEmpty()) {
             throw new IllegalArgumentException("jobIds is required");
-        }
-        if (jobIds.size() > props.browser().maxTabs()) {
-            throw new IllegalArgumentException("At most " + props.browser().maxTabs() + " applications can be opened at once");
         }
         // Resolve and validate every target first, so a bad third job cannot leave two tabs half started.
         record Plan(long jobId, Row row, Target target) {
@@ -100,16 +112,20 @@ public class ApplyService {
         List<TabState.View> out = new ArrayList<>();
         for (Plan plan : plans) {
             TabState current = tabs.get(plan.jobId());
-            if (current != null && (current.status() == Status.OPENING || current.status() == Status.FILLING || current.busy.get())) {
+            if (current != null && (current.status() == Status.OPENING || current.status() == Status.FILLING
+                    || current.status() == Status.QUEUED || current.busy.get())) {
                 out.add(current.view()); // a second click must not start a second fill on the same page
                 continue;
             }
             TabState state = new TabState(plan.jobId(), plan.row().title(), plan.row().employer(), plan.target().url());
+            boolean wait = queue && plan.target().url() != null && activeTabs() >= props.browser().maxTabs();
             tabs.put(plan.jobId(), state);
             if (plan.target().url() == null) {
                 state.set(plan.target().email() ? Status.EMAIL_ONLY : Status.NO_APPLY_LINK,
                         plan.target().email() ? "This ad is applied for by email, so there is nothing to open. Use the cover letter and CV PDFs."
                                 : "The ad has no application link. Open the ad itself and apply from there.");
+            } else if (wait) {
+                state.set(Status.QUEUED, "Waiting for a free browser tab. Close or finish one of the open applications.");
             } else {
                 background(state, () -> openAndFill(state));
             }
@@ -118,13 +134,37 @@ public class ApplyService {
         return out;
     }
 
+    /** Tabs that use one of the {@code maxTabs} slots. */
+    private int activeTabs() {
+        int n = 0;
+        for (TabState t : tabs.values()) {
+            Status s = t.status();
+            if (s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.QUEUED) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private synchronized void startQueued() {
+        List<TabState> waiting = tabs.values().stream().filter(t -> t.status() == Status.QUEUED)
+                .sorted(java.util.Comparator.comparingLong(TabState::seq)).toList();
+        for (TabState state : waiting) {
+            if (activeTabs() >= props.browser().maxTabs()) {
+                return;
+            }
+            state.set(Status.OPENING, "Opening the application");
+            background(state, () -> openAndFill(state));
+        }
+    }
+
     /** Re-reads the page and fills it again: after the user signed in, pressed Next, or answered questions. */
     public TabState.View fill(long jobId, boolean restart) {
         TabState state = state(jobId);
         if (state.url() == null) {
             throw new IllegalArgumentException("This job has no page to fill");
         }
-        if (state.busy.get()) {
+        if (state.busy.get() || state.status() == Status.QUEUED) {
             return state.view();
         }
         state.set(Status.FILLING, restart ? "Restarting the application" : "Reading the page");
@@ -165,6 +205,10 @@ public class ApplyService {
 
     public void showTab(long jobId) {
         TabState state = state(jobId);
+        if (state.status() == Status.QUEUED) {
+            throw new se.caibirch.jobpilot.common.ApiExceptions.ConflictException(
+                    "This application is waiting for a free browser tab and has no tab to show yet");
+        }
         try {
             browser.bringToFront(jobId);
         } catch (BrowserService.TabClosedException e) {
@@ -182,6 +226,20 @@ public class ApplyService {
             log.info("Closing the tab of job {}: {}", jobId, e.toString());
         }
         state.set(Status.CLOSED, "The tab was closed. Use Restart and refill to open it again.");
+    }
+
+    /** The user confirmed the submission: the tab has done its job, so its slot is released for the next application. */
+    public void finish(long jobId) {
+        TabState state = tabs.get(jobId);
+        if (state == null) {
+            return;
+        }
+        try {
+            browser.closeTab(jobId);
+        } catch (RuntimeException e) {
+            log.info("Closing the tab of submitted job {}: {}", jobId, e.toString());
+        }
+        state.set(Status.CLOSED, "Submitted. The tab was closed.");
     }
 
     private static void markClosed(TabState state) {
@@ -370,6 +428,7 @@ public class ApplyService {
     @Scheduled(fixedDelayString = "${jobpilot.browser.poll-millis:3000}")
     void pollWaitingTabs() {
         reconcileClosedTabs();
+        startQueued();
         for (TabState state : tabs.values()) {
             if (state.status() != Status.WAITING_FOR_SIGN_IN || state.busy.get()) {
                 continue;
@@ -395,7 +454,7 @@ public class ApplyService {
         }
         for (TabState state : tabs.values()) {
             Status s = state.status();
-            boolean hasPage = s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.OPENING;
+            boolean hasPage = s != Status.QUEUED && s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.OPENING;
             if (!hasPage || state.busy.get()) {
                 continue;
             }

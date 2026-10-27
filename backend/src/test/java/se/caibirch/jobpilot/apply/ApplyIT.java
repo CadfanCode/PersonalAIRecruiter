@@ -462,6 +462,35 @@ class ApplyIT {
     }
 
     @Test
+    void runAllQueuesTheJobsBeyondTheTabLimitAndStartsThemAsSlotsFree() throws Exception {
+        long[] ids = new long[7];
+        for (int i = 0; i < ids.length; i++) {
+            ids[i] = job("Batch " + i, url("empty.html"), null);
+        }
+        JsonNode started = call(post("/api/apply/batch"),
+                "{\"jobIds\":[" + java.util.Arrays.stream(ids).mapToObj(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "]}", 202);
+        assertThat(started).hasSize(7);
+
+        long queued = java.util.stream.StreamSupport.stream(call(get("/api/apply/status"), null, 200).spliterator(), false)
+                .filter(v -> v.get("status").asText().equals("QUEUED")).count();
+        assertThat(queued).isEqualTo(2); // five tabs, two waiting
+        JsonNode firstQueued = awaitStatus(ids[5], "QUEUED");
+        assertThat(firstQueued.get("message").asText()).contains("free browser tab");
+        for (int i = 0; i < 5; i++) {
+            awaitStatus(ids[i], "NEEDS_MANUAL_APPLY", "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
+        }
+        assertThat(browser.openTabCount().orElse(0)).isEqualTo(5);
+
+        call(post("/api/apply/" + ids[0] + "/close"), null, 204);
+        awaitStatus(ids[5], "NEEDS_MANUAL_APPLY", "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR"); // started by itself, in order
+        assertThat(call(get("/api/apply/status"), null, 200).get(6).get("status").asText()).isEqualTo("QUEUED");
+        // a queued card has no tab, so focus gives a clear message and fill leaves it alone
+        assertThat(call(post("/api/apply/" + ids[6] + "/focus"), null, 409).get("error").asText()).contains("waiting for a free browser tab");
+        assertThat(call(post("/api/apply/" + ids[6] + "/fill"), null, 202).get("status").asText()).isEqualTo("QUEUED");
+        assertThat(awaitStatus(ids[6], "QUEUED").get("status").asText()).isEqualTo("QUEUED");
+    }
+
+    @Test
     void aFailingModelCallShowsTheErrorOnTheCard() throws Exception {
         claude.respond("mapFormFields", t -> {
             throw new ClaudeCallException("Claude CLI exited with code 1");

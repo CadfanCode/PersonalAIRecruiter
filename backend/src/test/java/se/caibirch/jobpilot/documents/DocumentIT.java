@@ -1,6 +1,7 @@
 package se.caibirch.jobpilot.documents;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -96,7 +97,7 @@ class DocumentIT {
     @BeforeEach
     void setUp() throws Exception {
         jdbc.sql("""
-                TRUNCATE job, run_job, pipeline_run, search_profile, job_score, document, cv_entry, profile, tag, skill,
+                TRUNCATE job, run_job, application, pipeline_run, search_profile, job_score, document, cv_entry, profile, tag, skill,
                          known_gap, answers_memory RESTART IDENTITY CASCADE""").update();
         claude.calls().clear();
         call(put("/api/profile"), """
@@ -231,6 +232,94 @@ class DocumentIT {
     }
 
     // ---- tests ----
+
+    // ---- selected applications: batch generation and the user's own "submitted" confirmation ----
+
+    JsonNode awaitApplications(java.util.function.Predicate<JsonNode> done) throws Exception {
+        long deadline = System.currentTimeMillis() + 40_000;
+        JsonNode list;
+        do {
+            list = call(get("/api/applications"), null, 200);
+            if (done.test(list)) {
+                return list;
+            }
+            Thread.sleep(50);
+        } while (System.currentTimeMillis() < deadline);
+        throw new AssertionError("applications did not settle: " + list);
+    }
+
+    JsonNode application(JsonNode list, long job) {
+        for (JsonNode a : list) {
+            if (a.get("jobId").asLong() == job) {
+                return a;
+            }
+        }
+        throw new AssertionError("no application for job " + job + " in " + list);
+    }
+
+    @Test
+    void createDocumentsForSelectedJobsRunsAsOneBatchAndOneFailureDoesNotStopTheRest() throws Exception {
+        long second = addJob("Java-utvecklare Backend", "Acme AB", "sv", "Vi söker backendutvecklare, FAILME.", runId);
+        long third = addJob("Systemutvecklare", "Foo AB", "sv", "Vi söker en systemutvecklare.", runId);
+        // the second ad's CV cannot be written
+        claude.respond("writeCv", t -> {
+            if (t.prompt().contains("FAILME")) {
+                throw new se.caibirch.jobpilot.claude.ClaudeCallException("the model failed for this ad");
+            }
+            return cvJson("sv", "Byggde mikrotjänster i Java och Kotlin.", "Åtgärdade race conditions i loggningsflödena.");
+        });
+
+        JsonNode started = call(post("/api/applications/documents"),
+                "{\"jobIds\":[" + jobId + "," + second + "," + third + "],\"runId\":" + runId + "}", 202);
+        assertThat(started.get("items")).hasSize(3);
+
+        JsonNode list = awaitApplications(l -> l.size() == 3 && java.util.stream.StreamSupport.stream(l.spliterator(), false)
+                .allMatch(a -> a.get("generation") != null && !a.get("generation").isNull()
+                        && Set.of("DONE", "FAILED").contains(a.get("generation").get("status").asText())));
+
+        assertThat(application(list, jobId).get("generation").get("status").asText()).isEqualTo("DONE");
+        assertThat(application(list, third).get("generation").get("status").asText()).isEqualTo("DONE");
+        JsonNode failed = application(list, second);
+        assertThat(failed.get("generation").get("status").asText()).isEqualTo("FAILED");
+        assertThat(failed.get("generation").get("message").asText()).contains("the model failed");
+        assertThat(application(list, jobId).get("cv").get("version").asInt()).isEqualTo(1);
+        assertThat(application(list, second).get("cv").isNull()).isTrue();
+        assertThat(application(list, jobId).get("searchMode").asText()).isEqualTo("TARGETED");
+    }
+
+    @Test
+    void selectingAJobTwiceKeepsOneApplicationAndRemovingItLeavesTheDocuments() throws Exception {
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+        assertThat(call(get("/api/applications"), null, 200)).hasSize(1);
+        assertThat(call(get("/api/jobs/" + jobId), null, 200).get("row").get("status").asText()).isEqualTo("SHORTLISTED");
+
+        generate(jobId);
+        call(delete("/api/applications/" + jobId), null, 204);
+        assertThat(call(get("/api/applications"), null, 200)).isEmpty();
+        assertThat(docs(jobId).get("cv").isNull()).isFalse();
+        call(delete("/api/applications/" + jobId), null, 404);
+        call(post("/api/applications"), "{\"jobIds\":[999999]}", 404);
+    }
+
+    @Test
+    void markingAnApplicationSubmittedRecordsTheDocumentsUsedAndCanBeUndone() throws Exception {
+        generate(jobId);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+
+        JsonNode view = call(post("/api/applications/" + jobId + "/submitted"), null, 200);
+        assertThat(view.get("submittedAt").isNull()).isFalse();
+        assertThat(view.get("jobStatus").asText()).isEqualTo("APPLIED");
+        assertThat(view.get("submittedDocs").get("cv").get("file").asText()).endsWith(".pdf");
+        assertThat(view.get("submittedDocs").get("letter").get("version").asInt()).isEqualTo(1);
+
+        String firstAt = view.get("submittedAt").asText();
+        assertThat(call(post("/api/applications/" + jobId + "/submitted"), null, 200).get("submittedAt").asText()).isEqualTo(firstAt);
+
+        JsonNode undone = call(delete("/api/applications/" + jobId + "/submitted"), null, 200);
+        assertThat(undone.get("submittedAt").isNull()).isTrue();
+        assertThat(undone.get("jobStatus").asText()).isEqualTo("FILLED");
+    }
 
     @Test
     void generatesBothDocumentsFillsFactsFromTheDatabaseAndRendersPdfs() throws Exception {
