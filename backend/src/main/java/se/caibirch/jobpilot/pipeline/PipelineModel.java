@@ -15,6 +15,7 @@ public final class PipelineModel {
     public static final class Step {
         public static final String PROFILE = "PROFILE";
         public static final String SUGGEST = "SUGGEST";
+        public static final String FETCH = "FETCH";
         public static final String SEARCH = "SEARCH";
         public static final String RANK = "RANK";
         public static final String DONE = "DONE";
@@ -24,7 +25,8 @@ public final class PipelineModel {
     }
 
     public record Run(long id, Long searchProfileId, Status status, String step, int progress, String message,
-                      Instant startedAt, Instant finishedAt, RunOptions options, String prompt, String kind, Long jobId) {
+                      Instant startedAt, Instant finishedAt, RunOptions options, String prompt, String kind, Long jobId,
+                      String sourceUrl) {
     }
 
     /** A run with its current search profile, as the UI polls it. */

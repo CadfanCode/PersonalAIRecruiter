@@ -47,6 +47,12 @@ jobpilot:
     max-tabs: 5
     allow-file-urls: false
     suggestion-wait-millis: 5000
+  manual:
+    paste-only-hosts:
+      - linkedin.com
+    allow-private-hosts: false
+    max-page-bytes: 2000000
+    fetch-timeout-seconds: 15
   aktivitet:
     form-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet
     list-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera

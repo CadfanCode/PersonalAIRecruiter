@@ -104,6 +104,10 @@ public class RunRepository {
                 """).param("now", Timestamp.from(now)).update();
     }
 
+    public void setSourceUrl(long id, String url) {
+        jdbc.sql("UPDATE pipeline_run SET source_url = :u WHERE id = :id").param("u", url).param("id", id).update();
+    }
+
     public Optional<String> mode(long runId) {
         return jdbc.sql("SELECT mode FROM pipeline_run WHERE id = :id").param("id", runId).query(String.class).optional();
     }
@@ -140,7 +144,7 @@ public class RunRepository {
                     rs.getTimestamp("started_at").toInstant(),
                     rs.getTimestamp("finished_at") == null ? null : rs.getTimestamp("finished_at").toInstant(),
                     mapper.readValue(rs.getString("options_json"), RunOptions.class), rs.getString("sp_prompt"),
-                    rs.getString("kind"), jobIdOf(rs));
+                    rs.getString("kind"), jobIdOf(rs), rs.getString("source_url"));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Corrupt options_json for run " + rs.getLong("id"), e);
         }

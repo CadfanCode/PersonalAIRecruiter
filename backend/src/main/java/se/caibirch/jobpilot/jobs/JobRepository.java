@@ -94,6 +94,11 @@ public class JobRepository {
                 false));
     }
 
+    /** The id of an ad that is already stored under this dedupe key (for example the same ad found earlier on Platsbanken). */
+    public Optional<Long> idByDedupeKey(String key) {
+        return jdbc.sql("SELECT id FROM job WHERE dedupe_key = :k").param("k", key).query(Long.class).optional();
+    }
+
     public void linkToRun(long runId, long jobId, double relevance) {
         jdbc.sql("""
                 INSERT INTO run_job (run_id, job_id, relevance) VALUES (:r, :j, :rel)

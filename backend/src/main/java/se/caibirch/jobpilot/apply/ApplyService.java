@@ -38,6 +38,7 @@ import se.caibirch.jobpilot.cvdb.CvModel.Profile;
 import se.caibirch.jobpilot.cvdb.CvService;
 import se.caibirch.jobpilot.documents.DocumentModel;
 import se.caibirch.jobpilot.documents.DocumentRepository;
+import se.caibirch.jobpilot.manual.PasteOnlyHosts;
 import se.caibirch.jobpilot.jobs.JobModel.Row;
 import se.caibirch.jobpilot.jobs.JobRepository;
 import se.caibirch.jobpilot.ranking.CvDigestService;
@@ -61,12 +62,13 @@ public class ApplyService {
     private final DocumentRepository documents;
     private final SnapshotRepository snapshots;
     private final ExecutorService executor;
+    private final PasteOnlyHosts pasteOnly;
     private final ObjectMapper mapper;
     private final JobPilotProperties props;
     private final Map<Long, TabState> tabs = new ConcurrentHashMap<>();
 
     public ApplyService(BrowserService browser, ClaudeRunner claude, JobRepository jobs, CvService cv, CvDigestService digests,
-                        DocumentRepository documents, SnapshotRepository snapshots, ExecutorService applyExecutor,
+                        DocumentRepository documents, SnapshotRepository snapshots, ExecutorService applyExecutor, PasteOnlyHosts pasteOnly,
                         ObjectMapper mapper, JobPilotProperties props) {
         this.browser = browser;
         this.claude = claude;
@@ -76,6 +78,7 @@ public class ApplyService {
         this.documents = documents;
         this.snapshots = snapshots;
         this.executor = applyExecutor;
+        this.pasteOnly = pasteOnly;
         this.mapper = mapper;
         this.props = props;
     }
@@ -121,9 +124,14 @@ public class ApplyService {
             boolean wait = queue && plan.target().url() != null && activeTabs() >= props.browser().maxTabs();
             tabs.put(plan.jobId(), state);
             if (plan.target().url() == null) {
-                state.set(plan.target().email() ? Status.EMAIL_ONLY : Status.NO_APPLY_LINK,
-                        plan.target().email() ? "This ad is applied for by email, so there is nothing to open. Use the cover letter and CV PDFs."
-                                : "The ad has no application link. Open the ad itself and apply from there.");
+                if (plan.target().manualSite()) {
+                    state.set(Status.APPLY_MANUALLY, "Apply on the site yourself: it discourages automatic use, so JobPilot never opens it in its browser. "
+                            + "Use the CV and cover letter PDFs from Documents, then confirm here when you have sent it.");
+                } else {
+                    state.set(plan.target().email() ? Status.EMAIL_ONLY : Status.NO_APPLY_LINK,
+                            plan.target().email() ? "This ad is applied for by email, so there is nothing to open. Use the cover letter and CV PDFs."
+                                    : "The ad has no application link. Open the ad itself and apply from there.");
+                }
             } else if (wait) {
                 state.set(Status.QUEUED, "Waiting for a free browser tab. Close or finish one of the open applications.");
             } else {
@@ -139,7 +147,7 @@ public class ApplyService {
         int n = 0;
         for (TabState t : tabs.values()) {
             Status s = t.status();
-            if (s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.QUEUED) {
+            if (s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.APPLY_MANUALLY && s != Status.QUEUED) {
                 n++;
             }
         }
@@ -244,7 +252,7 @@ public class ApplyService {
 
     private static void markClosed(TabState state) {
         Status now = state.status();
-        if (now != Status.EMAIL_ONLY && now != Status.NO_APPLY_LINK) {
+        if (now != Status.EMAIL_ONLY && now != Status.NO_APPLY_LINK && now != Status.APPLY_MANUALLY) {
             state.set(Status.CLOSED, "The tab was closed. Use Restart and refill to open it again.");
         }
     }
@@ -454,7 +462,8 @@ public class ApplyService {
         }
         for (TabState state : tabs.values()) {
             Status s = state.status();
-            boolean hasPage = s != Status.QUEUED && s != Status.FILLING && s != Status.CLOSED && s != Status.EMAIL_ONLY && s != Status.NO_APPLY_LINK && s != Status.OPENING;
+            boolean hasPage = s != Status.QUEUED && s != Status.FILLING && s != Status.CLOSED && s != Status.EMAIL_ONLY
+                    && s != Status.NO_APPLY_LINK && s != Status.APPLY_MANUALLY && s != Status.OPENING;
             if (!hasPage || state.busy.get()) {
                 continue;
             }
@@ -470,7 +479,7 @@ public class ApplyService {
 
     // ---- helpers ----
 
-    private record Target(String url, boolean email) {
+    private record Target(String url, boolean email, boolean manualSite) {
     }
 
     /** The apply link, else the ad page. Only http(s) is opened (file: only for test fixtures). */
@@ -484,14 +493,17 @@ public class ApplyService {
             // no raw JSON to read
         }
         if (url == null || url.isBlank()) {
-            return new Target(null, email);
+            return new Target(null, email, false);
+        }
+        if (pasteOnly.matches(url)) {
+            return new Target(null, false, true); // never opened in the automated browser
         }
         String scheme = URI.create(url.strip()).getScheme();
         scheme = scheme == null ? "" : scheme.toLowerCase(Locale.ROOT);
         if (!(scheme.equals("http") || scheme.equals("https") || (scheme.equals("file") && props.browser().allowFileUrls()))) {
             throw new IllegalArgumentException("Refusing to open a " + (scheme.isEmpty() ? "relative" : scheme) + ": address");
         }
-        return new Target(url.strip(), email);
+        return new Target(url.strip(), email, false);
     }
 
     private TabState state(long jobId) {

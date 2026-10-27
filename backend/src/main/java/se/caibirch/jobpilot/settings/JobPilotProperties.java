@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.bind.ConstructorBinding;
  */
 @ConfigurationProperties(prefix = "jobpilot")
 public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Claude claude, Search search,
-                                 JobTech jobtech, Browser browser, Aktivitet aktivitet) {
+                                 JobTech jobtech, Browser browser, Aktivitet aktivitet, Manual manual) {
 
     public record Claude(String path, String model, int timeoutSeconds, int webTimeoutSeconds, int concurrency) {
 
@@ -44,6 +44,20 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
     public record JobTech(String baseUrl, String taxonomyUrl, String apiKey, int requestsPerSecond) {
     }
 
+    /**
+     * Adding a job by its link. {@code pasteOnlyHosts} are sites that discourage bots (LinkedIn): JobPilot never fetches them
+     * and never opens them in its automated browser; the user pastes the ad text and applies there by hand.
+     * {@code allowPrivateHosts} is for tests only: by default only public web addresses are fetched.
+     */
+    public record Manual(List<String> pasteOnlyHosts, boolean allowPrivateHosts, int maxPageBytes, int fetchTimeoutSeconds) {
+
+        public Manual {
+            pasteOnlyHosts = pasteOnlyHosts == null ? List.of("linkedin.com") : List.copyOf(pasteOnlyHosts);
+            maxPageBytes = maxPageBytes <= 0 ? 2_000_000 : maxPageBytes;
+            fetchTimeoutSeconds = fetchTimeoutSeconds <= 0 ? 15 : fetchTimeoutSeconds;
+        }
+    }
+
     /** The apply browser (SPEC 9.1). file: URLs are only for fixtures in tests. */
     public record Browser(boolean headless, int maxTabs, boolean allowFileUrls, int suggestionWaitMillis) {
     }
@@ -65,7 +79,8 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
         this(dataDir, allowedOrigins, claude, new Search(7, 50, 10, "Systemutvecklare/Programmerare"),
                 new JobTech("http://localhost:0", "http://localhost:0", "", 5), new Browser(true, 5, false, 5_000),
                 new Aktivitet("https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet",
-                        "https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera"));
+                        "https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera"),
+                new Manual(null, false, 0, 0));
     }
 
     public Path browserProfileDir() {
