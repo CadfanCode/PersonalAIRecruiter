@@ -6,6 +6,7 @@ import {
   MODE_LABEL,
   useApplications,
   useMarkSubmitted,
+  useRemoveApplication,
   useUndoSubmitted,
 } from '../api/applications'
 import {
@@ -133,6 +134,7 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
   const openOne = useOpenBatch()
   const submitted = useMarkSubmitted()
   const undo = useUndoSubmitted()
+  const remove = useRemoveApplication()
   const [text, setText] = useState<Record<string, string>>({})
   const [confirming, setConfirming] = useState(false)
 
@@ -156,7 +158,7 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
       { onSuccess: () => fill.mutate({ jobId }) },
     )
 
-  const error = fill.error ?? focus.error ?? close.error ?? openOne.error ?? submitted.error ?? undo.error
+  const error = fill.error ?? focus.error ?? close.error ?? openOne.error ?? submitted.error ?? undo.error ?? remove.error
 
   return (
     <section aria-label={`Application: ${title}`} className="rounded-lg border border-[var(--line)] bg-[var(--panel)] p-5">
@@ -263,8 +265,12 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
         )}
         {hasTab && <Button variant="ghost" onClick={() => focus.mutate(jobId)}>Focus tab</Button>}
         {hasTab && <Button variant="ghost" onClick={() => close.mutate(jobId)}>Close tab</Button>}
+        {app && !isSubmitted && !working && (
+          <Button variant="ghost" className="ml-auto" onClick={() => remove.mutate(jobId)} disabled={remove.isPending}
+            title="Take it off this list. Its documents are kept.">Remove</Button>
+        )}
         {!isSubmitted && !confirming && (
-          <Button variant="ghost" className="ml-auto" onClick={() => setConfirming(true)}>I submitted it</Button>
+          <Button variant="ghost" className={app && !working ? '' : 'ml-auto'} onClick={() => setConfirming(true)}>I submitted it</Button>
         )}
         {error && <span role="alert" className="self-center text-sm text-red-600">{error.message}</span>}
       </div>

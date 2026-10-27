@@ -12,3 +12,8 @@ The user can ask for fine adjustments to a generated CV or letter in their own w
   Undo saves the previous content back through the normal edit endpoint.
 - **What is on screen is the base.** The page sends its current draft, including unsaved edits, plus the recent conversation.
 - **Honest refusals.** A request that needs something the CV database does not contain changes nothing and says what is missing.
+- **Deliberate exception to "long work runs as PipelineRun steps" (CLAUDE.md).** A chat revision runs synchronously inside the
+  request (one Claude call, plus one rewrite when the validator finds a violation) because the user is waiting for the refreshed
+  document and a PipelineRun would add polling for a few seconds of work. Nothing else in the app does this.
+- **Exclusions are enforced in Java, not only in the prompt.** Entries that are hidden or excluded for the job are never offered, and
+  a citation of one is never added to the selection, so the validator flags it and the single rewrite removes it.

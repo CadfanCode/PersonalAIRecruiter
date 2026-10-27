@@ -81,4 +81,23 @@ describe('documents overview for the selected jobs', () => {
     renderPage()
     expect(await screen.findByRole('button', { name: 'Continue to Finalize Applications' })).toBeDisabled()
   })
+
+  it('hides finished applications and offers to create documents for a selected job that has none', async () => {
+    const calls = mockApi({
+      'GET /api/documents': [],
+      'GET /api/applications': [
+        app({ jobId: 1, title: 'Done and sent', submittedAt: '2026-10-27T12:00:00Z' }),
+        app({ jobId: 2, title: 'Selected only', cv: null, letter: null, generation: null }),
+      ],
+      'POST /api/applications/documents': { items: [] },
+    })
+    renderPage('/documents')
+
+    expect(await screen.findByText('Selected only')).toBeInTheDocument()
+    expect(screen.queryByText('Done and sent')).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('0 of 1 selected jobs')
+    await userEvent.click(screen.getByRole('button', { name: 'Create documents' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/applications/documents')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/applications/documents')!.body).toEqual({ jobIds: [2], runId: 7 })
+  })
 })

@@ -320,6 +320,26 @@ class DocumentIT {
     }
 
     @Test
+    void aCitationOfAnExcludedEntryIsNeverAcceptedEvenIfTheModelIgnoresTheExclusion() throws Exception {
+        generate(jobId);
+        call(patch("/api/jobs/" + jobId + "/selection"), "{\"pinned\":[],\"excluded\":[" + teaching + "]}", 204);
+        long letterId = docs(jobId).get("letter").get("id").asLong();
+        String sneaky = letterJson("sv", "Jag är systemutvecklare och har undervisat över 100 studenter.")
+                .replace("\"factIdsUsed\":[" + fBraive1 + "," + fPersonal + "]", "\"factIdsUsed\":[" + fBraive1 + "," + fPersonal + "," + fTeach + "]");
+        claude.respond("reviseDocument", t -> revision(true, "Lade till undervisningen.", sneaky));
+        claude.respond("rewriteForViolations", t -> letterJson("sv", "Jag är systemutvecklare med erfarenhet av Java och Kotlin."));
+
+        JsonNode result = chat(letterId, "Nämn undervisningen", 200);
+
+        assertThat(jdbc.sql("SELECT selection_json::text FROM job WHERE id = :id").param("id", jobId).query(String.class).single())
+                .doesNotContain("\"entryId\": " + teaching);
+        // the validator flagged the citation, the one rewrite removed it, and nothing outside the selection was saved
+        assertThat(claude.calls().stream().filter(c -> c.name().equals("rewriteForViolations"))).hasSize(1);
+        assertThat(result.get("document").get("content").get("factIdsUsed").toString()).doesNotContain(String.valueOf(fTeach));
+        assertThat(result.get("document").get("content").toString()).doesNotContain("över 100 studenter");
+    }
+
+    @Test
     void aRevisionThatBreaksTheWritingRulesGetsOneRewriteBeforeItIsSaved() throws Exception {
         generate(jobId);
         long cvId = docs(jobId).get("cv").get("id").asLong();

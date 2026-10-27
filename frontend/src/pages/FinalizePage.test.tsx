@@ -271,4 +271,18 @@ describe('finalize applications', () => {
 
     expect(await screen.findByText('Documents used: CV v2 (CV_Cai_Birch_Ravion.pdf), cover letter v1 (Brev_Ravion.pdf)')).toBeInTheDocument()
   })
+
+  it('removes an application from the list on request, but not while it is filling or once submitted', async () => {
+    const calls = mockApi({
+      'GET /api/applications': [app({ jobId: 1 }), app({ jobId: 2, title: 'Sent', submittedAt: '2026-10-27T12:00:00Z', jobStatus: 'APPLIED' })],
+      'GET /api/apply/status': [],
+      'DELETE /api/applications/1': null,
+    })
+    renderPage()
+
+    const card = await screen.findByRole('region', { name: 'Application: Software Developer' })
+    expect(within(screen.getByRole('region', { name: 'Application: Sent' })).queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
+    await userEvent.click(within(card).getByRole('button', { name: 'Remove' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/applications/1')).toBe(true))
+  })
 })

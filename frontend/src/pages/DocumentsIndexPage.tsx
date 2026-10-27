@@ -16,8 +16,9 @@ export function DocumentsIndexPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
 
-  const selected = apps.data ?? []
-  const selectedIds = new Set(selected.map((a) => a.jobId))
+  // A submitted application is finished: it lives in Finalize and the Activity Report, not in this list.
+  const selected = (apps.data ?? []).filter((a) => !a.submittedAt)
+  const selectedIds = new Set((apps.data ?? []).map((a) => a.jobId))
   const others = (docs.data ?? []).filter((d) => !selectedIds.has(d.jobId))
   const generating = selected.filter(isGenerating).length
   const ready = selected.filter((a) => a.cv && a.letter).length
@@ -68,6 +69,14 @@ export function DocumentsIndexPage() {
                     <Button variant="ghost" disabled={retry.isPending}
                       onClick={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })}>
                       Try again
+                    </Button>
+                  </div>
+                )}
+                {!isGenerating(a) && !a.cv && !a.letter && !a.generation && (
+                  <div className="mt-2 flex items-center gap-3">
+                    <span className="text-sm text-[var(--muted)]">No documents yet.</span>
+                    <Button disabled={retry.isPending} onClick={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })}>
+                      Create documents
                     </Button>
                   </div>
                 )}

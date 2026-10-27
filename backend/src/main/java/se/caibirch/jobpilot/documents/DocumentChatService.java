@@ -122,7 +122,7 @@ public class DocumentChatService {
 
         Object content = docs.parse(row.kind(), revised);
         String gapNote = cvDoc ? ((CvContent) current).gapNote() : null;
-        Selection widened = widen(selection, cited(content), entryById, cvDoc);
+        Selection widened = widen(selection, cited(content), entryById, offeredIds, cvDoc);
         if (cvDoc) {
             content = CvAssembler.assemble((CvContent) content, widened, entryById, profile, language, gapNote);
         }
@@ -135,7 +135,7 @@ public class DocumentChatService {
             } else {
                 content = docs.rewrite(Kind.LETTER, (LetterContent) content, report, offered, entryById, language, LetterContent.class);
             }
-            widened = widen(widened, cited(content), entryById, cvDoc);
+            widened = widen(widened, cited(content), entryById, offeredIds, cvDoc);
             ctx = context(row, ad, language, widened, entryById, cvDoc);
             report = report(cvDoc, content, ctx);
         }
@@ -184,11 +184,14 @@ public class DocumentChatService {
     }
 
     /** Entries the revision now draws on join the job's selection, so the validator and a later regeneration agree with the document. */
-    private Selection widen(Selection selection, Set<Long> citedFacts, Map<Long, Entry> entryById, boolean cvDoc) {
+    private Selection widen(Selection selection, Set<Long> citedFacts, Map<Long, Entry> entryById, Set<Long> allowedEntries, boolean cvDoc) {
         Map<Long, Selection.SelectedEntry> byId = new LinkedHashMap<>();
         selection.entries().forEach(e -> byId.put(e.entryId(), e));
         String use = cvDoc ? "cv" : "letter";
         for (Entry e : entryById.values()) {
+            if (!allowedEntries.contains(e.id())) {
+                continue; // hidden or excluded for this job: citing it widens nothing, so the validator flags the citation
+            }
             List<Long> used = e.facts().stream().map(Fact::id).filter(citedFacts::contains).toList();
             if (used.isEmpty()) {
                 continue;
