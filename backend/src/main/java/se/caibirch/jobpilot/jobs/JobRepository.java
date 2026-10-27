@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -146,6 +147,52 @@ public class JobRepository {
         jdbc.sql("UPDATE job SET asks_for_new_graduates = :g, experience_required_text = :e, language = :l WHERE id = :id")
                 .param("g", asksForNewGraduates).param("e", experienceRequiredText).param("l", language)
                 .param("id", id).update();
+    }
+
+    // ---- document selection ----
+
+    public record SelectionState(Set<Long> pinned, Set<Long> excluded, String selectionJson) {
+    }
+
+    public Optional<SelectionState> selectionState(long jobId) {
+        return jdbc.sql("SELECT pinned_entry_ids_json::text AS p, excluded_entry_ids_json::text AS x, selection_json::text AS s "
+                + "FROM job WHERE id = :id").param("id", jobId)
+                .query((rs, n) -> new SelectionState(ids(rs.getString("p")), ids(rs.getString("x")), rs.getString("s"))).optional();
+    }
+
+    public void savePins(long jobId, Set<Long> pinned, Set<Long> excluded) {
+        try {
+            jdbc.sql("UPDATE job SET pinned_entry_ids_json = :p::jsonb, excluded_entry_ids_json = :x::jsonb WHERE id = :id")
+                    .param("p", mapper.writeValueAsString(pinned)).param("x", mapper.writeValueAsString(excluded))
+                    .param("id", jobId).update();
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    public void saveSelection(long jobId, String json) {
+        jdbc.sql("UPDATE job SET selection_json = :s::jsonb WHERE id = :id").param("s", json).param("id", jobId).update();
+    }
+
+    /** The search profile of the newest search run that found this ad. */
+    public Optional<Long> latestSearchProfileId(long jobId) {
+        return jdbc.sql("""
+                SELECT r.search_profile_id FROM run_job rj JOIN pipeline_run r ON r.id = rj.run_id
+                WHERE rj.job_id = :id AND r.kind = 'SEARCH' AND r.search_profile_id IS NOT NULL
+                ORDER BY r.id DESC LIMIT 1""").param("id", jobId).query(Long.class).optional();
+    }
+
+    public void markDocsReady(long jobId) {
+        jdbc.sql("UPDATE job SET status = 'DOCS_READY' WHERE id = :id AND status IN ('NEW', 'SHORTLISTED')")
+                .param("id", jobId).update();
+    }
+
+    private Set<Long> ids(String json) {
+        try {
+            return new java.util.LinkedHashSet<>(mapper.readValue(json, new TypeReference<List<Long>>() { }));
+        } catch (JsonProcessingException e) {
+            return Set.of();
+        }
     }
 
     // ---- scores ----

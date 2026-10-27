@@ -18,6 +18,11 @@ public final class ClaudeResources {
     private ClaudeResources() {
     }
 
+    /** An example text under {@code claude/examples/}, used as a shape reference in prompts. */
+    public static String example(String name) {
+        return read("claude/examples/" + name + ".txt").strip();
+    }
+
     public static String schema(String name) {
         return read("claude/schemas/" + name + ".json");
     }

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "language": { "type": "string", "enum": ["sv", "en"] },
+    "subject": { "type": "string" },
+    "subline": { "type": "string" },
+    "greeting": { "type": "string" },
+    "paragraphs": { "type": "array", "items": { "type": "string" }, "minItems": 3 },
+    "closing": { "type": "string" },
+    "signature": { "type": "string" },
+    "factIdsUsed": { "type": "array", "items": { "type": "integer" } }
+  },
+  "required": ["language", "subject", "subline", "greeting", "paragraphs", "closing", "signature", "factIdsUsed"],
+  "additionalProperties": false
+}

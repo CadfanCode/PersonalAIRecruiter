@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import se.caibirch.jobpilot.claude.ClaudeResources;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
 import se.caibirch.jobpilot.claude.ClaudeTask;
+import se.caibirch.jobpilot.documents.NewGraduatePhrases;
 import se.caibirch.jobpilot.jobs.JobModel.Score;
 import se.caibirch.jobpilot.jobs.JobRepository;
 import se.caibirch.jobpilot.jobs.JobRepository.AdText;
@@ -101,7 +102,8 @@ public class ScoreService {
                 ? "claude-default" : props.claude().model();
         Score score = JobScoring.toScore(raw, model, clock.instant());
         jobs.saveScore(jobId, searchProfileId, cv.version(), score);
-        jobs.applyScoreFindings(jobId, raw.asksForNewGraduates(),
+        // The scorer missed "i början av din karriär" once; the same phrase list the validator uses decides too.
+        jobs.applyScoreFindings(jobId, raw.asksForNewGraduates() || NewGraduatePhrases.appearsIn(ad.description()),
                 raw.experienceRequiredText() == null || raw.experienceRequiredText().isBlank() ? null
                         : raw.experienceRequiredText(), raw.language());
     }

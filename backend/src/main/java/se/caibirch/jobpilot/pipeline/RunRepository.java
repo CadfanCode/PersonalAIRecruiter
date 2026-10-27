@@ -72,8 +72,17 @@ public class RunRepository {
         return jdbc.sql(SELECT + " WHERE r.id = :id").param("id", id).query(this::map).optional();
     }
 
+    /** Search runs only; document runs belong to a job and have their own page. */
     public List<Run> list(int limit) {
-        return jdbc.sql(SELECT + " ORDER BY r.id DESC LIMIT :n").param("n", limit).query(this::map).list();
+        return jdbc.sql(SELECT + " WHERE r.kind = 'SEARCH' ORDER BY r.id DESC LIMIT :n").param("n", limit).query(this::map).list();
+    }
+
+    public long createDocumentsRun(long jobId, long searchProfileId, Instant now) {
+        return jdbc.sql("""
+                INSERT INTO pipeline_run (kind, job_id, search_profile_id, status, step, progress, message, started_at)
+                VALUES ('DOCUMENTS', :job, :sp, 'QUEUED', 'SELECT', 0, 'Queued', :now) RETURNING id
+                """).param("job", jobId).param("sp", searchProfileId).param("now", Timestamp.from(now))
+                .query(Long.class).single();
     }
 
     /** Runs that were RUNNING or QUEUED when the app stopped can never finish. WAITING_FOR_USER runs stay. */
@@ -84,6 +93,11 @@ public class RunRepository {
                 """).param("now", Timestamp.from(now)).update();
     }
 
+    private static Long jobIdOf(ResultSet rs) throws SQLException {
+        long id = rs.getLong("job_id");
+        return rs.wasNull() ? null : id;
+    }
+
     private Run map(ResultSet rs, int n) throws SQLException {
         try {
             long sp = rs.getLong("search_profile_id");
@@ -92,7 +106,8 @@ public class RunRepository {
                     rs.getString("step"), rs.getInt("progress"), rs.getString("message"),
                     rs.getTimestamp("started_at").toInstant(),
                     rs.getTimestamp("finished_at") == null ? null : rs.getTimestamp("finished_at").toInstant(),
-                    mapper.readValue(rs.getString("options_json"), RunOptions.class), rs.getString("sp_prompt"));
+                    mapper.readValue(rs.getString("options_json"), RunOptions.class), rs.getString("sp_prompt"),
+                    rs.getString("kind"), jobIdOf(rs));
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Corrupt options_json for run " + rs.getLong("id"), e);
         }

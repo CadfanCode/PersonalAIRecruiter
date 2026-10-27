@@ -10,14 +10,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import se.caibirch.jobpilot.jobs.JobRepository.AdText;
 
 /** Renders a stored ad as plain text for the scoring prompt, including JobTech's structured requirements. */
-final class AdFormatter {
+public final class AdFormatter {
 
     static final int MAX_DESCRIPTION_CHARS = 12_000;
 
     private AdFormatter() {
     }
 
-    static String format(AdText ad, ObjectMapper mapper) {
+    public static String format(AdText ad, ObjectMapper mapper) {
         StringBuilder out = new StringBuilder();
         line(out, "Title", ad.title());
         line(out, "Employer", ad.employer());
