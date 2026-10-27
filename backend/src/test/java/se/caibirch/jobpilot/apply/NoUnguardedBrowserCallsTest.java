@@ -81,26 +81,29 @@ class NoUnguardedBrowserCallsTest {
         String guard = code(MAIN.resolve("se/caibirch/jobpilot/apply/BrowserGuard.java"));
 
         assertThat(Pattern.compile("\\.click\\s*\\(").matcher(guard).results().count()).as("click calls in BrowserGuard").isEqualTo(1);
-        assertThat(guard).doesNotContainPattern("\\.(press|pressSequentially|keyboard|mouse|dispatchEvent|requestSubmit|dblclick|tap|dragTo|evaluate|evaluateHandle|addInitScript|route|hover)\\s*\\(");
+        assertThat(guard).doesNotContainPattern("\\.(pressSequentially|keyboard|mouse|dispatchEvent|requestSubmit|dblclick|tap|dragTo|evaluate|evaluateHandle|addInitScript|route|hover)\\s*\\(");
+        // exactly one key press, ArrowDown to open the ort list, and never Enter (it can submit a form)
+        assertThat(Pattern.compile("\\.press\\s*\\(").matcher(guard).results().count()).as("press calls in BrowserGuard").isEqualTo(1);
+        assertThat(guard).contains(".press(\"ArrowDown\"").doesNotContain("\"Enter\"").doesNotContain("Key.ENTER");
         assertThat(FORM_SUBMIT.matcher(guard).find()).isFalse();
-        // the only enum values a click may have: M6 adds AKTIVITET_SPARA and nothing else
-        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION }");
+        // the only reasons a click may have; a new one has to change this test on purpose
+        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA }");
     }
 
     @Test
     void pageScriptsRunsOnlyTheTwoFixedScriptsFromTheClasspath() throws IOException {
         String scripts = code(MAIN.resolve("se/caibirch/jobpilot/apply/PageScripts.java"));
 
-        assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(3);
-        assertThat(scripts).contains("read(\"apply/extract-fields.js\")", "read(\"apply/detect-state.js\")");
+        assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(4);
+        assertThat(scripts).contains("read(\"apply/extract-fields.js\")", "read(\"apply/detect-state.js\")", "read(\"apply/read-saved-activities.js\")");
         assertThat(scripts).doesNotContainPattern("\\.(click|press|keyboard|mouse|dispatchEvent|submit)\\s*\\(");
         // every call starts with one of the two fixed scripts; nothing is concatenated from other input
-        assertThat(Pattern.compile("\\.evaluate\\s*\\((EXTRACT|DETECT)\\b").matcher(scripts).results().count()).isEqualTo(3);
+        assertThat(Pattern.compile("\\.evaluate\\s*\\((EXTRACT|DETECT|SAVED)\\b").matcher(scripts).results().count()).isEqualTo(4);
     }
 
     @Test
     void theScriptFilesThemselvesNeverClickTypeOrSubmit() throws IOException {
-        for (String name : List.of("extract-fields.js", "detect-state.js")) {
+        for (String name : List.of("extract-fields.js", "detect-state.js", "read-saved-activities.js")) {
             String js = Files.readString(Path.of("src/main/resources/apply/" + name)).replaceAll("(?m)^\\s*//.*$", "");
             assertThat(js).as(name).doesNotContainPattern("\\.(click|submit|requestSubmit|dispatchEvent|focus)\\s*\\(")
                     .doesNotContainPattern("\\.(value|checked)\\s*=[^=]").doesNotContain("fetch(").doesNotContain("XMLHttpRequest");

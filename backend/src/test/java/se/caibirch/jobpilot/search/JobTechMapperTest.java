@@ -30,7 +30,7 @@ class JobTechMapperTest {
         assertThat(job.sourceId()).isEqualTo("31646689");
         assertThat(job.title()).isEqualTo("Senior Fullstackutvecklare Java");
         assertThat(job.employer()).isEqualTo("Quest Consulting Sverige AB");
-        assertThat(job.clientEmployer()).isEqualTo("Quest Consulting AB");
+        assertThat(job.clientEmployer()).as("same employer under another spelling").isNull();
         assertThat(job.municipality()).isEqualTo("Stockholm");
         assertThat(job.url()).isEqualTo("https://arbetsformedlingen.se/platsbanken/annonser/31646689");
         assertThat(job.applyUrl()).isEqualTo("https://pnty-apply.ponty-system.se/quest?id=8602&pnty_src=platsbanken");
@@ -68,6 +68,18 @@ class JobTechMapperTest {
         ((com.fasterxml.jackson.databind.node.ObjectNode) hit.get("employer")).put("workplace", hit.get("employer").get("name").asText());
 
         assertThat(JobTechMapper.map(hit).orElseThrow().clientEmployer()).isNull();
+    }
+
+    @Test
+    void theEndClientIsOnlyAWorkplaceThatNamesSomeoneElse() {
+        assertThat(JobTechMapper.clientEmployer("SAAB Aktiebolag", "Saab", "Järfälla")).isNull();
+        assertThat(JobTechMapper.clientEmployer("TIKK TAKK TIME SWEDEN AB", "Stockholm", "Stockholm")).isNull();
+        assertThat(JobTechMapper.clientEmployer("Maxitech AB", "Maxitech ", "Stockholm")).isNull();
+        assertThat(JobTechMapper.clientEmployer("Quest Consulting Sverige AB", "Quest Consulting AB", "Stockholm")).isNull();
+        assertThat(JobTechMapper.clientEmployer("Comstream AB", "  ", "Stockholm")).isNull();
+        assertThat(JobTechMapper.clientEmployer("Friday Väst AB", "Elektroniktest AB", "Järfälla")).isEqualTo("Elektroniktest AB");
+        assertThat(JobTechMapper.clientEmployer("Comstream AB", " Taxi Stockholm ", "Stockholm")).isEqualTo("Taxi Stockholm");
+        assertThat(JobTechMapper.clientEmployer(null, "X", null)).isNull();
     }
 
     @Test

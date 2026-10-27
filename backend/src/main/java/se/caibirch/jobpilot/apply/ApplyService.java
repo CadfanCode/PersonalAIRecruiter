@@ -189,7 +189,7 @@ public class ApplyService {
         try {
             state.set(Status.FILLING, "Reading the page");
             Snapshot snap = browser.withTab(jobId, page -> {
-                new BrowserGuard(page).dismissCookieBanner();
+                new BrowserGuard(page, props.browser().suggestionWaitMillis(), null).dismissCookieBanner();
                 PageScripts.PageState ps = PageScripts.detect(page);
                 Kind kind = PageClassifier.classify(ps);
                 return new Snapshot(kind, kind == Kind.FORM ? PageScripts.extract(page) : List.of(), ps.url());
@@ -268,7 +268,7 @@ public class ApplyService {
                     ClaudeResources.schema("mapFormFields"), FormActions.class));
             ActionValidator.Validated validated = ActionValidator.validate(current, mapped, ctx);
             ActionExecutor.Result result = browser.withTab(jobId, page ->
-                    new ActionExecutor(page, new BrowserGuard(page)).execute(validated.planned(), current));
+                    new ActionExecutor(page, new BrowserGuard(page, props.browser().suggestionWaitMillis(), null)).execute(validated.planned(), current));
             snapshots.save(jobId, state.url(), current, Map.of("pass", pass, "proposed", mapped, "done", result.done(),
                     "skipped", concat(validated.skipped(), result.skipped())));
             done.addAll(result.done());

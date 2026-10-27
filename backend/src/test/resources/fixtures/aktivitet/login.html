@@ -1,0 +1,11 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Logga in</title></head><body>
+<h1>Logga in med Mobilt BankID</h1><form onsubmit="return false"><label for="pn">Personnummer</label><input id="pn"><button type="submit">Logga in</button></form>
+<script>
+window.__submitted = false; window.__clicks = []; window.__skickaInClicked = false; window.__keys = [];
+document.addEventListener("keydown", function (e) { window.__keys.push(e.key); }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option], li");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

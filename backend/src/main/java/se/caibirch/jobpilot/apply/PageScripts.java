@@ -31,6 +31,7 @@ public final class PageScripts {
             .configure(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
     private static final String EXTRACT = read("apply/extract-fields.js");
     private static final String DETECT = read("apply/detect-state.js");
+    private static final String SAVED = read("apply/read-saved-activities.js");
 
     private PageScripts() {
     }
@@ -75,6 +76,18 @@ public final class PageScripts {
         return new PageState(b(m, "passwordVisible"), b(m, "signInText"), b(m, "bankIdText"), b(m, "createAccountText"),
                 b(m, "confirmPasswordText"), fields, b(m, "ansokButton"), b(m, "sessionError"),
                 String.valueOf(m.get("url")), String.valueOf(m.get("title")));
+    }
+
+    /** One saved activity row as text, with its date as yyyy-MM-dd. */
+    public record SavedRow(String text, String date) {
+    }
+
+    /** The activities already on the aktivitetsrapport page; {@code noneMarker} is true when the page says there are none. */
+    public record SavedActivities(List<SavedRow> entries, boolean noneMarker) {
+    }
+
+    public static SavedActivities savedActivities(Page page) {
+        return MAPPER.convertValue(page.mainFrame().evaluate(SAVED), SavedActivities.class);
     }
 
     private static boolean b(Map<String, Object> m, String key) {

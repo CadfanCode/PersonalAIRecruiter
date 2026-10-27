@@ -1,0 +1,65 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Lägg till aktivitet</title></head><body>
+<h1>Lägg till aktivitet</h1>
+<details open><summary>Sökta jobb</summary>
+<form id="f" onsubmit="return false">
+  <label for="yr">Yrkesroll</label><input id="yr" autocomplete="off" aria-controls="yrlist">
+  <ul id="yrlist" style="display:none;list-style:none;padding:0;border:1px solid #888"></ul>
+  <label for="ag">Arbetsgivaren</label><input id="ag">
+  <fieldset><legend>Välj omfattning</legend>
+    <label><input type="radio" name="om" value="heltid"> Heltid</label><label><input type="radio" name="om" value="deltid"> Deltid</label>
+    <label><input type="radio" name="om" value="behov"> Timmar vid behov</label></fieldset>
+  <fieldset><legend>Var finns jobbet?</legend>
+    <label><input type="radio" name="var" value="se"> Sverige</label><label><input type="radio" name="var" value="ob"> Obestämd ort</label>
+    <label><input type="radio" name="var" value="ut"> Utomlands</label></fieldset>
+  <label for="ort">Sök och välj ort</label><input id="ort" role="combobox" aria-controls="ortlist" aria-expanded="false" autocomplete="off">
+  <ul id="ortlist" style="display:none;list-style:none;padding:0;border:1px solid #888"></ul>
+  <fieldset><legend>Svarade du på en annons när du sökte jobbet?</legend>
+    <label><input type="radio" name="ann" value="ja"> Ja</label><label><input type="radio" name="ann" value="nej"> Nej</label></fieldset>
+  <label for="dt">Vilket datum sökte du jobbet?</label><input id="dt" type="date">
+  <button type="submit" id="spara">Spara</button>
+  <button type="button" id="skicka" onclick="window.__skickaInClicked = true">Skicka in</button>
+</form></details>
+<div id="toast" role="status"></div>
+<script>
+var roles = ["Systemutvecklare/Programmerare", "Systemutvecklare/Programmerare (inriktning)", "Systemadministratör", "Systemanalytiker"];
+var cities = ["Stockholm", "Stockholms-Näs", "Stocksund", "Solna", "Järfälla"];
+var yr = document.getElementById("yr"), yl = document.getElementById("yrlist");
+yr.addEventListener("input", function () {
+  var q = yr.value.toLowerCase(); yl.innerHTML = ""; yl.style.display = "none";
+  setTimeout(function () {                              // suggestions arrive late, like a real backend
+    roles.filter(function (r) { return q && r.toLowerCase().indexOf(q) === 0; }).forEach(function (r) {
+      var li = document.createElement("li"); li.textContent = r;
+      li.addEventListener("click", function () { yr.value = r; yl.style.display = "none"; }); yl.appendChild(li);
+    });
+    yl.style.display = yl.children.length ? "block" : "none";
+  }, 600);
+});
+var ort = document.getElementById("ort"), ol = document.getElementById("ortlist");
+ort.addEventListener("keydown", function (e) {           // the list only opens on ArrowDown, and the items are plain li
+  if (e.key !== "ArrowDown") return;
+  var q = ort.value.toLowerCase(); ol.innerHTML = "";
+  cities.filter(function (c) { return c.toLowerCase().indexOf(q) === 0; }).forEach(function (c) {
+    var li = document.createElement("li"); li.textContent = c;
+    li.addEventListener("click", function () { ort.value = c; ol.style.display = "none"; }); ol.appendChild(li);
+  });
+  ol.style.display = ol.children.length ? "block" : "none";
+});
+document.getElementById("f").addEventListener("submit", function (e) {
+  e.preventDefault();
+  var v = function (id) { return document.getElementById(id).value; };
+  var checked = function (n) { var r = document.querySelector("input[name=" + n + "]:checked"); return r ? r.value : ""; };
+  window.__saved = (window.__saved || []);
+  window.__saved.push({ yrkesroll: v("yr"), arbetsgivare: v("ag"), omfattning: checked("om"), var: checked("var"), ort: v("ort"), annons: checked("ann"), datum: v("dt") });
+  document.getElementById("toast").textContent = "Din aktivitet är sparad: " + v("ag");
+  document.getElementById("f").reset();                  // the form resets after saving
+});
+</script>
+<script>
+window.__submitted = false; window.__clicks = []; window.__skickaInClicked = false; window.__keys = [];
+document.addEventListener("keydown", function (e) { window.__keys.push(e.key); }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option], li");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

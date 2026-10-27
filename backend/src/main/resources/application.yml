@@ -42,3 +42,7 @@ jobpilot:
     headless: ${JOBPILOT_BROWSER_HEADLESS:false}
     max-tabs: 5
     allow-file-urls: false
+    suggestion-wait-millis: 5000
+  aktivitet:
+    form-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet
+    list-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera

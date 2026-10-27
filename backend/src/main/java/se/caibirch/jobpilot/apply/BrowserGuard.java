@@ -22,8 +22,8 @@ import com.microsoft.playwright.options.SelectOption;
  */
 public final class BrowserGuard {
 
-    /** Why a click is allowed. M6 adds exactly one more: the Spara button of the aktivitetsrapport. */
-    public enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION }
+    /** Why a click is allowed. AKTIVITET_SPARA is the one M6 adds: the Spara button of the aktivitetsrapport form. */
+    public enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA }
 
     /** @param done true when the action happened; otherwise {@code reason} says why it was refused or failed */
     public record Outcome(boolean done, String reason) {
@@ -40,11 +40,26 @@ public final class BrowserGuard {
     static final Pattern SAFE_ID = Pattern.compile("^(f\\d+-)?jp-\\d+$");
     private static final int CLICK_TIMEOUT_MS = 3_000;
     private static final int SUGGESTION_WAIT_MS = 1_500;
+    private static final String SAVE_TEXT = "Spara";
+
+    private static final Pattern SAFE_LIST_ID = Pattern.compile("^[A-Za-z0-9_:.\\-]{1,100}$");
 
     private final Page page;
+    private final int suggestionWaitMs;
+    private final String aktivitetFormUrl;
 
     public BrowserGuard(Page page) {
+        this(page, SUGGESTION_WAIT_MS, null);
+    }
+
+    /**
+     * @param suggestionWaitMs how long to wait for a suggestion list
+     * @param aktivitetFormUrl the one page on which {@code AKTIVITET_SPARA} may click; null means never
+     */
+    public BrowserGuard(Page page, int suggestionWaitMs, String aktivitetFormUrl) {
         this.page = page;
+        this.suggestionWaitMs = suggestionWaitMs;
+        this.aktivitetFormUrl = aktivitetFormUrl;
     }
 
     // ---- fields ----
@@ -61,7 +76,7 @@ public final class BrowserGuard {
         try {
             l.fill(value, new Locator.FillOptions().setTimeout(5_000));
             if (f.autocomplete()) {
-                Outcome picked = chooseSuggestion(f, value);
+                Outcome picked = pickSuggestion(f, l, value, false);
                 if (!picked.done()) {
                     return picked;
                 }
@@ -175,25 +190,156 @@ public final class BrowserGuard {
         return false;
     }
 
-    /** Picks the suggestion that equals {@code text}, in the list the field just opened. */
-    Outcome chooseSuggestion(FormField f, String text) {
-        Frame frame = frame(f);
-        Locator options = frame.locator("[role=option]");
+    /**
+     * Types {@code typed} into an autocomplete field and clicks the suggestion that equals {@code exact}. When
+     * {@code arrowDown} is set and no list appeared, one ArrowDown opens it (the ort field does this). Nothing else is
+     * ever pressed, and Enter never.
+     */
+    public Outcome typeAndPick(FormField f, String typed, String exact, boolean arrowDown) {
+        Outcome refusal = checkField(f);
+        if (refusal != null) {
+            return refusal;
+        }
+        if (!f.isText()) {
+            return Outcome.refused("not a text field");
+        }
+        Locator l = locator(f);
         try {
-            options.first().waitFor(new Locator.WaitForOptions().setTimeout(SUGGESTION_WAIT_MS));
+            l.fill(typed, new Locator.FillOptions().setTimeout(5_000));
         } catch (PlaywrightException e) {
+            return Outcome.refused("could not fill: " + first(e));
+        }
+        return pickSuggestion(f, l, exact, arrowDown);
+    }
+
+    private Outcome pickSuggestion(FormField f, Locator input, String text, boolean arrowDown) {
+        Frame frame = frame(f);
+        String listId = listIdOf(input);
+        Locator options = frame.locator(listId == null ? "[role=option], [role=listbox] li"
+                : "[role=option], [role=listbox] li, [id=\"" + listId + "\"] li");
+        boolean open = appears(options);
+        if (!open && arrowDown) {
+            try {
+                input.press("ArrowDown", new Locator.PressOptions().setTimeout(2_000));
+            } catch (PlaywrightException e) {
+                return Outcome.refused("could not open the list: " + first(e));
+            }
+            open = appears(options);
+        }
+        if (!open) {
             return Outcome.refused("typed the text, but no suggestion appeared; pick it yourself");
         }
-        int n = Math.min(options.count(), 50);
+        int n;
+        try {
+            n = Math.min(options.count(), 80);
+        } catch (PlaywrightException e) {
+            return Outcome.refused("the suggestions disappeared");
+        }
         for (int i = 0; i < n; i++) {
             Locator option = options.nth(i);
-            String t = option.innerText().strip();
-            if (t.equalsIgnoreCase(text.strip())) {
-                Outcome o = click(option, ClickPurpose.AUTOCOMPLETE_OPTION);
-                return o.done() ? o : Outcome.refused("typed the text, but " + o.reason());
+            try {
+                if (option.innerText().strip().equalsIgnoreCase(text.strip())) {
+                    Outcome o = click(option, ClickPurpose.AUTOCOMPLETE_OPTION, listId);
+                    return o.done() ? o : Outcome.refused("typed the text, but " + o.reason());
+                }
+            } catch (PlaywrightException ignored) {
+                // the list changed while we read it
             }
         }
         return Outcome.refused("typed the text, but no suggestion matched exactly; pick it yourself");
+    }
+
+    private boolean appears(Locator options) {
+        try {
+            options.first().waitFor(new Locator.WaitForOptions().setTimeout(suggestionWaitMs));
+            return true;
+        } catch (PlaywrightException e) {
+            return false;
+        }
+    }
+
+    /** The id of the list an input points at with aria-controls or aria-owns, if it is a plain safe id. */
+    private static String listIdOf(Locator input) {
+        for (String attr : new String[] {"aria-controls", "aria-owns"}) {
+            String v = input.getAttribute(attr);
+            if (v != null && SAFE_LIST_ID.matcher(v.strip()).matches()) {
+                return v.strip();
+            }
+        }
+        return null;
+    }
+
+    // ---- the aktivitetsrapport form ----
+
+    /**
+     * Clicks Spara on the aktivitetsrapport form. All of these must hold: the guard was given the form's address, the
+     * page is exactly that address (query and hash ignored), exactly one visible control reads exactly "Spara", and it
+     * passes the submit-like deny list ("Skicka in" and "Spara och skicka in" never do).
+     */
+    public Outcome saveActivity() {
+        if (aktivitetFormUrl == null) {
+            return Outcome.refused("refused: no aktivitet form address configured");
+        }
+        if (!stripQueryAndHash(page.url()).equals(stripQueryAndHash(aktivitetFormUrl))) {
+            return Outcome.refused("refused: not on the aktivitetsrapport form");
+        }
+        Locator candidates = page.locator("button, input[type=submit], input[type=button], [role=button]");
+        List<Locator> exact = new java.util.ArrayList<>();
+        try {
+            int n = Math.min(candidates.count(), 80);
+            for (int i = 0; i < n; i++) {
+                Locator c = candidates.nth(i);
+                if (c.isVisible() && SAVE_TEXT.equals(labelOf(c))) {
+                    exact.add(c);
+                }
+            }
+        } catch (PlaywrightException e) {
+            return Outcome.refused("could not look for the Spara button: " + first(e));
+        }
+        if (exact.size() != 1) {
+            return Outcome.refused("expected exactly one Spara button, found " + exact.size());
+        }
+        return click(exact.get(0), ClickPurpose.AKTIVITET_SPARA);
+    }
+
+    /** Waits until the page text contains the phrase and one of the names (the saved-activity toast). */
+    public boolean waitForConfirmation(String phrase, List<String> names, int timeoutMs) {
+        long end = System.currentTimeMillis() + timeoutMs;
+        while (System.currentTimeMillis() < end) {
+            try {
+                String text = page.locator("body").innerText(new Locator.InnerTextOptions().setTimeout(2_000));
+                if (text.contains(phrase) && names.stream().anyMatch(n -> !n.isBlank() && text.toLowerCase(Locale.ROOT).contains(n.toLowerCase(Locale.ROOT)))) {
+                    return true;
+                }
+                Thread.sleep(150);
+            } catch (PlaywrightException e) {
+                // the page is navigating; try again
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private static String labelOf(Locator c) {
+        String text = c.innerText(new Locator.InnerTextOptions().setTimeout(1_000)).strip();
+        if (!text.isEmpty()) {
+            return text;
+        }
+        String value = c.getAttribute("value");
+        return value == null ? "" : value.strip();
+    }
+
+    static String stripQueryAndHash(String url) {
+        int cut = url.length();
+        for (char ch : new char[] {'?', '#'}) {
+            int i = url.indexOf(ch);
+            if (i >= 0) {
+                cut = Math.min(cut, i);
+            }
+        }
+        return url.substring(0, cut);
     }
 
     /**
@@ -201,16 +347,19 @@ public final class BrowserGuard {
      * deny list (SPEC 9.3) applies on top of it, checked against every text the element carries.
      */
     Outcome click(Locator target, ClickPurpose purpose) {
+        return click(target, purpose, null);
+    }
+
+    Outcome click(Locator target, ClickPurpose purpose, String listId) {
         try {
-            String own = nz(target.innerText(new Locator.InnerTextOptions().setTimeout(1_500)));
+            String own = safeText(target);
             String value = nz(target.getAttribute("value"));
             String aria = nz(target.getAttribute("aria-label"));
             String title = nz(target.getAttribute("title"));
             String type = nz(target.getAttribute("type")).toLowerCase(Locale.ROOT);
             String role = nz(target.getAttribute("role")).toLowerCase(Locale.ROOT);
-            String ancestor = nz(target.locator("xpath=ancestor-or-self::*[self::button or self::a or @role='button' or @role='option' or self::li][1]")
-                    .first().innerText(new Locator.InnerTextOptions().setTimeout(1_500)));
-            if (type.equals("submit")) {
+            String ancestor = safeText(target.locator("xpath=ancestor-or-self::*[self::button or self::a or @role='button' or @role='option' or self::li][1]").first());
+            if (type.equals("submit") && purpose != ClickPurpose.AKTIVITET_SPARA) {
                 return Outcome.refused("refused: this is a submit button");
             }
             for (String t : List.of(own, value, aria, title, ancestor)) {
@@ -236,9 +385,19 @@ public final class BrowserGuard {
                     }
                 }
                 case AUTOCOMPLETE_OPTION -> {
-                    boolean option = role.equals("option") || target.locator("xpath=ancestor::*[@role='listbox']").count() > 0;
+                    boolean option = role.equals("option") || target.locator("xpath=ancestor::*[@role='listbox']").count() > 0
+                            || (listId != null && target.locator("xpath=ancestor::*[@id='" + listId + "']").count() > 0);
                     if (!option) {
                         return Outcome.refused("not a suggestion in a list");
+                    }
+                }
+                case AKTIVITET_SPARA -> {
+                    // exact text, exact page; the deny list above already refused anything submit-like
+                    if (aktivitetFormUrl == null || !stripQueryAndHash(page.url()).equals(stripQueryAndHash(aktivitetFormUrl))) {
+                        return Outcome.refused("refused: Spara is only clicked on the aktivitetsrapport form");
+                    }
+                    if (!SAVE_TEXT.equals(own.strip()) && !(own.isBlank() && SAVE_TEXT.equals(value.strip()))) {
+                        return Outcome.refused("refused: the button does not read exactly Spara");
                     }
                 }
             }
@@ -290,6 +449,19 @@ public final class BrowserGuard {
     private Frame frame(FormField f) {
         List<Frame> frames = page.frames();
         return f.frame() < frames.size() ? frames.get(f.frame()) : page.mainFrame();
+    }
+
+    /** The visible text, or the raw text content for nodes (such as inputs) that have no innerText. */
+    private static String safeText(Locator l) {
+        try {
+            return nz(l.innerText(new Locator.InnerTextOptions().setTimeout(1_500)));
+        } catch (PlaywrightException e) {
+            try {
+                return nz(l.textContent(new Locator.TextContentOptions().setTimeout(1_000)));
+            } catch (PlaywrightException again) {
+                return "";
+            }
+        }
     }
 
     private static String nz(String s) {

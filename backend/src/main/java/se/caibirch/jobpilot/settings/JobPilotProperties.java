@@ -12,7 +12,7 @@ import org.springframework.boot.context.properties.bind.ConstructorBinding;
  */
 @ConfigurationProperties(prefix = "jobpilot")
 public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Claude claude, Search search,
-                                 JobTech jobtech, Browser browser) {
+                                 JobTech jobtech, Browser browser, Aktivitet aktivitet) {
 
     public record Claude(String path, String model, int timeoutSeconds, int webTimeoutSeconds, int concurrency) {
     }
@@ -25,7 +25,14 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
     }
 
     /** The apply browser (SPEC 9.1). file: URLs are only for fixtures in tests. */
-    public record Browser(boolean headless, int maxTabs, boolean allowFileUrls) {
+    public record Browser(boolean headless, int maxTabs, boolean allowFileUrls, int suggestionWaitMillis) {
+    }
+
+    /**
+     * The only two addresses the aktivitetsrapport automation may open (SPEC 10). Tests point them at fixtures; the
+     * Spara button is only ever clicked on {@code formUrl}.
+     */
+    public record Aktivitet(String formUrl, String listUrl) {
     }
 
     /** The one Spring binds from application.yml; the shorter constructor below is for tests. */
@@ -36,7 +43,9 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
     /** Defaults for everything beyond the first three settings; used by tests that only care about those. */
     public JobPilotProperties(Path dataDir, List<String> allowedOrigins, Claude claude) {
         this(dataDir, allowedOrigins, claude, new Search(7, 50, 10, "Systemutvecklare/Programmerare"),
-                new JobTech("http://localhost:0", "http://localhost:0", "", 5), new Browser(true, 5, false));
+                new JobTech("http://localhost:0", "http://localhost:0", "", 5), new Browser(true, 5, false, 5_000),
+                new Aktivitet("https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet",
+                        "https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera"));
     }
 
     public Path browserProfileDir() {

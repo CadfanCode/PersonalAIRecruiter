@@ -34,8 +34,7 @@ public final class JobTechMapper {
         String city = text(address, "city");
         String employer = text(hit.path("employer"), "name");
         String workplace = text(hit.path("employer"), "workplace");
-        String clientEmployer = workplace != null && employer != null
-                && !workplace.equalsIgnoreCase(employer) ? workplace : null;
+        String clientEmployer = clientEmployer(employer, workplace, municipality);
         String description = text(hit.path("description"), "text");
         String hours = text(hit.path("working_hours_type"), "label");
         String employment = hours != null ? hours : text(hit.path("employment_type"), "label");
@@ -47,6 +46,39 @@ public final class JobTechMapper {
                 instant(text(hit, "application_deadline")), LanguageDetector.detect(description), employment,
                 description, hit.toString(), false, null, hit.path("relevance").asDouble(0),
                 workplaceModel != null && REMOTE.matcher(workplaceModel).find()));
+    }
+
+    private static final java.util.Set<String> GENERIC = java.util.Set.of("ab", "aktiebolag", "publ", "ltd", "inc", "gmbh", "sverige",
+            "sweden", "nordic", "group", "holding", "the", "och", "and", "&");
+
+    /**
+     * The end client is the workplace only when it names someone else. "SAAB Aktiebolag" with workplace "Saab", a
+     * workplace that is just the city, or one whose words are contained in the employer's are the same employer.
+     */
+    static String clientEmployer(String employer, String workplace, String municipality) {
+        if (workplace == null || employer == null) {
+            return null;
+        }
+        String w = workplace.strip();
+        if (w.isEmpty() || (municipality != null && w.equalsIgnoreCase(municipality.strip()))) {
+            return null;
+        }
+        java.util.Set<String> e = words(employer);
+        java.util.Set<String> c = words(w);
+        if (c.isEmpty() || e.containsAll(c) || c.containsAll(e)) {
+            return null;
+        }
+        return w;
+    }
+
+    private static java.util.Set<String> words(String name) {
+        java.util.Set<String> out = new java.util.LinkedHashSet<>();
+        for (String t : name.toLowerCase(Locale.ROOT).split("[^\\p{L}\\p{N}]+")) {
+            if (!t.isEmpty() && !GENERIC.contains(t)) {
+                out.add(t);
+            }
+        }
+        return out;
     }
 
     static Instant instant(String value) {

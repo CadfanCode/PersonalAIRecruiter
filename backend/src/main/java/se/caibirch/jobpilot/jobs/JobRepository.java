@@ -138,7 +138,10 @@ public class JobRepository {
     }
 
     public boolean patch(long id, Status status, String notes) {
-        return jdbc.sql("UPDATE job SET status = coalesce(:status, status), notes = coalesce(:notes, notes) WHERE id = :id")
+        return jdbc.sql("""
+                UPDATE job SET status = coalesce(:status, status), notes = coalesce(:notes, notes),
+                    applied_at = CASE WHEN :status = 'APPLIED' AND applied_at IS NULL THEN now() ELSE applied_at END
+                WHERE id = :id""")
                 .param("status", status == null ? null : status.name()).param("notes", notes).param("id", id)
                 .update() > 0;
     }
