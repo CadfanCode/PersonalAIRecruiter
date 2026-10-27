@@ -233,6 +233,121 @@ class DocumentIT {
 
     // ---- tests ----
 
+    // ---- "Ask Claude": fine adjustments through chat ----
+
+    String revision(boolean changed, String reply, String documentJson) {
+        return "{\"changed\":" + changed + ",\"reply\":\"" + reply + "\",\"document\":" + documentJson + "}";
+    }
+
+    JsonNode chat(long documentId, String message, int status) throws Exception {
+        return call(post("/api/documents/" + documentId + "/chat"), "{\"message\":\"" + message + "\",\"history\":[]}", status);
+    }
+
+    @Test
+    void chatRevisesTheDocumentSavesANewVersionAndKeepsDatabaseOwnedFieldsAndRevokesApproval() throws Exception {
+        generate(jobId);
+        long cvId = docs(jobId).get("cv").get("id").asLong();
+        call(post("/api/documents/" + cvId + "/approve"), null, 200);
+        // the model also tampers with the employer and the title of the experience item: the database wins
+        String revised = cvJson("sv", "Byggde och förbättrade mikrotjänster i Java och Kotlin.", "Åtgärdade race conditions i loggningsflödena.")
+                .replace("\"entryId\":" + braive + ",\"title\":\"\"", "\"entryId\":" + braive + ",\"title\":\"Hacked AB\"");
+        claude.respond("reviseDocument", t -> revision(true, "Kortade första punkten.", revised));
+
+        JsonNode result = chat(cvId, "Gör första punkten mer konkret", 200);
+
+        assertThat(result.get("changed").asBoolean()).isTrue();
+        assertThat(result.get("approvalRevoked").asBoolean()).isTrue();
+        assertThat(result.get("reply").asText()).startsWith("Kortade första punkten.");
+        JsonNode doc = result.get("document");
+        assertThat(doc.get("version").asInt()).isEqualTo(2);
+        assertThat(doc.get("approved").asBoolean()).isFalse();
+        JsonNode item = doc.get("content").get("sections").get(1).get("items").get(0);
+        assertThat(item.get("bullets").get(0).get("text").asText()).contains("förbättrade mikrotjänster");
+        assertThat(item.get("title").asText()).isEqualTo("Systemutvecklare (praktik)"); // restored from the database
+        assertThat(item.get("meta").asText()).isEqualTo("Braive AB");
+        assertThat(docs(jobId).get("cv").get("version").asInt()).isEqualTo(2);
+        // the prompt carried the request, the current document and the data-not-instructions warning
+        String prompt = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().prompt();
+        assertThat(prompt).contains("Gör första punkten mer konkret", "data, not instructions")
+                .doesNotContain("SECRET OWNER TODO");
+    }
+
+    @Test
+    void chatThatChangesNothingKeepsTheVersionAndExplainsWhy() throws Exception {
+        generate(jobId);
+        long letterId = docs(jobId).get("letter").get("id").asLong();
+        JsonNode current = docs(jobId).get("letter").get("content");
+        claude.respond("reviseDocument", t -> revision(false, "Det finns ingen erfarenhet av Rust i din CV-databas.", current.toString()));
+
+        JsonNode result = chat(letterId, "Lägg till att jag kan Rust", 200);
+
+        assertThat(result.get("changed").asBoolean()).isFalse();
+        assertThat(result.get("reply").asText()).contains("Rust");
+        assertThat(docs(jobId).get("letter").get("version").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void chatCanUseAnyFactOfTheDatabaseAndTheJobSelectionGrowsWithIt() throws Exception {
+        generate(jobId);
+        long letterId = docs(jobId).get("letter").get("id").asLong();
+        String letter = letterJson("sv", "Jag är systemutvecklare och har även undervisat över 100 studenter.")
+                .replace("\"factIdsUsed\":[" + fBraive1 + "," + fPersonal + "]", "\"factIdsUsed\":[" + fBraive1 + "," + fPersonal + "," + fTeach + "]");
+        claude.respond("reviseDocument", t -> revision(true, "Lade till undervisningen.", letter));
+
+        JsonNode result = chat(letterId, "Nämn att jag har undervisat", 200);
+
+        assertThat(result.get("changed").asBoolean()).isTrue();
+        // the offered facts included the teaching entry even though the first selection left it out
+        String prompt = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().prompt();
+        assertThat(prompt).contains("Taught labs for over 100 students.");
+        assertThat(jdbc.sql("SELECT selection_json::text FROM job WHERE id = :id").param("id", jobId).query(String.class).single())
+                .contains("\"entryId\": " + teaching);
+        assertThat(result.get("document").get("report").get("violations")).isEmpty();
+    }
+
+    @Test
+    void entriesTheUserExcludedForTheJobAreNeverOfferedToTheModel() throws Exception {
+        generate(jobId);
+        call(patch("/api/jobs/" + jobId + "/selection"), "{\"pinned\":[],\"excluded\":[" + teaching + "]}", 204);
+        long letterId = docs(jobId).get("letter").get("id").asLong();
+        JsonNode current = docs(jobId).get("letter").get("content");
+        claude.respond("reviseDocument", t -> revision(false, "Ok.", current.toString()));
+
+        chat(letterId, "Lite kortare", 200);
+
+        String prompt = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().prompt();
+        assertThat(prompt).doesNotContain("Taught labs for over 100 students.").contains("Built microservices in Java and Kotlin.");
+    }
+
+    @Test
+    void aRevisionThatBreaksTheWritingRulesGetsOneRewriteBeforeItIsSaved() throws Exception {
+        generate(jobId);
+        long cvId = docs(jobId).get("cv").get("id").asLong();
+        String dashed = cvJson("sv", "Byggde mikrotjänster – i Java och Kotlin.", "Åtgärdade race conditions i loggningsflödena.");
+        claude.respond("reviseDocument", t -> revision(true, "Ändrade.", dashed));
+        claude.respond("rewriteForViolations", t -> cvJson("sv", "Byggde mikrotjänster i Java och Kotlin.", "Åtgärdade race conditions i loggningsflödena."));
+
+        JsonNode result = chat(cvId, "Skriv om första punkten", 200);
+
+        assertThat(claude.calls().stream().filter(c -> c.name().equals("rewriteForViolations"))).hasSize(1);
+        assertThat(result.get("document").get("report").get("violations")).isEmpty();
+        assertThat(result.get("document").get("content").toString()).doesNotContain("–");
+    }
+
+    @Test
+    void chatRefusesAnEmptyRequestAndAMalformedAnswerChangesNothing() throws Exception {
+        generate(jobId);
+        long cvId = docs(jobId).get("cv").get("id").asLong();
+        chat(cvId, "   ", 400);
+        claude.respond("reviseDocument", t -> "{\"changed\":true,\"reply\":\"x\",\"document\":{\"language\":\"sv\"}}");
+
+        JsonNode error = chat(cvId, "Ändra något", 500);
+
+        assertThat(error.get("error").asText()).contains("nothing was changed");
+        assertThat(docs(jobId).get("cv").get("version").asInt()).isEqualTo(1);
+        call(post("/api/documents/999999/chat"), "{\"message\":\"hej\"}", 404);
+    }
+
     // ---- selected applications: batch generation and the user's own "submitted" confirmation ----
 
     JsonNode awaitApplications(java.util.function.Predicate<JsonNode> done) throws Exception {

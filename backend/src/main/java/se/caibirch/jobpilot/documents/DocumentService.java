@@ -257,7 +257,7 @@ public class DocumentService {
     }
 
     /** One automatic rewrite with the violation report (SPEC 8.3). Java-owned fields are restored by the caller. */
-    private <T> T rewrite(Kind kind, T document, Report report, List<Selection.SelectedEntry> selected,
+    <T> T rewrite(Kind kind, T document, Report report, List<Selection.SelectedEntry> selected,
                           Map<Long, Entry> entryById, String language, Class<T> type) {
         String schema = kind == Kind.CV ? "writeCv" : "writeLetter";
         return claude.run(ClaudeTask.of("rewriteForViolations",
@@ -267,7 +267,7 @@ public class DocumentService {
                 ClaudeResources.schema(schema), type));
     }
 
-    private List<Map<String, Object>> factsFor(List<Selection.SelectedEntry> selected, Map<Long, Entry> entryById) {
+    List<Map<String, Object>> factsFor(List<Selection.SelectedEntry> selected, Map<Long, Entry> entryById) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (Selection.SelectedEntry s : selected) {
             Entry e = entryById.get(s.entryId());
@@ -299,7 +299,7 @@ public class DocumentService {
         return out;
     }
 
-    private ValidationContext context(String language, boolean asksNewGrad, List<Entry> entries, Set<Long> selectedEntryIds,
+    ValidationContext context(String language, boolean asksNewGrad, List<Entry> entries, Set<Long> selectedEntryIds,
                                       Set<String> foreignEmployers) {
         Map<Long, ValidationContext.Fact> facts = new HashMap<>();
         for (Entry e : entries) {
@@ -313,7 +313,7 @@ public class DocumentService {
     }
 
     /** Employers named in the example letters, minus the one being applied to. */
-    private static Set<String> foreignEmployers(String language, String targetEmployer) {
+    static Set<String> foreignEmployers(String language, String targetEmployer) {
         Set<String> names = new LinkedHashSet<>(List.of("Knowit", "Ravion"));
         String target = targetEmployer == null ? "" : targetEmployer.toLowerCase();
         names.removeIf(n -> target.contains(n.toLowerCase()));
@@ -322,7 +322,7 @@ public class DocumentService {
 
     // ---- storage, edit, approve ----
 
-    private void store(long jobId, Kind kind, String language, Object content, Rendered rendered, Report report,
+    void store(long jobId, Kind kind, String language, Object content, Rendered rendered, Report report,
                        Profile profile, String employer, Long searchProfileId) {
         Report withPages = withPages(report, rendered.pages(), kind);
         Path file = pdfPath(jobId, kind, language, profile, employer);
@@ -448,7 +448,7 @@ public class DocumentService {
                 : validator.validateLetter((LetterContent) content, ctx);
     }
 
-    private Object parse(Kind kind, JsonNode json) {
+    Object parse(Kind kind, JsonNode json) {
         try {
             return kind == Kind.CV ? mapper.treeToValue(json, CvContent.class) : mapper.treeToValue(json, LetterContent.class);
         } catch (JsonProcessingException e) {
@@ -482,15 +482,15 @@ public class DocumentService {
 
     // ---- helpers ----
 
-    private static String languageName(String language) {
+    static String languageName(String language) {
         return "sv".equals(language) ? "Swedish" : "English";
     }
 
-    private static String candidate(Profile p) {
+    static String candidate(Profile p) {
         return (p.fullName() == null ? "" : p.fullName()) + (p.headline() == null ? "" : ", " + p.headline());
     }
 
-    private String write(Object o) {
+    String write(Object o) {
         try {
             return mapper.writeValueAsString(o);
         } catch (JsonProcessingException e) {
@@ -498,7 +498,7 @@ public class DocumentService {
         }
     }
 
-    private <T> T read(String json, Class<T> type) {
+    <T> T read(String json, Class<T> type) {
         try {
             return mapper.readValue(json, type);
         } catch (JsonProcessingException e) {
@@ -506,7 +506,7 @@ public class DocumentService {
         }
     }
 
-    private JsonNode readTree(String json) {
+    JsonNode readTree(String json) {
         try {
             return mapper.readTree(json);
         } catch (JsonProcessingException e) {

@@ -31,6 +31,12 @@ public class DocumentController {
     public record GenerateRequest(Long runId) {
     }
 
+    public record ChatRequest(String message, JsonNode content, List<DocumentChatService.Turn> history) {
+    }
+
+    public record ChatResponse(String reply, boolean changed, boolean approvalRevoked, View document) {
+    }
+
     public record SelectionRequest(List<Long> pinned, List<Long> excluded) {
     }
 
@@ -46,14 +52,16 @@ public class DocumentController {
     }
 
     private final DocumentService service;
+    private final DocumentChatService chat;
     private final DocumentRepository documents;
     private final JobRepository jobs;
     private final CvService cv;
     private final ObjectMapper mapper;
 
-    public DocumentController(DocumentService service, DocumentRepository documents, JobRepository jobs, CvService cv,
+    public DocumentController(DocumentService service, DocumentChatService chat, DocumentRepository documents, JobRepository jobs, CvService cv,
                               ObjectMapper mapper) {
         this.service = service;
+        this.chat = chat;
         this.documents = documents;
         this.jobs = jobs;
         this.cv = cv;
@@ -95,6 +103,16 @@ public class DocumentController {
     @PutMapping("/documents/{id}")
     public View update(@PathVariable long id, @RequestBody JsonNode content) {
         return view(service.update(id, content));
+    }
+
+    /**
+     * "Ask Claude": revises the document as the user asks, validates it and saves a new version. {@code content} is what the
+     * user sees now (with unsaved edits); the stored content is used when it is absent.
+     */
+    @PostMapping("/documents/{id}/chat")
+    public ChatResponse chat(@PathVariable long id, @RequestBody ChatRequest request) {
+        DocumentChatService.Result r = chat.revise(id, request.message(), request.content(), request.history());
+        return new ChatResponse(r.reply(), r.changed(), r.approvalRevoked(), view(r.document()));
     }
 
     @PostMapping("/documents/{id}/approve")
