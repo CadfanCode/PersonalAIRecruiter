@@ -158,11 +158,12 @@ class PipelineIT {
         return """
                 {"id":"%s","headline":"%s","relevance":%s,"removed":%s,"webpage_url":"https://platsbanken/%s",
                  "application_deadline":"%s","publication_date":"%s",
-                 "description":{"text":"Vi söker en utvecklare som har erfarenhet av Java och Spring för %s"},
+                 "description":{"text":"Vi söker en utvecklare som har erfarenhet av Java och Spring för %s%s"},
                  "employer":{"name":"%s","workplace":"%s"},"working_hours_type":{"label":"Heltid"},
                  "application_details":{"url":"https://apply/%s"},
                  "workplace_address":{"municipality":"%s","city":"%s"}}""".formatted(id, title, relevance, removed, id,
-                deadline, published, title, employer, employer, id, municipality, municipality);
+                deadline, published, title, title.startsWith("Junior Java") ? ". Du är i början av din karriär." : "",
+                employer, employer, id, municipality, municipality);
     }
 
     static void stubSearch(String query, String... hits) {
@@ -223,6 +224,9 @@ class PipelineIT {
         assertThat(rows.get(1).get("score").get("total").asInt()).isEqualTo(75);
         assertThat(rows.get(2).get("municipality").asText()).isEqualTo("Solna");
         assertThat(rows.get(0).get("experienceRequiredText").asText()).isEqualTo("1 år");
+        // the scorer said false, but the ad says "i början av din karriär": the shared phrase list wins
+        assertThat(rows.get(0).get("asksForNewGraduates").asBoolean()).isTrue();
+        assertThat(rows.get(1).get("asksForNewGraduates").asBoolean()).isFalse();
         assertThat(rows.get(0).get("applyUrl").asText()).isEqualTo("https://apply/1");
         assertThat(view.get("run").get("message").asText()).contains("Found 7 ads", "4 after filters",
                 "1 excluded term", "1 outside locations", "1 deadline passed", "scoring 3");
