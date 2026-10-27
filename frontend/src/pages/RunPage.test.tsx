@@ -231,4 +231,59 @@ describe('run page', () => {
       expect(screen.queryByText('Idrottslärare')).not.toBeInTheDocument()
     })
   })
+
+  describe('paste a job link', () => {
+    const manualRun = (over = {}) => run({
+      status: 'WAITING_FOR_USER', step: 'FETCH', progress: 10, sourceUrl: 'https://www.linkedin.com/jobs/view/1',
+      message: 'This site discourages automatic reading, so JobPilot does not open it. Copy the ad text from your own browser and paste it below.',
+      options: { maxAgeDays: null, limit: null, includeWeb: null, autoContinue: true, mode: 'MANUAL', aggressive: null }, ...over,
+    })
+
+    it('adds a job from the dashboard by its address and follows the run', async () => {
+      const calls = mockApi({
+        'GET /api/runs': [], 'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
+        'POST /api/import': { id: 7 },
+        'GET /api/runs/7': { run: manualRun({ status: 'RUNNING', message: 'Reading the ad' }), profile: null },
+      })
+      renderRun('/')
+
+      await userEvent.click(screen.getByRole('radio', { name: /Paste a job link/ }))
+      expect(screen.getByRole('button', { name: 'Add this job' })).toBeDisabled()
+      expect(screen.getByText(/never opened or read by JobPilot/)).toBeInTheDocument()
+      await userEvent.type(screen.getByLabelText('Job ad address'), 'https://www.linkedin.com/jobs/view/1')
+      await userEvent.click(screen.getByRole('button', { name: 'Add this job' }))
+
+      expect(await screen.findByText('Reading the ad')).toBeInTheDocument()
+      expect(calls.find((c) => c.url === '/api/import')!.body).toEqual({ url: 'https://www.linkedin.com/jobs/view/1' })
+    })
+
+    it('asks for the pasted ad text when the page cannot be read and sends it', async () => {
+      const calls = mockApi({
+        'GET /api/runs/7': { run: manualRun(), profile: null }, 'GET /api/runs/7/jobs': [],
+        'POST /api/import/7/text': null,
+      })
+      renderRun()
+
+      expect(await screen.findAllByText(/discourages automatic reading/)).not.toHaveLength(0)
+      expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Read ad')
+      expect(screen.getByRole('link', { name: 'the ad' })).toHaveAttribute('href', 'https://www.linkedin.com/jobs/view/1')
+      const send = screen.getByRole('button', { name: 'Use this text' })
+      expect(send).toBeDisabled()
+      await userEvent.type(screen.getByLabelText('Ad text'), 'x'.repeat(250))
+      await userEvent.click(send)
+
+      await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/import/7/text')).toBe(true))
+      expect(calls.find((c) => c.url === '/api/import/7/text')!.body).toEqual({ text: 'x'.repeat(250) })
+    })
+
+    it('starts the single pasted job ticked, so the next step is one click away', async () => {
+      mockApi({
+        'GET /api/runs/7': { run: manualRun({ status: 'DONE', step: 'DONE', message: 'Added it' }), profile },
+        'GET /api/runs/7/jobs': [job({ title: 'Lärare i idrott', rank: 1, total: 65 })],
+      })
+      renderRun()
+
+      expect(await screen.findByRole('button', { name: 'Create tailored documents for 1 selected job' })).toBeInTheDocument()
+    })
+  })
 })

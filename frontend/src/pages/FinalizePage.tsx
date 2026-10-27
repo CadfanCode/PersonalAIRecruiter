@@ -31,6 +31,7 @@ const LABEL: Record<TabStatus, [string, string]> = {
   SESSION_EXPIRED: ['Session expired', 'bg-red-100 text-red-800'],
   EMAIL_ONLY: ['Apply by email', 'bg-slate-200 text-slate-700'],
   NO_APPLY_LINK: ['No application link', 'bg-slate-200 text-slate-700'],
+  APPLY_MANUALLY: ['Apply on the site yourself', 'bg-amber-100 text-amber-800'],
   CLOSED: ['Tab closed', 'bg-stone-200 text-stone-700'],
   ERROR: ['Problem', 'bg-red-100 text-red-800'],
 }
@@ -134,7 +135,7 @@ function ApplicationCard({ app, tab }: { app: Application | undefined; tab: TabV
   const title = app?.title ?? tab?.title ?? `Job ${jobId}`
   const employer = app?.employer ?? tab?.employer
   const [label, style] = tab ? LABEL[tab.status] : ['Not started', 'bg-slate-200 text-slate-700']
-  const hasTab = !!tab && !['EMAIL_ONLY', 'NO_APPLY_LINK', 'CLOSED', 'QUEUED'].includes(tab.status)
+  const hasTab = !!tab && !['EMAIL_ONLY', 'NO_APPLY_LINK', 'APPLY_MANUALLY', 'CLOSED', 'QUEUED'].includes(tab.status)
   const working = tab?.status === 'OPENING' || tab?.status === 'FILLING'
   const reopen = tab?.status === 'CLOSED' || tab?.status === 'ERROR'
   const questions = tab?.questions ?? []

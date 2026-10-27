@@ -44,7 +44,7 @@ export interface Run {
   id: number
   searchProfileId: number | null
   status: RunStatus
-  step: 'PROFILE' | 'SUGGEST' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER' | 'OPEN' | 'CHECK' | 'SAVE'
+  step: 'PROFILE' | 'SUGGEST' | 'FETCH' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER' | 'OPEN' | 'CHECK' | 'SAVE'
   progress: number
   message: string | null
   startedAt: string
@@ -53,6 +53,8 @@ export interface Run {
   prompt: string | null
   kind: 'SEARCH' | 'DOCUMENTS' | 'AKTIVITET'
   jobId: number | null
+  /** MANUAL runs: the address the user pasted. */
+  sourceUrl?: string | null
 }
 
 export interface RunView {
@@ -185,6 +187,18 @@ export const useSaveRoles = (runId: number) => {
     onSuccess: (roles) => client.setQueryData(['runs', runId, 'roles'], roles),
   })
 }
+
+/** Adds one job by its address (and optionally its pasted text). Resolves to the MANUAL run to follow. */
+export function useImportJob() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (body: { url: string; text?: string }) => api<{ id: number }>('/api/import', { method: 'POST', body }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['runs'] }),
+  })
+}
+
+/** The ad text for a MANUAL run that could not read the page by itself. */
+export const useProvideAdText = (runId: number) => useRunAction((text: string) => api(`/api/import/${runId}/text`, { method: 'POST', body: { text } }), runId)
 
 export const useEditProfile = (runId: number) =>
   useRunAction((p: SearchProfile) => api(`/api/runs/${runId}/profile`, { method: 'PUT', body: p }), runId)

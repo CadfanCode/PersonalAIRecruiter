@@ -1,11 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { type SearchProfile, useCancelRun, useContinueRun, useEditProfile, useRoles, useRun, useRunJobs, useSaveRoles } from '../api/runs'
+import { type SearchProfile, useCancelRun, useContinueRun, useEditProfile, useProvideAdText, useRoles, useRun, useRunJobs, useSaveRoles } from '../api/runs'
 import { Button } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
 import { ResultsTable } from '../components/runs/ResultsTable'
 import { ProfileSection } from '../components/runs/ProfileSection'
+import { PasteAdPanel } from '../components/runs/PasteAdPanel'
 import { RoleSuggestions } from '../components/runs/RoleSuggestions'
 import { StepTracker } from '../components/runs/StepTracker'
 import { useToast } from '../components/Toasts'
@@ -35,6 +36,7 @@ export function RunPage() {
   const rolesReady = discover && (status === 'WAITING_FOR_USER' || status === 'DONE' || view.data?.run.step === 'SEARCH' || view.data?.run.step === 'RANK')
   const roles = useRoles(runId, rolesReady)
   const saveRoles = useSaveRoles(runId)
+  const provideText = useProvideAdText(runId)
 
   if (view.isError) {
     return (
@@ -78,6 +80,16 @@ export function RunPage() {
         )}
       </div>
 
+      {run.options.mode === 'MANUAL' && (
+        <div className="mb-5 max-w-4xl">
+          {run.sourceUrl && <p className="mb-2 text-sm text-[var(--muted)]">Pasted link: <span className="break-all">{run.sourceUrl}</span></p>}
+          {waiting && run.step === 'FETCH' && (
+            <PasteAdPanel url={run.sourceUrl} message={run.message} sending={provideText.isPending}
+              error={provideText.isError ? provideText.error.message : null} onSubmit={(text) => provideText.mutate(text)} />
+          )}
+        </div>
+      )}
+
       {discover && roles.data && roles.data.length > 0 && (
         <div className="mb-6 max-w-4xl">
           <RoleSuggestions key={`${runId}-${waiting}`} roles={roles.data} options={run.options} waiting={waiting}
@@ -105,7 +117,7 @@ export function RunPage() {
         </div>
       )}
 
-      {jobs.data && jobs.data.length > 0 && <ResultsTable runId={runId} jobs={jobs.data}
+      {jobs.data && jobs.data.length > 0 && <ResultsTable runId={runId} jobs={jobs.data} preselectAll={run.options.mode === 'MANUAL'}
         defaultMinScore={discover ? (run.options.aggressive ? DISCOVER_AGGRESSIVE_MIN_SCORE : DISCOVER_MIN_SCORE) : undefined} />}
       {run.status === 'DONE' && jobs.data?.length === 0 && !jobs.isFetching && (
         <Panel>

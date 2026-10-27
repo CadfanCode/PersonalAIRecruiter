@@ -12,6 +12,7 @@ export type TabStatus =
   | 'SESSION_EXPIRED'
   | 'EMAIL_ONLY'
   | 'NO_APPLY_LINK'
+  | 'APPLY_MANUALLY'
   | 'CLOSED'
   | 'ERROR'
 

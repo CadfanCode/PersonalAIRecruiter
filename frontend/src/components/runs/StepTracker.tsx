@@ -7,10 +7,12 @@ const STEPS = [
   { key: 'DONE', label: 'Done' },
 ] as const
 
+const MANUAL_STEPS = [{ key: 'FETCH', label: 'Read ad' }, STEPS[0], STEPS[2], STEPS[3]] as const
 const DISCOVER_STEPS = [STEPS[0], { key: 'SUGGEST', label: 'Roles' }, ...STEPS.slice(1)] as const
 
 export function StepTracker({ run }: { run: Run }) {
-  const steps: readonly { key: string; label: string }[] = run.options.mode === 'DISCOVER' ? DISCOVER_STEPS : STEPS
+  const steps: readonly { key: string; label: string }[] =
+    run.options.mode === 'DISCOVER' ? DISCOVER_STEPS : run.options.mode === 'MANUAL' ? MANUAL_STEPS : STEPS
   const current = steps.findIndex((s) => s.key === run.step)
   const failed = run.status === 'FAILED' || run.status === 'CANCELLED'
   return (

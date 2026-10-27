@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { DISCOVER_AGGRESSIVE_LIMIT, DISCOVER_LIMIT, DISCOVER_MAX_LIMIT, type RunMode, useStartRun } from '../api/runs'
+import { DISCOVER_AGGRESSIVE_LIMIT, DISCOVER_LIMIT, DISCOVER_MAX_LIMIT, type RunMode, useImportJob, useStartRun } from '../api/runs'
 import { Button, Field, TextArea, TextInput } from './Form'
 import { Panel } from './Panel'
 
@@ -10,6 +10,7 @@ const DISCOVER_EXAMPLES = ['Stockholm region, full time', 'Uppsala or Stockholm,
 const MODES: { key: RunMode; label: string; hint: string }[] = [
   { key: 'TARGETED', label: 'Targeted search', hint: 'You name the role; JobPilot finds and ranks the ads.' },
   { key: 'DISCOVER', label: 'Discover roles', hint: 'JobPilot reads your whole CV and suggests roles you would be strong for, including ones you have not thought of.' },
+  { key: 'MANUAL', label: 'Paste a job link', hint: 'You found a job yourself, for example on LinkedIn; JobPilot handles it like any other.' },
 ]
 
 export function NewRunForm() {
@@ -23,6 +24,12 @@ export function NewRunForm() {
   const start = useStartRun()
   const navigate = useNavigate()
   const discover = mode === 'DISCOVER'
+  const manual = mode === 'MANUAL'
+  const [url, setUrl] = useState('')
+  const [adText, setAdText] = useState('')
+  const importJob = useImportJob()
+  const addJob = () =>
+    importJob.mutate({ url: url.trim(), ...(adText.trim() ? { text: adText.trim() } : {}) }, { onSuccess: ({ id }) => navigate(`/runs/${id}`) })
 
   const submit = () =>
     start.mutate(
@@ -38,7 +45,7 @@ export function NewRunForm() {
 
   return (
     <Panel title="New run">
-      <div role="radiogroup" aria-label="Search mode" className="mb-4 grid grid-cols-2 gap-2">
+      <div role="radiogroup" aria-label="Search mode" className="mb-4 grid grid-cols-3 gap-2">
         {MODES.map((m) => (
           <label key={m.key}
             className={`cursor-pointer rounded-md border p-3 ${mode === m.key ? 'border-[var(--accent)] bg-navy/5' : 'border-[var(--line)]'}`}>
@@ -51,6 +58,27 @@ export function NewRunForm() {
         ))}
       </div>
 
+      {manual ? (
+        <div>
+          <Field label="Address of the job ad">
+            <TextInput aria-label="Job ad address" type="url" placeholder="https://www.linkedin.com/jobs/view/..." value={url} onChange={(e) => setUrl(e.target.value)} />
+          </Field>
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm text-[var(--muted)]">I already have the ad text (needed for LinkedIn)</summary>
+            <TextArea aria-label="Ad text" rows={6} className="mt-2" value={adText} onChange={(e) => setAdText(e.target.value)}
+              placeholder="Copy the whole ad from your own browser and paste it here" />
+          </details>
+          <p className="mt-3 text-xs text-[var(--muted)]">
+            Sites that discourage bots, such as LinkedIn, are never opened or read by JobPilot: paste the ad text and apply there yourself.
+            Other sites are read once, only to get the ad.
+          </p>
+          <div className="mt-4">
+            <Button onClick={addJob} disabled={!url.trim() || importJob.isPending}>{importJob.isPending ? 'Adding...' : 'Add this job'}</Button>
+          </div>
+          {importJob.isError && <p role="alert" className="mt-3 text-sm text-red-600">{importJob.error.message}</p>}
+        </div>
+      ) : (
+      <>
       <TextArea
         aria-label={discover ? 'Where and how you want to work' : 'Starting prompt'}
         rows={3}
@@ -98,6 +126,8 @@ export function NewRunForm() {
         </Button>
       </div>
       {start.isError && <p role="alert" className="mt-3 text-sm text-red-600">{start.error.message}</p>}
+      </>
+      )}
     </Panel>
   )
 }

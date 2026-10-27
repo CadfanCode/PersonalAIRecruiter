@@ -82,6 +82,7 @@ export function ResultsTable({
   topN = 10,
   now = new Date(),
   defaultMinScore,
+  preselectAll,
 }: {
   runId: number
   jobs: JobRow[]
@@ -89,12 +90,19 @@ export function ResultsTable({
   now?: Date
   /** Discover runs start with a minimum score filter, so the broad search does not bury the good ads. */
   defaultMinScore?: number
+  /** A run with a single pasted job starts with that job ticked, so the next step is one click away. */
+  preselectAll?: boolean
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'rank', desc: false }])
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() =>
     defaultMinScore ? [{ id: 'score', value: defaultMinScore }] : [])
   const [globalFilter, setGlobalFilter] = useState('')
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>(() => loadSelection(runId, jobs))
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>(() => {
+    const stored = loadSelection(runId, jobs)
+    return preselectAll && Object.keys(stored).length === 0 && localStorage.getItem(selectionKey(runId)) === null
+      ? Object.fromEntries(jobs.map((j) => [String(j.id), true]))
+      : stored
+  })
   const [showAll, setShowAll] = useState(false)
   const [openId, setOpenId] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
