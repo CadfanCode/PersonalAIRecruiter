@@ -1,9 +1,12 @@
 export class ApiError extends Error {
   readonly status: number
+  /** The parsed JSON error body, when there was one (for example the validator report of a refused approval). */
+  readonly body: unknown
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, body?: unknown) {
     super(message)
     this.status = status
+    this.body = body
   }
 }
 
@@ -24,13 +27,15 @@ export async function api<T>(path: string, init: Omit<RequestInit, 'body'> & { b
   const response = await fetch(path, { ...rest, body: payload, headers: { ...headers, ...rest.headers } })
   if (!response.ok) {
     let detail = `${response.status} ${response.statusText}`
+    let parsed: unknown
     try {
-      const json = (await response.json()) as { error?: string }
-      if (json.error) detail = json.error
+      parsed = await response.json()
+      const error = (parsed as { error?: string }).error
+      if (error) detail = error
     } catch {
       // not JSON, keep the status line
     }
-    throw new ApiError(response.status, detail)
+    throw new ApiError(response.status, detail, parsed)
   }
   if (response.status === 204) return undefined as T
   return (await response.json()) as T

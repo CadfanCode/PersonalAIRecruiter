@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useStartDocuments } from '../../api/documents'
 import { type JobRow, useJobDetail, usePatchJob } from '../../api/runs'
 import { Button, TextArea } from '../Form'
 import { useToast } from '../Toasts'
@@ -11,6 +13,8 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
   const detail = useJobDetail(jobId, runId)
   const patch = usePatchJob(runId)
   const toast = useToast()
+  const navigate = useNavigate()
+  const startDocs = useStartDocuments()
   const row: JobRow | undefined = detail.data?.row
 
   if (jobId === null) return null
@@ -50,7 +54,13 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
 
           <div className="flex flex-wrap gap-2">
             <Button variant="ghost" onClick={() => update({ status: 'SHORTLISTED' }, 'Shortlisted')}>Shortlist</Button>
-            <Button variant="ghost" disabled title="Arrives in milestone 4">Generate documents</Button>
+            <Button variant="ghost" disabled={startDocs.isPending}
+              onClick={() => startDocs.mutate({ jobId, runId }, {
+                onSuccess: ({ runId: id }) => navigate(`/documents/job/${jobId}?run=${id}`),
+                onError: (e) => toast(e.message, 'error'),
+              })}>
+              {row.status === 'DOCS_READY' ? 'Open documents' : 'Generate documents'}
+            </Button>
             <Button variant="ghost" disabled title="Arrives in milestone 5">Open application</Button>
             <Button variant="ghost" onClick={() => update({ status: 'APPLIED' }, 'Marked as applied')}>Mark applied</Button>
             <Button variant="ghost" disabled title="Arrives in milestone 6">Log in aktivitetsrapport</Button>

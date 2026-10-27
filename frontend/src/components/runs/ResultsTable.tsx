@@ -11,6 +11,8 @@ import {
   useReactTable,
 } from '@tanstack/react-table'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useStartDocuments } from '../../api/documents'
 import { JOB_STATUSES, type JobRow, type JobStatus, usePatchJob } from '../../api/runs'
 import { Button } from '../Form'
 import { useToast } from '../Toasts'
@@ -72,6 +74,8 @@ export function ResultsTable({
   const [views, setViews] = useState<SavedView[]>(loadViews)
   const patch = usePatchJob(runId)
   const toast = useToast()
+  const navigate = useNavigate()
+  const startDocs = useStartDocuments()
 
   const filtering = globalFilter !== '' || columnFilters.length > 0
   // The default view is the top N by score; any filter or "show all" widens it (SPEC 7.4).
@@ -181,7 +185,13 @@ export function ResultsTable({
       else if (e.key === 'k') setActiveIndex(Math.max(i - 1, 0))
       else if (e.key === 's' && r[i]) setStatus(r[i].original.id, 'SHORTLISTED')
       else if (e.key === 'Enter' && r[i]) setOpenId(r[i].original.id)
-      else if (e.key === 'g') toast('Generating documents arrives in milestone 4')
+      else if (e.key === 'g' && r[i]) {
+        const jobId = r[i].original.id
+        startDocs.mutate({ jobId, runId }, {
+          onSuccess: ({ runId: id }) => navigate(`/documents/job/${jobId}?run=${id}`),
+          onError: (err) => toast(err.message, 'error'),
+        })
+      }
       else if (e.key === 'Escape') setOpenId(null)
     }
     window.addEventListener('keydown', onKey)
@@ -316,7 +326,7 @@ export function ResultsTable({
         </table>
       </div>
       <p className="mt-2 text-xs text-[var(--muted)]">
-        Keys: j/k move, Enter opens, s shortlists, g generates documents (milestone 4). Showing {rows.length} of {jobs.length}.
+        Keys: j/k move, Enter opens, s shortlists, g generates documents. Showing {rows.length} of {jobs.length}.
       </p>
 
       <JobDrawer runId={runId} jobId={openId} onClose={() => setOpenId(null)} />

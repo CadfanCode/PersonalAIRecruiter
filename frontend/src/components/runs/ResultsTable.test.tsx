@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobRow } from '../../api/runs'
 import { job } from '../../test/fixtures'
@@ -13,7 +14,12 @@ function renderTable(jobs: JobRow[], topN = 10) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <ResultsTable runId={7} jobs={jobs} topN={topN} now={NOW} />
+      <MemoryRouter initialEntries={['/runs/7']}>
+        <Routes>
+          <Route path="/runs/7" element={<ResultsTable runId={7} jobs={jobs} topN={topN} now={NOW} />} />
+          <Route path="/documents/job/:jobId" element={<p>Documents page</p>} />
+        </Routes>
+      </MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -139,11 +145,38 @@ describe('results table', () => {
     const drawer = await screen.findByRole('dialog', { name: 'Job details' })
     expect(await within(drawer).findByText('Vi söker en utvecklare.')).toBeInTheDocument()
     expect(within(drawer).getByRole('link', { name: 'Apply link' })).toHaveAttribute('href', bravo.url)
-    expect(within(drawer).getByRole('button', { name: 'Generate documents' })).toBeDisabled()
+    expect(within(drawer).getByRole('button', { name: 'Open application' })).toBeDisabled()
     await userEvent.click(within(drawer).getByRole('button', { name: 'Mark applied' }))
 
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true))
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ status: 'APPLIED' })
+  })
+
+  it('starts document generation from the drawer and opens the documents page', async () => {
+    const all = rows()
+    const bravo = all[1]
+    const calls = mockApi({
+      [`GET /api/jobs/${bravo.id}?run=7`]: { row: bravo, description: 'x' },
+      [`POST /api/jobs/${bravo.id}/documents`]: { runId: 42 },
+    })
+    renderTable(all)
+
+    await userEvent.click(screen.getByText('Bravo'))
+    await userEvent.click(await screen.findByRole('button', { name: 'Generate documents' }))
+
+    expect(await screen.findByText('Documents page')).toBeInTheDocument()
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ runId: 7 })
+  })
+
+  it('generates documents for the active row with the g key', async () => {
+    const all = rows()
+    const calls = mockApi({ [`POST /api/jobs/${all[0].id}/documents`]: { runId: 43 } })
+    renderTable(all)
+
+    await userEvent.keyboard('g')
+
+    expect(await screen.findByText('Documents page')).toBeInTheDocument()
+    expect(calls[0].url).toBe(`/api/jobs/${all[0].id}/documents`)
   })
 
   it('saves notes from the drawer', async () => {

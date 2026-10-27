@@ -35,13 +35,15 @@ export interface Run {
   id: number
   searchProfileId: number | null
   status: RunStatus
-  step: 'PROFILE' | 'SEARCH' | 'RANK' | 'DONE'
+  step: 'PROFILE' | 'SEARCH' | 'RANK' | 'DONE' | 'SELECT' | 'CV' | 'LETTER' | 'RENDER'
   progress: number
   message: string | null
   startedAt: string
   finishedAt: string | null
   options: RunOptions
   prompt: string | null
+  kind: 'SEARCH' | 'DOCUMENTS'
+  jobId: number | null
 }
 
 export interface RunView {
@@ -109,6 +111,9 @@ export const useRunJobs = (id: number, enabled = true, active = false) =>
     enabled,
     refetchInterval: active ? 2000 : false,
   })
+
+export const useJob = (jobId: number) =>
+  useQuery({ queryKey: ['jobs', jobId], queryFn: () => api<JobDetail>(`/api/jobs/${jobId}`) })
 
 export const useJobDetail = (jobId: number | null, runId: number) =>
   useQuery({
