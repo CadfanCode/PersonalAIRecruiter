@@ -280,4 +280,89 @@ describe('documents page', () => {
     expect(link).toHaveAttribute('href', '/documents/job/1')
     expect(within(link).getByText(/CV approved · letter to review/)).toBeInTheDocument()
   })
+
+  describe('ask Claude', () => {
+    it('sends the request with what is on screen, shows the reply and the refreshed version, and can undo it', async () => {
+      let version = 1
+      const revised = cvDoc({ version: 2, content: { ...cvDoc().content, headline: 'Backendutvecklare | Java' } })
+      const calls = mockApi({
+        ...base(),
+        'GET /api/jobs/1/documents': () => (version === 1 ? jobDocs() : jobDocs({ cv: revised })),
+        'POST /api/documents/100/chat': () => {
+          version = 2
+          return { reply: 'Bytte rubrik till Backendutvecklare.', changed: true, approvalRevoked: true, document: revised }
+        },
+        'PUT /api/documents/100': () => {
+          version = 3
+          return cvDoc({ version: 3 })
+        },
+      })
+      renderPage()
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Put the most relevant experience first' }))
+
+      expect(await screen.findByText('Bytte rubrik till Backendutvecklare.')).toBeInTheDocument()
+      expect(screen.getByText(/Approval was removed/)).toBeInTheDocument()
+      expect(await screen.findByDisplayValue('Backendutvecklare | Java')).toBeInTheDocument() // the editor shows the new version
+      expect(screen.getByTitle('CV preview')).toHaveAttribute('src', '/api/documents/100/pdf?v=2')
+      const sent = calls.find((c) => c.url === '/api/documents/100/chat')!.body as { message: string; content: { headline: string }; history: unknown[] }
+      expect(sent.message).toBe('Put the most relevant experience first')
+      expect(sent.content.headline).toBe('Javautvecklare | Spring Boot')
+      expect(sent.history).toEqual([])
+
+      await userEvent.click(screen.getByRole('button', { name: 'Undo this change' }))
+      await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/documents/100')).toBe(true))
+      expect((calls.find((c) => c.method === 'PUT')!.body as { headline: string }).headline).toBe('Javautvecklare | Spring Boot')
+      expect(await screen.findByText('Undone: the previous version is back.')).toBeInTheDocument()
+    })
+
+    it('includes unsaved edits, sends the conversation so far, and offers no undo when nothing changed', async () => {
+      const calls = mockApi({
+        ...base(),
+        'POST /api/documents/100/chat': () => ({ reply: 'There is no Rust in your CV database.', changed: false, approvalRevoked: false, document: cvDoc() }),
+      })
+      renderPage()
+
+      const headline = await screen.findByDisplayValue('Javautvecklare | Spring Boot')
+      await userEvent.type(headline, ' och Kotlin')
+      expect(screen.getByText(/Your unsaved edits are included/)).toBeInTheDocument()
+      await userEvent.type(screen.getByLabelText('Your request to Claude'), 'Add that I know Rust{Enter}')
+      expect(await screen.findByText('There is no Rust in your CV database.')).toBeInTheDocument()
+      await userEvent.type(screen.getByLabelText('Your request to Claude'), 'Ok, then shorter{Enter}')
+
+      await vi.waitFor(() => expect(calls.filter((c) => c.url === '/api/documents/100/chat')).toHaveLength(2))
+      const first = calls.find((c) => c.url === '/api/documents/100/chat')!.body as { content: { headline: string } }
+      expect(first.content.headline).toBe('Javautvecklare | Spring Boot och Kotlin')
+      const second = calls.filter((c) => c.url === '/api/documents/100/chat')[1].body as { history: { role: string; text: string }[] }
+      expect(second.history).toEqual([
+        { role: 'user', text: 'Add that I know Rust' },
+        { role: 'assistant', text: 'There is no Rust in your CV database.' },
+      ])
+      expect(screen.queryByRole('button', { name: 'Undo this change' })).not.toBeInTheDocument()
+    })
+
+    it('shows the server message in the conversation when Claude cannot do it', async () => {
+      mockApi({
+        ...base(),
+        'POST /api/documents/100/chat': new Response(JSON.stringify({ error: 'Something went wrong: Claude answered in the wrong shape, so nothing was changed.' }), { status: 500 }),
+      })
+      renderPage()
+
+      await userEvent.type(await screen.findByLabelText('Your request to Claude'), 'Change something{Enter}')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('nothing was changed')
+    })
+
+    it('keeps a separate conversation for the cover letter', async () => {
+      mockApi({ ...base(), 'POST /api/documents/100/chat': { reply: 'Done.', changed: false, approvalRevoked: false, document: cvDoc() } })
+      renderPage()
+
+      await userEvent.type(await screen.findByLabelText('Your request to Claude'), 'hello{Enter}')
+      expect(await screen.findByText('Done.')).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('tab', { name: /Cover letter/ }))
+
+      expect(screen.queryByText('Done.')).not.toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Ask Claude to adjust this letter' })).toBeInTheDocument()
+    })
+  })
 })

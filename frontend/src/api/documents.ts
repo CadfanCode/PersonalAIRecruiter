@@ -138,3 +138,37 @@ export function useSaveSelection(jobId: number) {
     onSuccess: () => client.invalidateQueries({ queryKey: ['job-documents', jobId] }),
   })
 }
+
+export interface ChatTurn {
+  role: 'user' | 'assistant'
+  text: string
+  /** The document before an assistant change, so the page can offer to undo it. */
+  previous?: CvContent | LetterContent
+  approvalRevoked?: boolean
+  error?: boolean
+}
+
+interface ChatResponse {
+  reply: string
+  changed: boolean
+  approvalRevoked: boolean
+  document: DocView
+}
+
+/** "Ask Claude": revises the document as asked. The content sent is what the user sees now, including unsaved edits. */
+export function useDocumentChat(jobId: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, message, content, history }: { id: number; message: string; content: CvContent | LetterContent; history: ChatTurn[] }) =>
+      api<ChatResponse>(`/api/documents/${id}/chat`, {
+        method: 'POST',
+        body: { message, content, history: history.filter((t) => !t.error).map(({ role, text }) => ({ role, text })) },
+      }),
+    onSuccess: (r) => {
+      if (!r.changed) return
+      void client.invalidateQueries({ queryKey: ['job-documents', jobId] })
+      void client.invalidateQueries({ queryKey: ['documents'] })
+      void client.invalidateQueries({ queryKey: ['applications'] })
+    },
+  })
+}

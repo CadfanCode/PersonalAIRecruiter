@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import {
+  type ChatTurn,
   type CvContent,
   type DocView,
   type LetterContent,
@@ -14,6 +15,7 @@ import {
 } from '../api/documents'
 import { useApplications } from '../api/applications'
 import { useJob, useRun } from '../api/runs'
+import { DocChat } from '../components/documents/DocChat'
 import { CvEditor } from '../components/documents/CvEditor'
 import { groupIssues } from '../components/documents/issues'
 import { LetterEditor } from '../components/documents/LetterEditor'
@@ -27,6 +29,7 @@ type Tab = 'CV' | 'LETTER'
 export function JobDocumentsPage() {
   const jobId = Number(useParams().jobId)
   const [search, setSearch] = useSearchParams()
+  const [turns, setTurns] = useState<Record<Tab, ChatTurn[]>>({ CV: [], LETTER: [] }) // kept here: the editor restarts on every new version
   const [tab, setTab] = useState<Tab>(search.get('tab') === 'letter' ? 'LETTER' : 'CV')
   const runId = search.get('run') ? Number(search.get('run')) : null
   const fromRun = search.get('from') ? Number(search.get('from')) : undefined // the search run the ad came from
@@ -103,7 +106,7 @@ export function JobDocumentsPage() {
               Regenerate both
             </Button>
           </div>
-          {doc && <DocEditor key={`${doc.id}-${doc.version}`} doc={doc} jobId={jobId} />}
+          {doc && <DocEditor key={`${doc.id}-${doc.version}`} doc={doc} jobId={jobId} turns={turns[tab]} onTurns={(t) => setTurns((prev) => ({ ...prev, [tab]: t }))} />}
           <div className="mt-6 max-w-3xl">
             <SelectionPanel jobId={jobId} docs={docs.data} />
           </div>
@@ -122,7 +125,7 @@ export function JobDocumentsPage() {
   )
 }
 
-function DocEditor({ doc, jobId }: { doc: DocView; jobId: number }) {
+function DocEditor({ doc, jobId, turns, onTurns }: { doc: DocView; jobId: number; turns: ChatTurn[]; onTurns: (t: ChatTurn[]) => void }) {
   const [draft, setDraft] = useState<CvContent | LetterContent>(doc.content)
   const [refused, setRefused] = useState<Report | null>(null)
   const save = useSaveDocument(jobId)
@@ -160,6 +163,7 @@ function DocEditor({ doc, jobId }: { doc: DocView; jobId: number }) {
             Not approved: fix the problems marked in red first.
           </p>
         )}
+        <DocChat doc={doc} jobId={jobId} draft={draft} dirty={dirty} turns={turns} onTurns={onTurns} />
         {doc.kind === 'CV' ? (
           <CvEditor content={draft as CvContent} facts={doc.facts} issues={issues} onChange={setDraft} />
         ) : (
