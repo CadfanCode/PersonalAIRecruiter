@@ -539,7 +539,7 @@ Milestone 6 decisions (see ADR 0006):
 - Duplicates: a third fixed read-only script reads the saved activities (ISO or Swedish dates). The same
   employer on the same date is a DUPLICATE: skipped, and the job stays APPLIED (it may be a second application
   there; the user logs it by hand if so). Only a job JobPilot itself saved earlier counts as LOGGED.
-- LOGGED only after a confirmed save (or a duplicate). The run is an `AKTIVITET` run; a login or BankID wall
+- LOGGED only after a confirmed save (or a job JobPilot itself saved earlier). The run is an `AKTIVITET` run; a login or BankID wall
   puts it in WAITING_FOR_USER and a read-only poll continues when the wall is gone. Only the two configured
   addresses (`jobpilot.aktivitet.form-url` and `list-url`) are ever opened. Real Arbetsförmedlingen markup is
   unverified: tests use fixtures only.
