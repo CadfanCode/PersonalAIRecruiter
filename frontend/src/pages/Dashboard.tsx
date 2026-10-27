@@ -7,7 +7,7 @@ import { RecentRuns } from '../components/RecentRuns'
 export function Dashboard() {
   return (
     <>
-      <PageTitle>Dashboard</PageTitle>
+      <PageTitle>New run</PageTitle>
       <ReminderBanner />
       <div className="grid max-w-4xl gap-5">
         <NewRunForm />

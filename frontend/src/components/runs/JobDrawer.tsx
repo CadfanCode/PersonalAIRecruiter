@@ -60,7 +60,7 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
             <Button variant="ghost" disabled={openApplication.isPending}
               title="Opens the ad in the JobPilot browser and fills what it can. It never submits."
               onClick={() => openApplication.mutate([jobId], {
-                onSuccess: () => navigate('/apply'),
+                onSuccess: () => navigate('/finalize'),
                 onError: (e) => toast(e.message, 'error'),
               })}>
               Open application

@@ -22,7 +22,8 @@ function renderTable(jobs: JobRow[], topN = 10) {
         <Routes>
           <Route path="/runs/7" element={<ResultsTable runId={7} jobs={jobs} topN={topN} now={NOW} />} />
           <Route path="/documents/job/:jobId" element={<p>Documents page</p>} />
-          <Route path="/apply" element={<p>Apply page</p>} />
+          <Route path="/finalize" element={<p>Finalize page</p>} />
+          <Route path="/documents" element={<p>Documents overview</p>} />
           <Route path="/aktivitet" element={<LocationProbe />} />
         </Routes>
       </MemoryRouter>
@@ -157,7 +158,7 @@ describe('results table', () => {
     expect(calls.find((c) => c.method === 'PATCH')!.body).toEqual({ status: 'APPLIED' })
   })
 
-  it('opens the application from the drawer and goes to the apply monitor', async () => {
+  it('opens the application from the drawer and goes to Finalize Applications', async () => {
     const all = rows()
     const bravo = all[1]
     const calls = mockApi({
@@ -169,24 +170,36 @@ describe('results table', () => {
     await userEvent.click(screen.getByText('Bravo'))
     await userEvent.click(await screen.findByRole('button', { name: 'Open application' }))
 
-    expect(await screen.findByText('Apply page')).toBeInTheDocument()
+    expect(await screen.findByText('Finalize page')).toBeInTheDocument()
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ jobIds: [bravo.id] })
   })
 
-  it('opens the selected rows as applications, up to five at a time', async () => {
-    const many = Array.from({ length: 7 }, (_, i) => job({ title: `Row ${i + 1}`, rank: i + 1, total: 90 - i }))
-    const calls = mockApi({ 'POST /api/apply': [] })
+  it('shows what is selected, lets the user deselect, and continues with one clear button', async () => {
+    const many = Array.from({ length: 3 }, (_, i) => job({ title: `Row ${i + 1}`, rank: i + 1, total: 90 - i }))
+    const calls = mockApi({ 'POST /api/applications/documents': { items: [] } })
     renderTable(many, 10)
 
-    for (let i = 1; i <= 6; i++) await userEvent.click(screen.getByLabelText(`Select Row ${i}`))
-    const open = screen.getByRole('button', { name: 'Open applications' })
-    expect(open).toBeDisabled()
-    expect(open).toHaveAttribute('title', expect.stringContaining('At most 5'))
-    await userEvent.click(screen.getByLabelText('Select Row 6'))
-    await userEvent.click(screen.getByRole('button', { name: 'Open applications' }))
+    expect(screen.queryByRole('button', { name: /Create tailored documents/ })).not.toBeInTheDocument()
+    for (let i = 1; i <= 3; i++) await userEvent.click(screen.getByLabelText(`Select Row ${i}`))
+    const bar = screen.getByRole('region', { name: 'Selected jobs' })
+    expect(within(bar).getByText('3 selected')).toBeInTheDocument()
+    expect(within(bar).getByRole('button', { name: 'Create tailored documents for 3 selected jobs' })).toBeInTheDocument()
 
-    expect(await screen.findByText('Apply page')).toBeInTheDocument()
-    expect((calls.find((c) => c.method === 'POST')!.body as { jobIds: number[] }).jobIds).toHaveLength(5)
+    await userEvent.click(within(bar).getByRole('button', { name: 'Deselect Row 2' }))
+    expect(screen.getByLabelText('Select Row 2')).not.toBeChecked()
+    await userEvent.click(within(bar).getByRole('button', { name: 'Create tailored documents for 2 selected jobs' }))
+
+    expect(await screen.findByText('Documents overview')).toBeInTheDocument()
+    const body = calls.find((c) => c.method === 'POST')!.body as { jobIds: number[]; runId: number }
+    expect(body.runId).toBe(7)
+    expect(body.jobIds).toEqual([many[0].id, many[2].id])
+  })
+
+  it('says "job" for a single selection', async () => {
+    mockApi({})
+    renderTable(rows())
+    await userEvent.click(screen.getByLabelText('Select Bravo'))
+    expect(screen.getByRole('button', { name: 'Create tailored documents for 1 selected job' })).toBeInTheDocument()
   })
 
   it('logs only the selected jobs that are marked applied, and only when there are some', async () => {

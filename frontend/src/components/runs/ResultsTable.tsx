@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-table'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useOpenApplications } from '../../api/apply'
+import { useCreateDocuments } from '../../api/applications'
 import { JOB_STATUSES, type JobRow, type JobStatus, usePatchJob } from '../../api/runs'
 import { Button } from '../Form'
 import { useToast } from '../Toasts'
@@ -30,7 +30,6 @@ interface SavedView {
 }
 
 const VIEWS_KEY = 'jobpilot.views'
-const MAX_TABS = 5
 
 function loadViews(): SavedView[] {
   try {
@@ -76,7 +75,7 @@ export function ResultsTable({
   const patch = usePatchJob(runId)
   const toast = useToast()
   const navigate = useNavigate()
-  const openApplications = useOpenApplications()
+  const createDocuments = useCreateDocuments()
 
   const filtering = globalFilter !== '' || columnFilters.length > 0
   // The default view is the top N by score; any filter or "show all" widens it (SPEC 7.4).
@@ -270,26 +269,43 @@ export function ResultsTable({
       </div>
 
       {selectedCount > 0 && (
-        <div className="mb-3 flex items-center gap-2 rounded-md bg-navy/10 px-3 py-2 text-sm">
-          <span>{selectedCount} selected</span>
-          <Button variant="ghost" onClick={() => {
-            table.getSelectedRowModel().rows.forEach((r) => setStatus(r.original.id, 'SHORTLISTED'))
-            setRowSelection({})
-          }}>Shortlist selected</Button>
-          <Button variant="ghost" disabled={selectedCount > MAX_TABS || openApplications.isPending}
-            title={selectedCount > MAX_TABS ? `At most ${MAX_TABS} applications can be opened at once` : 'Opens the selected ads in the JobPilot browser. Nothing is submitted.'}
-            onClick={() => openApplications.mutate(table.getSelectedRowModel().rows.map((r) => r.original.id), {
-              onSuccess: () => { setRowSelection({}); navigate('/apply') },
-              onError: (e) => toast(e.message, 'error'),
-            })}>
-            Open applications
-          </Button>
-          <Button variant="ghost" disabled={appliedSelected.length === 0}
-            title={appliedSelected.length === 0 ? 'Only jobs marked as applied can be logged' : 'Opens the confirmation step; nothing is saved yet'}
-            onClick={() => navigate(`/aktivitet?jobs=${appliedSelected.map((r) => r.original.id).join(',')}`)}>
-            Log in aktivitetsrapport ({appliedSelected.length})
-          </Button>
-          <Button variant="ghost" onClick={() => setRowSelection({})}>Clear</Button>
+        <div role="region" aria-label="Selected jobs"
+          className="sticky top-0 z-10 mb-3 rounded-md border border-[var(--accent)] bg-[var(--panel)] px-3 py-3 text-sm shadow-sm">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              disabled={createDocuments.isPending}
+              title="Writes a tailored CV and cover letter for each selected job, then takes you to them"
+              onClick={() => createDocuments.mutate(
+                { jobIds: table.getSelectedRowModel().rows.map((r) => r.original.id), runId },
+                { onSuccess: () => { setRowSelection({}); navigate('/documents?new=1') }, onError: (e) => toast(e.message, 'error') },
+              )}>
+              {createDocuments.isPending
+                ? 'Starting...'
+                : `Create tailored documents for ${selectedCount} selected ${selectedCount === 1 ? 'job' : 'jobs'}`}
+            </Button>
+            <span className="text-[var(--muted)]">{selectedCount} selected</span>
+            <span className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" onClick={() => {
+                table.getSelectedRowModel().rows.forEach((r) => setStatus(r.original.id, 'SHORTLISTED'))
+                setRowSelection({})
+              }}>Shortlist selected</Button>
+              <Button variant="ghost" disabled={appliedSelected.length === 0}
+                title={appliedSelected.length === 0 ? 'Only jobs marked as applied can be logged' : 'Opens the confirmation step; nothing is saved yet'}
+                onClick={() => navigate(`/aktivitet?jobs=${appliedSelected.map((r) => r.original.id).join(',')}`)}>
+                Log in aktivitetsrapport ({appliedSelected.length})
+              </Button>
+              <Button variant="ghost" onClick={() => setRowSelection({})}>Clear</Button>
+            </span>
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Jobs to continue with">
+            {table.getSelectedRowModel().rows.map((r) => (
+              <li key={r.id} className="flex items-center gap-1 rounded-full bg-navy/10 py-0.5 pl-2.5 pr-1 text-xs">
+                <span className="max-w-[16rem] truncate">{r.original.title}{r.original.employer ? `, ${r.original.employer}` : ''}</span>
+                <button type="button" aria-label={`Deselect ${r.original.title}`} onClick={() => r.toggleSelected(false)}
+                  className="rounded-full px-1.5 text-[var(--muted)] hover:bg-navy/20 hover:text-[var(--ink)]">×</button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

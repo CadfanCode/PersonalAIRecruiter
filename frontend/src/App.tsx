@@ -1,10 +1,10 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { AktivitetPage } from './pages/AktivitetPage'
-import { ApplyMonitorPage } from './pages/ApplyMonitorPage'
 import { CvDatabase } from './pages/CvDatabase'
 import { Dashboard } from './pages/Dashboard'
 import { DocumentsIndexPage } from './pages/DocumentsIndexPage'
+import { FinalizePage } from './pages/FinalizePage'
 import { JobDocumentsPage } from './pages/JobDocumentsPage'
 import { Placeholder } from './pages/Placeholder'
 import { RunPage } from './pages/RunPage'
@@ -20,7 +20,8 @@ export function App() {
         <Route path="runs/:id" element={<RunPage />} />
         <Route path="documents" element={<DocumentsIndexPage />} />
         <Route path="documents/job/:jobId" element={<JobDocumentsPage />} />
-        <Route path="apply" element={<ApplyMonitorPage />} />
+        <Route path="finalize" element={<FinalizePage />} />
+        <Route path="apply" element={<Navigate to="/finalize" replace />} />
         <Route path="aktivitet" element={<AktivitetPage />} />
         <Route path="cv" element={<CvDatabase />} />
         <Route path="settings" element={<SettingsPage />} />

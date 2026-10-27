@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AktivitetEntry, AktivitetLogRow, AktivitetPlan } from '../api/aktivitet'
+import type { Application } from '../api/applications'
 import { run } from '../test/fixtures'
 import { mockApi } from '../test/mockApi'
 import { AktivitetPage } from './AktivitetPage'
@@ -37,16 +38,43 @@ function renderPage(path = '/aktivitet?jobs=1,2,3') {
 }
 
 const inactive = { active: false, day: 20, daysLeft: 0, forMonth: '2026-10', message: '' }
-const quiet = { 'GET /api/aktivitet/log': [] as AktivitetLogRow[], 'GET /api/aktivitet/reminder': inactive }
+const quiet = { 'GET /api/aktivitet/log': [] as AktivitetLogRow[], 'GET /api/aktivitet/reminder': inactive, 'GET /api/applications': [] }
 
 afterEach(() => vi.unstubAllGlobals())
+
+const submittedApp = (jobId: number, over: Partial<Application> = {}): Application => ({
+  jobId, runId: 7, title: `Job ${jobId}`, employer: 'Comstream AB', municipality: 'Stockholm', url: null, applyUrl: null,
+  searchMode: 'DISCOVER', roleType: 'Lärare', score: 80, jobStatus: 'APPLIED', selectedAt: '2026-10-26T10:00:00Z',
+  submittedAt: '2026-10-27T09:00:00Z', cv: null, letter: null, generation: null,
+  submittedDocs: { cv: { file: 'CV.pdf', version: 2 }, letter: { file: 'Brev.pdf', version: 1 } }, ...over,
+})
+
+describe('activity report: applications submitted through Finalize', () => {
+  it('lists job, company, role type, search mode, date, documents used and status, and links to logging', async () => {
+    mockApi({ ...quiet, 'GET /api/applications': [submittedApp(1), submittedApp(2, { jobStatus: 'LOGGED', searchMode: 'MANUAL', roleType: null }),
+      { ...submittedApp(3), submittedAt: null }] })
+    renderPage('/aktivitet')
+
+    const panel = (await screen.findByText('Applications you submitted')).closest('section') as HTMLElement
+    const first = within(panel).getByRole('row', { name: /Job 1/ })
+    expect(within(first).getByText('Comstream AB')).toBeInTheDocument()
+    expect(within(first).getByText('Lärare')).toBeInTheDocument()
+    expect(within(first).getByText('Discover roles')).toBeInTheDocument()
+    expect(within(first).getByText('CV v2, letter v1')).toBeInTheDocument()
+    expect(within(first).getByText('Submitted')).toBeInTheDocument()
+    expect(within(panel).getByRole('row', { name: /Job 2/ })).toHaveTextContent('Pasted link')
+    expect(within(panel).getByText('Logged')).toBeInTheDocument()
+    expect(within(panel).queryByText('Job 3')).not.toBeInTheDocument() // selected but never submitted
+    expect(within(panel).getByRole('link', { name: 'Log 1 in the aktivitetsrapport' })).toHaveAttribute('href', '/aktivitet?jobs=1')
+  })
+})
 
 describe('aktivitet page', () => {
   it('says that the monthly report is never submitted and shows an empty state', async () => {
     mockApi(quiet)
     renderPage('/aktivitet')
 
-    expect(await screen.findByText(/Mark jobs as applied/)).toBeInTheDocument()
+    expect(await screen.findByText(/Submit applications from/)).toBeInTheDocument()
     expect(screen.getByText(/never submits the monthly report/)).toBeInTheDocument()
   })
 
@@ -215,7 +243,7 @@ describe('reminder banner', () => {
   it('is hidden outside the window', async () => {
     renderDashboard({ active: false, day: 17, daysLeft: 0, forMonth: '2026-10', message: '' })
 
-    await screen.findByText('New run')
+    await screen.findByRole('heading', { level: 1, name: 'New run' })
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 })

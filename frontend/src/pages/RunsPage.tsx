@@ -6,7 +6,7 @@ export function RunsPage() {
   const runs = useRuns()
   return (
     <>
-      <PageTitle>Runs</PageTitle>
+      <PageTitle>Results</PageTitle>
       {runs.isError && <p role="alert" className="text-sm text-red-600">Cannot reach the JobPilot API. Is the backend running?</p>}
       {runs.data?.length === 0 && (
         <Panel><p className="text-sm text-[var(--muted)]">No runs yet. Start one from the <Link className="underline" to="/">dashboard</Link>.</p></Panel>

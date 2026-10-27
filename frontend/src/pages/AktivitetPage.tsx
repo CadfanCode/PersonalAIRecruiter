@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { type AktivitetEntry, useAktivitetLog, useAktivitetPlan, useStartLogging } from '../api/aktivitet'
+import { type Application, MODE_LABEL, useApplications } from '../api/applications'
 import { useRun } from '../api/runs'
 import { Button, TextInput } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
@@ -38,7 +39,7 @@ export function AktivitetPage() {
 
   return (
     <>
-      <PageTitle>Aktivitetsrapport</PageTitle>
+      <PageTitle>Activity Report</PageTitle>
       <ReminderBanner />
       <p className="-mt-2 mb-5 max-w-3xl text-sm text-[var(--muted)]">
         JobPilot saves each applied job under "Sökta jobb" and stops there. It never submits the monthly report: do that yourself on
@@ -48,7 +49,7 @@ export function AktivitetPage() {
       {jobIds.length === 0 && runId === null && (
         <Panel>
           <p className="text-sm text-[var(--muted)]">
-            Mark jobs as applied in a <Link className="underline" to="/runs">run</Link>, select them and choose "Log in aktivitetsrapport".
+            Submit applications from <Link className="underline" to="/finalize">Finalize Applications</Link> and confirm them there; they show up here to be logged.
           </p>
         </Panel>
       )}
@@ -94,12 +95,67 @@ export function AktivitetPage() {
         </Panel>
       )}
 
+      <SubmittedApplications />
+
       {(log.data?.length ?? 0) > 0 && (
         <Panel title="Everything logged so far">
           <ResultTable rows={log.data!} />
         </Panel>
       )}
     </>
+  )
+}
+
+const docsUsed = (a: Application) =>
+  [a.submittedDocs?.cv && `CV v${a.submittedDocs.cv.version}`, a.submittedDocs?.letter && `letter v${a.submittedDocs.letter.version}`]
+    .filter(Boolean)
+    .join(', ') || 'none recorded'
+
+/** What the user said they submitted through Finalize Applications. Logging to Arbetsförmedlingen is a separate, confirmed step. */
+function SubmittedApplications() {
+  const apps = useApplications()
+  const submitted = (apps.data ?? []).filter((a) => a.submittedAt)
+  if (submitted.length === 0) return null
+  const notLogged = submitted.filter((a) => a.jobStatus !== 'LOGGED')
+  return (
+    <Panel title="Applications you submitted">
+      <table className="w-full text-left text-sm">
+        <thead className="text-xs uppercase text-[var(--muted)]">
+          <tr>
+            <th className="py-1 font-semibold">Job</th><th className="font-semibold">Company</th><th className="font-semibold">Role type</th>
+            <th className="font-semibold">Search mode</th><th className="font-semibold">Date</th><th className="font-semibold">Documents</th>
+            <th className="font-semibold">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {submitted.map((a) => (
+            <tr key={a.jobId} className="border-t border-[var(--line)] align-top">
+              <td className="py-1.5">{a.title}</td>
+              <td>{a.employer}</td>
+              <td>{a.roleType ?? ''}</td>
+              <td>{MODE_LABEL[a.searchMode]}</td>
+              <td>{new Date(a.submittedAt as string).toLocaleDateString('sv-SE')}</td>
+              <td className="text-[var(--muted)]">{docsUsed(a)}</td>
+              <td>
+                {a.jobStatus === 'LOGGED' ? (
+                  <span className="rounded-full bg-teal-100 px-2 py-0.5 text-xs font-medium text-teal-800">Logged</span>
+                ) : (
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Submitted</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {notLogged.length > 0 && (
+        <p className="mt-3 text-sm">
+          <Link className="font-medium underline" to={`/aktivitet?jobs=${notLogged.map((a) => a.jobId).join(',')}`}>
+            Log {notLogged.length} in the aktivitetsrapport
+          </Link>
+          <span className="ml-2 text-xs text-[var(--muted)]">You confirm every value before anything is saved.</span>
+        </p>
+      )}
+    </Panel>
   )
 }
 

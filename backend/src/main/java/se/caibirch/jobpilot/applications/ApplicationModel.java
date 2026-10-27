@@ -20,7 +20,7 @@ public final class ApplicationModel {
      * A selected job with its documents and where it stands. {@code submittedAt} is set only by the user's own click and
      * {@code submittedDocs} records which documents were used then.
      */
-    public record View(long jobId, String title, String employer, String municipality, String url, String applyUrl,
+    public record View(long jobId, Long runId, String title, String employer, String municipality, String url, String applyUrl,
                        String searchMode, String roleType, Integer score, String jobStatus, Instant selectedAt,
                        Instant submittedAt, DocState cv, DocState letter, Generation generation, JsonNode submittedDocs) {
     }

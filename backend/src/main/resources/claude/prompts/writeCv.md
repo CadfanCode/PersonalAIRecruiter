@@ -23,8 +23,10 @@ from this list:
 
 Write the CV as JSON with these parts:
 - language: "{{language}}".
-- headline: the role and focus, for example "Javautvecklare | Spring Boot, mikrotjänster och CI/CD". It names
-  only skills and tools that appear in the facts or the skill list.
+- headline: the role and focus, for example "Javautvecklare | Spring Boot, mikrotjänster och CI/CD" for a
+  software ad or "Lärare i idrott och hälsa | Pedagogik och idrottsvetenskap" for a teaching ad. It names the
+  field of THIS ad and only skills, tools and qualifications that appear in the facts or the skill list.
+  Do not describe the candidate as a developer for an ad outside software.
 - profileParagraphs: two to four short paragraphs. The first opens with the candidate's specialisation and the
   evidence for it (what they built, where), never with the degree or its date. Mention only things the facts
   support. The last may say what kind of role or team the candidate is looking for.
@@ -32,6 +34,8 @@ Write the CV as JSON with these parts:
   1. kind SKILLS, heading in {{languageName}} (for example "Tekniska kunskaper"): one item per group, with
      entryId 0, "title" the group label in {{languageName}} (for example "Java och backend"), "meta" a comma
      separated list of skills from the skill list, "bullets" empty. Choose the skills that matter for this ad.
+  (For an ad outside software, the skills group is short and names only the skills that matter for that field,
+  such as pedagogy, research methods or communication; leave the section out if the list has nothing relevant.)
   2. kind EXPERIENCE: one item per work or internship entry, in the order the entries appear in the facts
      list above (most relevant first).
   3. kind PROJECTS: one item per project or own-business entry.

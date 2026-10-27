@@ -22,6 +22,11 @@ Entries the user pinned (must be included): {{pinned}}
 Entries the user excluded (must not be included): {{excluded}}
 
 Rules:
+- First decide which field the ad belongs to (IT and software, teaching and education, public sector and
+  security, sport and health, or something else). Entries from that field lead, even when the candidate's
+  most recent work is in another field: a teaching ad leads with teaching, pedagogy and the relevant degrees
+  and certifications; a public-sector or security ad leads with that experience; a software ad leads with
+  software. Other fields are kept short or left out unless they add something the ad asks for.
 - Pick the entries and facts that best show the candidate fits THIS ad, using "relevantTags" and the ad's
   requirements. Prefer recent and relevant entries. Omit unrelated ones: a teaching CV drops Spring Boot, a
   developer CV keeps teaching only as one short fact that shows communication skills.

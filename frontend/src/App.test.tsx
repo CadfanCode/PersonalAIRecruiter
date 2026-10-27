@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, vi } from 'vitest'
@@ -48,13 +48,16 @@ describe('app shell', () => {
     renderApp()
     const nav = screen.getByRole('navigation', { name: 'Main' })
     expect(nav).toHaveTextContent('CV database')
+    expect(within(nav).getByRole('link', { name: /Finalize Applications/ })).toHaveAttribute('href', '/finalize')
+    expect(within(nav).getByRole('link', { name: 'Activity Report' })).toHaveAttribute('href', '/aktivitet')
+    expect(within(nav).queryByText(/Apply monitor/)).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('link', { name: 'Settings' }))
     expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
   })
 
   it('renders the dashboard with example chips', () => {
     renderApp()
-    expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 1, name: 'New run' })).toBeInTheDocument()
     expect(screen.getByText('PE teacher, Nacka')).toBeInTheDocument()
   })
 })

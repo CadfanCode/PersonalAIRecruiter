@@ -139,7 +139,7 @@ public class ApplicationService {
                 submittedDocs = null;
             }
         }
-        return new View(r.jobId(), r.title(), r.employer(), r.municipality(), r.url(), r.applyUrl(), r.searchMode(),
+        return new View(r.jobId(), r.runId(), r.title(), r.employer(), r.municipality(), r.url(), r.applyUrl(), r.searchMode(),
                 r.roleType(), r.score(), r.jobStatus(), r.selectedAt(), r.submittedAt(), cv, letter, generation, submittedDocs);
     }
 }

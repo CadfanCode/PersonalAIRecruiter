@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 
 export type TabStatus =
+  | 'QUEUED'
   | 'OPENING'
   | 'FILLING'
   | 'WAITING_FOR_SIGN_IN'
@@ -27,7 +28,7 @@ export interface TabView {
   passes: number
 }
 
-const WORKING: TabStatus[] = ['OPENING', 'FILLING']
+const WORKING: TabStatus[] = ['QUEUED', 'OPENING', 'FILLING']
 
 /** Polls while a tab is working or waiting for the user to sign in, so the card updates by itself. */
 export const useApplyStatus = () =>
@@ -45,6 +46,9 @@ function useApplyMutation<V, R = unknown>(fn: (v: V) => Promise<R>) {
 
 export const useOpenApplications = () =>
   useApplyMutation((jobIds: number[]) => api<TabView[]>('/api/apply', { method: 'POST', body: { jobIds } }))
+/** "Run all": every job is accepted; the ones beyond the tab limit wait as QUEUED and start by themselves. */
+export const useOpenBatch = () =>
+  useApplyMutation((jobIds: number[]) => api<TabView[]>('/api/apply/batch', { method: 'POST', body: { jobIds } }))
 export const useFillPage = () =>
   useApplyMutation(({ jobId, restart }: { jobId: number; restart?: boolean }) =>
     api<TabView>(`/api/apply/${jobId}/fill${restart ? '?restart=true' : ''}`, { method: 'POST' }),

@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import {
   type CvContent,
@@ -12,6 +12,7 @@ import {
   useSaveDocument,
   useStartDocuments,
 } from '../api/documents'
+import { useApplications } from '../api/applications'
 import { useJob, useRun } from '../api/runs'
 import { CvEditor } from '../components/documents/CvEditor'
 import { groupIssues } from '../components/documents/issues'
@@ -26,12 +27,15 @@ type Tab = 'CV' | 'LETTER'
 export function JobDocumentsPage() {
   const jobId = Number(useParams().jobId)
   const [search, setSearch] = useSearchParams()
-  const [tab, setTab] = useState<Tab>('CV')
+  const [tab, setTab] = useState<Tab>(search.get('tab') === 'letter' ? 'LETTER' : 'CV')
   const runId = search.get('run') ? Number(search.get('run')) : null
   const fromRun = search.get('from') ? Number(search.get('from')) : undefined // the search run the ad came from
   const docs = useJobDocuments(jobId)
   const job = useJob(jobId)
   const start = useStartDocuments()
+  const apps = useApplications()
+  const navigate = useNavigate()
+  const selected = apps.data?.find((a) => a.jobId === jobId)
   const client = useQueryClient()
   const run = useRun(runId ?? 0, runId !== null) // no run to follow, no request
   const runState = runId !== null ? run.data?.run : undefined
@@ -105,7 +109,15 @@ export function JobDocumentsPage() {
           </div>
         </>
       )}
-      <p className="mt-6 text-sm"><Link className="underline" to="/documents">All documents</Link></p>
+      <div className="mt-6 flex flex-wrap items-center gap-4 text-sm">
+        <Link className="underline" to="/documents">All documents</Link>
+        {docs.data?.cv && docs.data.letter && (
+          <Button className="ml-auto" onClick={() => navigate('/finalize')}
+            title={selected ? 'Fill in the application with these documents' : 'Go to the applications'}>
+            Continue to Finalize Applications
+          </Button>
+        )}
+      </div>
     </>
   )
 }
