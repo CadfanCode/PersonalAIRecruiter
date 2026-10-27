@@ -39,6 +39,23 @@ Out of scope for v1: multi-user, hosting, email sending, auto-submit, LinkedIn s
 7. **Log**: when the user marks a job "Applied", JobPilot can save it to the aktivitetsrapport
    (the user must already be signed in with BankID in the JobPilot browser profile).
 
+### 2.1 The guided pipeline (2026-10-27)
+
+The UI is one pipeline with four stages, each ending in one obvious action:
+
+1. **New run** (three modes): *Targeted search* (the prompt above), *Discover roles* (section 6.3) or *Paste a job link*
+   (section 6.4). All three end in a ranked results table.
+2. **Results**: the user ticks jobs (remembered per run in the browser). The selection bar shows what is selected, lets the user
+   deselect, and offers "Create tailored documents for N selected jobs": one batch writes a CV and a letter per job (one
+   failure does not stop the others) and opens Documents.
+3. **Documents**: progress and retry per selected job, the unchanged editor and PDF preview per job, "Ask Claude" chat
+   (section 8.6) and "Continue to Finalize Applications".
+4. **Finalize Applications** (was "Apply monitor"): every selected job with its documents and status; "Fill all" fills the
+   forms, at most five browser tabs at a time, the rest queue. The pause before submit is permanent (CLAUDE.md rule 1).
+   The user submits by hand and confirms with "I submitted it", which records the application (job, company, role type,
+   search mode, date, documents used) for the Activity Report. Logging in Arbetsförmedlingen stays a separate, prefilled
+   confirmation step (section 10).
+
 ## 3. Architecture
 
 ```
@@ -120,6 +137,19 @@ Tables for settings and the answers memory are added by the milestones that need
 
 `dedupe_key` = lowercase(employer + "|" + normalised title + "|" + municipality). Keep the
 source with the richest description when duplicates collide.
+
+### 4.1 Additions of 2026-10-27 (migrations V6 to V8)
+
+```
+pipeline_run.mode (TARGETED | DISCOVER | MANUAL), pipeline_run.source_url (MANUAL: the pasted address)
+application(job_id PK -> job, run_id, search_mode, role_type, selected_at, submitted_at, docs_json)
+  -- the pipeline basket. submitted_at is set only by the user's own "I submitted it" click; docs_json records the document
+  -- ids, versions and file names used then.
+role_suggestion(id, run_id, title, category RELATED|HYBRID|OUTSIDE_TECH|CUSTOM, match_score, reasoning, gaps, selected,
+                user_added, profile_json, search_profile_id, sort_order)
+run_job.role_suggestion_id          -- the role an ad was scored and is tailored against (its best-relevance role)
+run_job_role(run_id, job_id, role_suggestion_id)   -- every role that found the ad
+```
 
 ## 5. Claude integration
 
@@ -323,6 +353,33 @@ unverified" and sorted last.
 Lesson from 26 Oct 2026: aggregator snapshot pages (jooble, ledigajobb category pages) give
 stale or relative dates, and reposted ads keep old IDs. Trust the ad's own published date.
 
+### 6.3 Discover roles
+
+For users with a broad background. One `suggestRoles` call reads the WHOLE CV digest (education, work, projects,
+certifications, languages, skills, tags) and returns role types in three groups (closely related, hybrid, outside tech), each
+with a match score, reasoning, gaps and its own search fields. The run pauses in step SUGGEST. The user ticks roles (select
+all), renames, and adds roles of their own (their search fields come from one batched `profileRoles` call). Continue then:
+
+- builds one SearchProfile per chosen role on top of the run's base profile (the user's locations, age limit and employment
+  types), validated against the same schema as every profile; `relevantTags` are filtered to tags that exist;
+- searches each role with the normal collector and prefilter, merges by dedupe key (an ad keeps its best-relevance role as
+  primary and is tagged with every role that found it);
+- scores at most `limit` ads (default 60, aggressive 150, hard cap 150), round-robin across roles, each ad against its primary
+  role's profile. Every later profile lookup for an ad (drawer, tailoring, yrkesroll, application score) goes through the role.
+
+Aggressive: 24 instead of 12 suggestions with a lower bar, a 14-day default age limit, a larger default budget and a lower
+default minimum score filter in the results (25 instead of 40). Suggestions stay with the run (`GET /runs/{id}/roles`).
+
+### 6.4 Paste a job link
+
+`POST /import {url, text?}` adds one job the user found themselves. The address is read once, only when allowed: http(s)
+only, public addresses only (re-checked at every redirect), size and time limits. Sites in `jobpilot.manual.paste-only-hosts`
+(default linkedin.com) are never fetched and never opened by the apply browser (Finalize shows "Apply on the site yourself");
+the run waits in step FETCH for the user to paste the ad text. The same wait happens when a page cannot be read or is too thin.
+`extractJob` turns the text into an ad (with the municipality spelled as Platsbanken spells it), then the usual profile and
+score steps run in a MANUAL run and the job appears in the results like any other. An ad already stored is linked, not
+overwritten, and an explicit employer apply link in the ad is used for filling.
+
 ## 7. Ranking
 
 1. Pre-filter in Java: drop ads older than maxAgeDays, past deadline, matching exclusions, or
@@ -415,6 +472,15 @@ sv: "brinner för", "passionerad", "drivs av", "inte bara ... utan också", "i d
 - Example letters (`resources/claude/examples`): the Knowit letter for Swedish ads, the Ravion
   letter for English ads. They show shape only.
 
+### 8.6 Ask Claude (document chat)
+
+`POST /documents/{id}/chat {message, content?, history?}` revises the CV or letter as the user asks. The model sees the draft
+on screen, the ad, the writing rules and every fact of every entry the user has not excluded for this job, and must cite only
+those. Java then validates the answer against the writeCv/writeLetter schema, passes a CV through `CvAssembler` (database-owned
+fields cannot change), runs the validator with one automatic rewrite, adds entries the revision now uses to the job's selection,
+renders and stores a new version. Approval is revoked, as for any edit; the page says so and offers an undo (the previous content
+is saved back). A request that needs something not in the CV database changes nothing and says what is missing.
+
 ## 9. Applying in the browser
 
 ### 9.1 Browser
@@ -457,6 +523,14 @@ a different value is left alone. The Ja and Nej buttons of a radio group are one
 uploads the page is read again; fields that appeared (Ponty's category selects) get one more mapping
 pass, never more. Each pass is stored in `application_form_snapshot`. A job becomes FILLED after a
 fill that left no questions, never APPLIED.
+
+### 9.2.1 Batches and queueing
+
+`POST /apply/batch` ("Fill all") accepts any number of jobs. At most `browser.max-tabs` (5) tabs are open at once; the rest are
+QUEUED and start by themselves, in order, when a tab is closed or its application is confirmed as submitted. Form filling has its
+own two-thread executor, so a long documents batch or discovery run cannot starve it. A tab the user closed by hand is
+reconciled to CLOSED (Focus gives a message, Close is idempotent, "Restart and refill" reopens it). Jobs whose link is on the
+paste-only list get status APPLY_MANUALLY and no tab.
 
 ### 9.3 Guardrails enforced in code
 
@@ -578,6 +652,15 @@ GET      /documents              overview of jobs that have documents
 GET/PUT  /documents/{id}         edit content -> re-render
 POST     /documents/{id}/approve
 GET      /documents/{id}/pdf
+POST     /runs                   also {mode: TARGETED|DISCOVER, aggressive?}; Discover needs no prompt
+GET/PUT  /runs/{id}/roles        Discover: the suggested roles; PUT = the user's complete list (ticked, renamed, added)
+POST     /import                 {url, text?} -> {id} of a MANUAL run;  POST /import/{runId}/text {text}
+GET      /applications           the selected jobs with documents, generation progress, role type, mode, submission
+POST     /applications           {jobIds, runId?} select;  DELETE /applications/{jobId}
+POST     /applications/documents {jobIds, runId?} select and write documents as one batch (202)
+POST     /applications/{jobId}/submitted   the user's confirmation that they submitted by hand;  DELETE undoes it
+POST     /documents/{id}/chat    {message, content?, history?} -> {reply, changed, approvalRevoked, document}
+POST     /apply/batch            {jobIds:[...]} any number; five tabs at a time, the rest queue
 POST     /apply                  {jobIds:[...]} (at most 5) -> opens tabs and fills
 POST     /apply/{jobId}/focus    bring the tab to the front;  POST /apply/{jobId}/close
 POST     /apply/{jobId}/fill     re-scan and fill the current page (?restart=true reloads the application first)
@@ -613,7 +696,7 @@ Pages (React Router), styled with Tailwind, light and dark themes, responsive do
 4. **Documents**: side-by-side PDF preview and editable paragraphs, validator report, fact
    citations on hover (bullet -> source fact), Approve, Regenerate, and per-job pin/exclude of
    CV entries.
-5. **Apply monitor**: one card per open tab: status (Filling, Waiting for sign-in, Needs answers,
+5. **Finalize Applications** (formerly Apply monitor, `/finalize`; `/apply` redirects): one card per selected job with its documents and the tab: status (Filling, Waiting for sign-in, Needs answers,
    Ready for you to submit), filled and skipped counts, questions for the user with answer
    inputs, "Fill this page" and "Focus tab" buttons.
 6. **CV database**: timeline of entries grouped by kind, an inline editor for entries and facts
