@@ -2,10 +2,12 @@ package se.caibirch.jobpilot.documents;
 
 import java.time.YearMonth;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import se.caibirch.jobpilot.cvdb.CvModel.Entry;
 import se.caibirch.jobpilot.cvdb.CvModel.Kind;
@@ -36,24 +38,44 @@ public final class GapNote {
                 span(e, now).ifPresent(covered::add);
             }
         }
-        int minYear = Integer.MAX_VALUE;
-        int maxYear = Integer.MIN_VALUE;
+        List<int[]> years = new ArrayList<>();
         for (Entry e : all) {
             if (e.hidden() || selectedIds.contains(e.id())) {
                 continue;
             }
             Optional<Span> span = span(e, now);
             if (span.isPresent() && uncovered(span.get(), covered) > GAP_MONTHS) {
-                minYear = Math.min(minYear, span.get().from() / 12);
-                maxYear = Math.max(maxYear, span.get().to() / 12);
+                years.add(new int[] {span.get().from() / 12, span.get().to() / 12});
             }
         }
-        if (minYear == Integer.MAX_VALUE) {
+        if (years.isEmpty()) {
             return Optional.empty();
         }
-        String range = minYear == maxYear ? String.valueOf(minYear) : minYear + "-" + maxYear;
-        return Optional.of("sv".equals(language) ? "Övrig anställning " + range + ", referenser lämnas på begäran"
-                : "Other employment " + range + ", available on request");
+        String ranges = merge(years).stream().map(r -> r[0] == r[1] ? String.valueOf(r[0]) : r[0] + "-" + r[1])
+                .collect(Collectors.joining(", "));
+        boolean sv = "sv".equals(language);
+        int comma = ranges.lastIndexOf(", ");
+        if (comma > 0) {
+            ranges = ranges.substring(0, comma) + (sv ? " och " : " and ") + ranges.substring(comma + 2);
+        }
+        return Optional.of(sv ? "Övrig anställning " + ranges + ", referenser lämnas på begäran"
+                : "Other employment " + ranges + ", available on request");
+    }
+
+    /** Omitted periods that overlap or touch (at most a year apart) are shown as one range; distant ones stay separate. */
+    private static List<int[]> merge(List<int[]> years) {
+        List<int[]> sorted = new ArrayList<>(years);
+        sorted.sort(Comparator.comparingInt(r -> r[0]));
+        List<int[]> merged = new ArrayList<>();
+        for (int[] r : sorted) {
+            int[] last = merged.isEmpty() ? null : merged.get(merged.size() - 1);
+            if (last != null && r[0] <= last[1] + 1) {
+                last[1] = Math.max(last[1], r[1]);
+            } else {
+                merged.add(new int[] {r[0], r[1]});
+            }
+        }
+        return merged;
     }
 
     private static Optional<Span> span(Entry e, YearMonth now) {

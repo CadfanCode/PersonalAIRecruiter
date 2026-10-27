@@ -11,7 +11,7 @@ p { margin: 0; }
 /* CV */
 body.cv { font-size: 9.5pt; line-height: 1.38; }
 .cv h2 { font-size: 8.5pt; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #1F3A5F;
-         margin: 10pt 0 5pt 0; padding-bottom: 2pt; border-bottom: 0.6pt solid #1F3A5F; }
+         margin: 10pt 0 5pt 0; padding-bottom: 2pt; border-bottom: 0.6pt solid #1F3A5F; page-break-after: avoid; }
 .cv .item { margin-bottom: 6pt; page-break-inside: avoid; }
 .cv .para { margin: 0 0 3pt 0; }
 .cv .para.tight { margin: 1pt 0 0 0; color: #3a4452; }

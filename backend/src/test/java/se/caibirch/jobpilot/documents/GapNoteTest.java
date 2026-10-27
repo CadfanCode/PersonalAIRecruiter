@@ -61,6 +61,16 @@ class GapNoteTest {
     }
 
     @Test
+    void separatePeriodsAreListedSeparatelyNotAsOneMisleadingRange() {
+        var all = List.of(job(1, "2022-01", "2024-12"), job(2, "2018-01", "2021-01"), job(3, "2025-01", "2025-12"));
+
+        assertThat(GapNote.compute(all, Set.of(1L), "en", NOW)).contains("Other employment 2018-2021 and 2025, available on request");
+        assertThat(GapNote.compute(all, Set.of(1L), "sv", NOW)).contains("Övrig anställning 2018-2021 och 2025, referenser lämnas på begäran");
+        var three = List.of(job(1, "2022-01", "2022-12"), job(2, "2010-01", "2011-06"), job(3, "2015-01", "2016-06"), job(4, "2024-01", "2025-06"));
+        assertThat(GapNote.compute(three, Set.of(1L), "en", NOW)).contains("Other employment 2010-2011, 2015-2016 and 2024-2025, available on request");
+    }
+
+    @Test
     void hiddenEntriesUndatedEntriesAndNonEmploymentAreIgnored() {
         var all = List.of(job(1, "2024-01", "2026-05"), job(2, Kind.WORK, "2018-01", "2020-01", false, true),
                 job(3, Kind.WORK, null, null, false, false), job(4, Kind.EDUCATION, "2014-01", "2018-01", false, false),
