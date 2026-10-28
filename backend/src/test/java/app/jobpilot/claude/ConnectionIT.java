@@ -131,4 +131,21 @@ class ConnectionIT {
 
         assertThat(ConnectionService.failure("cli", "timed out after 180 s", 3).problem()).isEqualTo("OTHER");
     }
+
+    @Test
+    void eachStageCanUseItsOwnModelAndFollowsTheDefaultOtherwise() throws Exception {
+        call(put("/api/claude/connection/cli-model"), "{\"model\":\"sonnet\"}", 200);
+        JsonNode s = call(put("/api/claude/connection/stage-model/DOCUMENTS"), "{\"model\":\"opus\"}", 200);
+
+        assertThat(s.get("cli").get("stageModels")).hasSize(5);
+        assertThat(s.get("cli").get("stageModels").findValuesAsText("model")).containsExactly("", "", "", "opus", "");
+        assertThat(providerSettings.modelFor("writeCv")).isEqualTo("opus");
+        assertThat(providerSettings.modelFor("reviseDocument")).isEqualTo("opus");
+        assertThat(providerSettings.modelFor("scoreJob")).as("no override: the default").isEqualTo("sonnet");
+        assertThat(providerSettings.modelFor("health")).as("the connection check uses the default").isEqualTo("sonnet");
+
+        call(put("/api/claude/connection/stage-model/DOCUMENTS"), "{\"model\":\"\"}", 200);
+        assertThat(providerSettings.modelFor("writeCv")).isEqualTo("sonnet");
+        call(put("/api/claude/connection/stage-model/NONSENSE"), "{\"model\":\"opus\"}", 400);
+    }
 }

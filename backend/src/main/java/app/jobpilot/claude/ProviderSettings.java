@@ -12,6 +12,7 @@ public class ProviderSettings {
     public static final String CLI = "cli";
     static final String PROVIDER_KEY = "claude.provider";
     static final String CLI_MODEL_KEY = "claude.model";
+    static final String STAGE_MODEL_PREFIX = "claude.model.";
     static final String TESTED_KEY = "claude.tested";
 
     private final AppSettings settings;
@@ -67,5 +68,23 @@ public class ProviderSettings {
         } else {
             settings.put(CLI_MODEL_KEY, model.trim());
         }
+    }
+
+    /** The model for one stage, or blank when that stage follows the default. */
+    public String stageModel(ModelStage stage) {
+        return settings.get(STAGE_MODEL_PREFIX + stage.name(), "");
+    }
+
+    public void stageModel(ModelStage stage, String model) {
+        if (model == null || model.isBlank()) {
+            settings.delete(STAGE_MODEL_PREFIX + stage.name());
+        } else {
+            settings.put(STAGE_MODEL_PREFIX + stage.name(), model.trim());
+        }
+    }
+
+    /** What to pass as --model for a Claude task: its stage's choice, else the default. Read on every call. */
+    public String modelFor(String taskName) {
+        return ModelStage.ofTask(taskName).map(this::stageModel).filter(m -> !m.isBlank()).orElseGet(this::cliModel);
     }
 }

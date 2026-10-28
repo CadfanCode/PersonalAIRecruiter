@@ -45,25 +45,31 @@ public class CliClaudeRunner implements AiProvider {
     private final ObjectMapper mapper;
     private final ClaudeCallLog callLog;
     private final ClaudeConcurrency concurrency;
-    private final java.util.function.Supplier<String> model;
+    /** The model for a task name (null for the usage check): chosen per stage in Settings, read on every call. */
+    private final java.util.function.Function<String, String> model;
 
     public CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog) {
         this(props, mapper, callLog, ClaudeConcurrency.fixed(props.claude().concurrency()));
     }
 
     public CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog, ClaudeConcurrency concurrency) {
-        this(props, mapper, callLog, concurrency, () -> props.claude().model());
+        this(props, mapper, callLog, concurrency, (java.util.function.Supplier<String>) () -> props.claude().model());
     }
 
     /** {@code model} is asked for on every call, so a model picked in Settings applies to the next request. */
     @org.springframework.beans.factory.annotation.Autowired
     public CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog, ClaudeConcurrency concurrency,
                            ProviderSettings settings) {
-        this(props, mapper, callLog, concurrency, settings::cliModel);
+        this(props, mapper, callLog, concurrency, (java.util.function.Function<String, String>) settings::modelFor);
     }
 
     CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog, ClaudeConcurrency concurrency,
                     java.util.function.Supplier<String> model) {
+        this(props, mapper, callLog, concurrency, (java.util.function.Function<String, String>) task -> model.get());
+    }
+
+    CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog, ClaudeConcurrency concurrency,
+                    java.util.function.Function<String, String> model) {
         this.model = model;
         this.config = props.claude();
         this.workDir = props.claudeWorkDir().toFile();
@@ -118,7 +124,7 @@ public class CliClaudeRunner implements AiProvider {
             List<String> command = new ArrayList<>(List.of(config.executable(), "-p", "ok", "--output-format", "stream-json", "--verbose",
                     "--no-session-persistence", "--disable-slash-commands", "--strict-mcp-config", "--setting-sources", "project",
                     "--tools", ""));
-            String chosen = model.get();
+            String chosen = model.apply(null);
             if (chosen != null && !chosen.isBlank()) {
                 command.addAll(List.of("--model", chosen));
             }
@@ -279,7 +285,7 @@ public class CliClaudeRunner implements AiProvider {
         } else {
             command.addAll(List.of("--tools", ""));
         }
-        String chosen = model.get();
+        String chosen = model.apply(task.name());
         if (chosen != null && !chosen.isBlank()) {
             command.addAll(List.of("--model", chosen));
         }

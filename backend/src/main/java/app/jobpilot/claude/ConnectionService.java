@@ -13,7 +13,11 @@ import app.jobpilot.settings.JobPilotProperties;
 @Service
 public class ConnectionService {
 
-    public record CliStatus(boolean found, String path, String version, String help, String model) {
+    public record StageModel(String stage, String label, String model) {
+    }
+
+    /** {@code model} is the default; {@code stageModels} is one row per stage, blank meaning the default. */
+    public record CliStatus(boolean found, String path, String version, String help, String model, java.util.List<StageModel> stageModels) {
     }
 
     /** The OS credential store that holds saved employer-portal logins (Settings shows where they are kept). */
@@ -51,10 +55,14 @@ public class ConnectionService {
     private CliStatus cli() {
         try {
             String version = health.version();
-            return new CliStatus(true, config.executable(), version, null, settings.cliModel());
+            return new CliStatus(true, config.executable(), version, null, settings.cliModel(), stages());
         } catch (ClaudeCallException e) {
-            return new CliStatus(false, config.executable(), null, installHelp(), settings.cliModel());
+            return new CliStatus(false, config.executable(), null, installHelp(), settings.cliModel(), stages());
         }
+    }
+
+    private java.util.List<StageModel> stages() {
+        return java.util.Arrays.stream(ModelStage.values()).map(st -> new StageModel(st.name(), st.label(), settings.stageModel(st))).toList();
     }
 
     static String installHelp() {
@@ -66,6 +74,10 @@ public class ConnectionService {
     public void select(String provider) {
         settings.select(provider);
         settings.forgetTest();
+    }
+
+    public void stageModel(String stage, String model) {
+        settings.stageModel(ModelStage.valueOf(stage), model);
     }
 
     /** Takes effect on the next request: the CLI runner asks for the model on every call. */

@@ -41,6 +41,13 @@ public class ConnectionController {
         return service.status();
     }
 
+    /** One stage's model alias, or blank to follow the default. */
+    @PutMapping("/stage-model/{stage}")
+    public ConnectionService.Status stageModel(@org.springframework.web.bind.annotation.PathVariable String stage, @RequestBody ModelInput input) {
+        service.stageModel(stage, input.model());
+        return service.status();
+    }
+
     /** Always 200: {@code ok=false} carries what is wrong and how to fix it. */
     @PostMapping("/test")
     public ConnectionService.TestResult test() {

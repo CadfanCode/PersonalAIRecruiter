@@ -77,6 +77,16 @@ class CliClaudeRunnerTest {
     }
 
     @Test
+    void eachTaskAsksForItsOwnModel() {
+        JobPilotProperties props = new JobPilotProperties(dir.resolve("data"), List.of(), new JobPilotProperties.Claude("claude", "", 5, 5, 2));
+        java.util.function.Function<String, String> perTask = name -> name.equals("writeCv") ? "opus" : "sonnet";
+        CliClaudeRunner runner = new CliClaudeRunner(props, new ObjectMapper(), callLog, ClaudeConcurrency.fixed(1), perTask);
+
+        assertThat(runner.buildCommand(ClaudeTask.of("writeCv", "x", schema, Status.class), false)).containsSubsequence("--model", "opus");
+        assertThat(runner.buildCommand(ClaudeTask.of("scoreJob", "x", schema, Status.class), false)).containsSubsequence("--model", "sonnet");
+    }
+
+    @Test
     void parsesStructuredOutputFromRecordedEnvelope() throws IOException {
         CliClaudeRunner runner = runnerFor(printsFile("out.json", recorded), 10);
 
