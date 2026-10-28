@@ -20,3 +20,7 @@ JobPilot is now meant to be installed by anyone: one installer, nothing to set u
   as the fallback. Closing the window stops the app and the database. A second launch opens another window.
 - **Open limits.** The jar is about 420 MB because it holds Playwright's driver and four PostgreSQL builds; per-platform
   builds can trim it later. Playwright's Chromium (about 150 MB) is downloaded the first time it is needed.
+- **Linux packages are built in a container.** `packaging/build-linux.sh` runs jpackage in `eclipse-temurin:21-jdk-jammy` (Ubuntu 22.04),
+  so the bundled Java runtime and launcher need glibc 2.35, not the build machine's newer one. The `.deb` has no maintainer person,
+  depends on `libc6` and `xdg-utils`, and installs under `/opt/jobpilot`. Tested by installing it with apt in a clean Ubuntu 22.04
+  container and starting it as an ordinary user.

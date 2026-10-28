@@ -27,11 +27,8 @@ INPUT="$ROOT/dist/input"
 rm -rf "$ROOT/dist" && mkdir -p "$INPUT"
 cp backend/target/jobpilot-*.jar "$INPUT/jobpilot.jar"
 
-COMMON=(--name JobPilot --app-version "$VERSION" --vendor JobPilot --input "$INPUT" --main-jar jobpilot.jar
-  --main-class org.springframework.boot.loader.launch.PropertiesLauncher
-  --java-options "-Dloader.main=app.jobpilot.desktop.DesktopLauncher" --java-options "-Xmx1g"
-  --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.management,jdk.net,jdk.security.auth,jdk.security.jgss,jdk.charsets,jdk.zipfs,jdk.naming.dns
-  --description "Job applications, tailored and filled in for you")
+. packaging/jpackage-common.sh
+COMMON=("${JPACKAGE_COMMON[@]}")
 
 ICON=()
 case "$OS" in

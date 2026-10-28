@@ -1,0 +1,15 @@
+#!/bin/sh
+# Takes JobPilot out of the application menu. Nothing in the user's own data folder (~/.jobpilot) is touched.
+set -e
+case "$1" in
+    remove|upgrade|deconfigure)
+        xdg-desktop-menu uninstall /opt/jobpilot/lib/jobpilot-JobPilot.desktop >/dev/null 2>&1 || true
+    ;;
+    failed-upgrade)
+    ;;
+    *)
+        echo "prerm called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+exit 0
