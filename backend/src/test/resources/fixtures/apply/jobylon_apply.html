@@ -1,0 +1,17 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>Apply to Full-stack developer at Jobylon</title></head><body>
+<form onsubmit="return false">
+<label for="f">Förnamn</label><input id="f"><label for="l">Efternamn</label><input id="l">
+<label for="e">E-post</label><input id="e" type="email">
+<input type="file" aria-label="Ladda upp CV">
+<label><input type="checkbox" name="terms"> I accept the privacy policy</label>
+<input type="submit" value="Submit">
+</form>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

@@ -142,12 +142,40 @@ class BrowserGuardTest extends PlaywrightTest {
             open(c[0]);
             Locator target = page.locator(c[1]).first();
             for (ClickPurpose purpose : ClickPurpose.values()) {
+                if (purpose == ClickPurpose.OPEN_APPLICATION_FORM && c[0].equals("platsbanken_ad.html")) {
+                    continue; // an ad page whose Ansök only opens the form: the one thing that purpose is for (next test)
+                }
                 Outcome o = guard().click(target, purpose);
                 assertThat(o.done()).as(c[0] + " " + c[1] + " " + purpose).isFalse();
             }
             assertThat(submitted()).as(c[0] + " " + c[1]).isFalse();
             assertThat(clicks()).as(c[0] + " " + c[1]).isEmpty();
         }
+    }
+
+    @Test
+    void theOpenApplicationPurposeClicksAnAdsAnsokOnlyWhenNothingOnThePageLooksLikeTheFormAlready() {
+        open("platsbanken_ad.html");
+        assertThat(guard().click(page.locator("#ansok"), ClickPurpose.OPEN_APPLICATION_FORM).done()).isTrue();
+        assertThat(clicks()).containsExactly("Ansök");
+
+        // the same word on a page that already holds fields, in a form, as a submit or as a default-submit button: never
+        for (String[] c : new String[][] {{"ponty.html", "#applynow"}, {"final_ansok.html", "button:has-text('Ansök')"},
+                {"final_ansok.html", "button:has-text('Fortsätt')"}, {"final_ansok.html", "button:has-text('Registrera')"},
+                {"reachmee_apply.html", "input[type=submit]"}, {"reachmee_apply.html", "button:has-text('Ansök')"}}) {
+            open(c[0]);
+            Outcome o = guard().click(page.locator(c[1]).first(), ClickPurpose.OPEN_APPLICATION_FORM);
+            assertThat(o.done()).as(c[0] + " " + c[1] + ": " + o.reason()).isFalse();
+            assertThat(clicks()).as(c[0] + " " + c[1]).isEmpty();
+            assertThat(submitted()).isFalse();
+        }
+    }
+
+    @Test
+    void aButtonLabelledApplyNowIsNeverPressedButALinkWithThatLabelIsLoaded() {
+        open("jobshark_modal.html");
+        assertThat(guard().click(page.locator("button:has-text('Apply Now')"), ClickPurpose.OPEN_APPLICATION_FORM).done()).isFalse();
+        assertThat(clicks()).isEmpty();
     }
 
     @Test

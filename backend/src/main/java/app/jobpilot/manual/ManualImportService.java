@@ -143,7 +143,7 @@ public class ManualImportService {
             throw new IllegalStateException("That text does not look like a single job ad, so nothing was added");
         }
 
-        NewJob job = new NewJob("MANUAL", url, url, blank(ad.applyUrl()) ? null : ad.applyUrl().strip(), ad.title().strip(),
+        NewJob job = new NewJob("MANUAL", url, url, blank(ad.applyUrl()) || !ad.applyUrl().strip().matches("(?i)^https?://\\S+$") ? null : ad.applyUrl().strip(), ad.title().strip(),
                 ad.employer().strip(), null, ad.location(), blank(ad.municipality()) ? null : ad.municipality().strip(),
                 date(ad.publishedDate(), false), date(ad.deadline(), true), ad.language(), ad.employmentType(),
                 ad.description().strip(), "{}", ad.publishedDate() == null, url, 0, false);

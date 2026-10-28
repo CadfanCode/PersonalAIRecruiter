@@ -63,7 +63,8 @@ JobPilot is installed like any app (one installer per OS, no Docker, no database
 **First run (onboarding)**, one step per screen with a progress indicator, shown once: (1) drop or browse the CV (PDF, DOCX, TXT,
 MD); the files are held in the browser and read after step 2, because reading needs Claude; (2) connect Claude: the Claude Code
 subscription (found in the usual folders on every OS, with an install command when missing, and "not installed" told apart
-from "not signed in") or an Anthropic API key (kept only in the OS credential store); a real test call must pass before
+from "not signed in") or a Google AI Studio (Gemini) API key (kept in the OS credential store; without one, in an encrypted
+file, ADR 0017); a real test call must pass before
 continuing; then the CV is read, a short summary of what was found is shown and confirmed (the person's contact details fill
 only blank profile fields); (3) the country (Sweden live, others "coming soon"); (4) the search mode.
 `GET /api/onboarding` reports the state and the first open step; returning users never see it unless they run setup again.
@@ -88,7 +89,7 @@ and accepted for the user; they only pick roles (section 6.3), optionally "go wi
 ```
 React UI (served by the API in the installed app; 5173 in development) --REST/JSON--> Spring Boot API (18080 installed, 8080 dev)
                                    |                                                       --JDBC--> embedded PostgreSQL 16
-                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI  |  Anthropic Messages API (ADR 0014)
+                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI  |  Gemini generateContent API (ADR 0017)
                                    +-- CountryRegistry -- JobSource ------> one job board per country (Sweden: JobTech/Platsbanken)
                                    +-- SecretStore ------ java-keyring ----> OS credential store (API key, saved portal logins)
                                    +-- JobTechClient --- HTTPS ------------> jobsearch.api.jobtechdev.se
@@ -364,11 +365,14 @@ FormActions:
 
 ### 5.5 Providers (ADR 0014)
 
-`AiProvider` has two implementations: `cli` (above) and `api` (the Anthropic Messages API over HTTPS, the user's key from the OS
-credential store, structured output forced by one `respond` tool whose `input_schema` is the task's JSON Schema, the server-side
-`web_search` tool for career-page discovery, a larger answer budget for long tasks, 429/529 retried, an explicit error when an
-answer is cut off). Both share one adjustable call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings). The choice, the
-API model and the last passed connection test are in `app_setting`. `GET/PUT /api/claude/connection...` serve onboarding and Settings;
+`AiProvider` has two implementations: `cli` (above) and `gemini` (Google AI Studio `generateContent` over HTTPS, the user's key from
+the credential store or its encrypted-file fallback, structured output from `responseJsonSchema` with the task's JSON Schema, Google
+Search grounding for career-page discovery (in the same call, or in two when the model refuses both together), a larger answer
+budget for long tasks, 429/5xx retried with growing pauses, an explicit error when an answer is cut off). Both share one adjustable
+call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings). The choice, both models (`claude.model`: a Claude Code alias
+such as `sonnet`, `opus`, `fable`, passed as `--model` and read on every request; `gemini.model`, default `gemini-flash-latest`) and
+the last passed connection test are in `app_setting`. A database that still says provider `api` (the removed Anthropic option) is
+treated as "not chosen" and the person is asked to connect again. `GET/PUT /api/claude/connection...` serve onboarding and Settings;
 the key is never returned (only its last four characters), never logged and never written to the database.
 
 ## 6. Job search
@@ -552,15 +556,31 @@ is saved back). A request that needs something not in the CV database changes no
 - Playwright for Java, `launchPersistentContext(~/.jobpilot/browser-profile, headless=false)`,
   Chromium. The same profile keeps the user's logins (Varbi, Jobshark, ledigajobb,
   Arbetsförmedlingen with BankID) between sessions.
-- One tab per job. Keep a map of job id to page so the UI can show per-tab status.
+- **Out of sight until needed (ADR 0018).** The window starts minimised (`--start-minimized`, then DevTools
+  `Browser.setWindowBounds windowState=minimized`) with `--disable-backgrounding-occluded-windows`,
+  `--disable-renderer-backgrounding`, `--disable-background-timer-throttling` so hidden pages run at full speed, and through XWayland
+  (`--ozone-platform=x11`) on a Wayland session. It is restored and the tab brought to the front only when a sign-in is genuinely
+  needed, the form is filled and ready for review, or the person pressed "Open the browser to take over" (which keeps it up until
+  that tab is closed); it is minimised again when no tab needs the person. `jobpilot.browser.background=false` keeps it always visible.
+  Moving the window off-screen was tried and rejected: window managers keep it on screen. One window holds every tab, so showing it
+  shows all of them.
+- One tab per job. Keep a map of job id to page so the UI can show per-tab status. A tab that the application's own Apply click
+  opened in a new window replaces the job's tab.
 - Accept only necessary cookies when a cookie banner is detected (button text matches
   "nödvändiga", "necessary", "reject", "endast").
 
 ### 9.2 Filling a page
 
-1. Navigate to `apply_url` (fall back to `url`).
-2. Detect login walls (password inputs, "Logga in", "Sign in", BankID, account-creation pages).
-   Set the tab status to `WAITING_FOR_USER` and poll every 3 s until the page changes.
+1. Navigate to `apply_url` (fall back to `url` when `apply_url` is not an address), with one retry. Stage: *Opening job ad*.
+2. **Find the form** (stage *Finding application form*, `find-form-seconds` = 90 in all). Dismiss a necessary-only cookie notice, read
+   the page and classify it with its reasons (`PageClassifier.explain`, logged and shown on the card): a form with fields is
+   filled; an ad with an Apply link or button and no fields is followed (a link is loaded, a button is clicked, a new tab becomes
+   the job's tab), up to 4 pages, never pressing the same button twice; a sign-in wall is declared only when a password field is
+   visible, a password is being confirmed, or the page is near empty (at most two fields) with sign-in, BankID or account words and
+   no Apply link or button. A "Logga in" link in a header, an ad that says "registerkontroll", or a form that offers BankID never
+   counts. Set the tab status to `WAITING_FOR_SIGN_IN` (and reveal the window) and poll every 3 s until the page changes. When no way
+   on is found the tab says why (`NEEDS_MANUAL_APPLY`), offers "Open the browser to take over", and carries on by itself when the
+   form shows (poll).
 3. Extract fields with a script injected via `page.evaluate`: for every visible input, select,
    textarea and file input, assign `data-jp-id`, then collect label text (label[for], aria-label,
    closest label, preceding text), name, type, required, options, current value, and the
@@ -574,7 +594,12 @@ is saved back). A request that needs something not in the CV database changes no
    user. Screening questions that need judgment ("Har du erfarenhet av Angular?") are filled only
    if the answers memory or CV database clearly supports an answer. Otherwise they go to
    `questionsForUser`, and the user's answer is saved to the answers memory.
-7. Multi-step forms: the user clicks Next themselves, then presses "Fill this page" in the UI.
+7. Multi-step forms: the user clicks Next themselves, then presses "Fill this page" in the UI. (Known gap: automatically pressing
+   "Nästa" or "Fortsätt" was not built, because those labels are also used for the final step of many sites.)
+8. **Stages and failures.** The card shows *Opening job ad, Finding application form, Filling personal details, Uploading CV and cover
+   letter, Answering questions, Ready for your review* as a progress bar (`stage` in `GET /api/apply/status`). A step that throws, or
+   a form not found in time, ends in `ERROR` with `failedStage` and `failure`; the card names the stage and offers "Try again" and
+   "Open the browser to take over". The model call for the form is repeated once.
 
 Nothing in the model's answer is trusted (`ActionValidator`). An action runs only if its `fieldId` is
 one of the fields just extracted, it fits the field type (fill only text and textarea, check only
@@ -613,13 +638,18 @@ other host or on a sign-up form (a second password field, or more than three inp
   and unticking) whose label, aria-label, title, legend or nearby text matches
   `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter|godkänn|accept|personuppgift|policy|intyga|marknadsför|marketing|prenumer|subscribe/i`
   (the last eight alternatives were added in milestone 5 to make the rule stricter).
-- Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY` or
-  `AUTOCOMPLETE_OPTION`; milestone 6 adds `AKTIVITET_SPARA`). Enter is never pressed. `evaluate` runs
-  only the two fixed scripts in `PageScripts`. A test scans `src/main/java` and fails the build if any
-  other class calls a raw click, key press, `evaluate`, `dispatchEvent` or form submit.
+- Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY`, `AUTOCOMPLETE_OPTION`,
+  `AKTIVITET_SPARA`, `OPEN_APPLICATION_FORM`). Enter is never pressed. `evaluate` runs only the fixed scripts in `PageScripts`
+  (extract, detect, read-saved-activities, find-apply-candidates). A test scans `src/main/java` and fails the build if any
+  other class calls a raw click, key press, `evaluate`, `dispatchEvent`, form submit, `navigate` or popup listener.
 - No code path calls `click()` on elements matching
-  `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish/i`. The only allowed clicks
-  are cookie "necessary only" buttons and autocomplete options chosen by the executor itself.
+  `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish|registrera|register|spara ansökan/i`, and none on a
+  `type=submit` control or a `<button>` without a type inside a `<form>` (a default submit). The one purpose that may carry
+  "Ansök" or "Apply" is `OPEN_APPLICATION_FORM` (the label must start with an apply word, such as Ansök, Apply, Jag är
+  intresserad, I'm interested), and it is refused when the page already is a form, when JobPilot has filled anything on the
+  application, inside a form that has inputs, or for any `FINAL_SUBMIT` word. A link with an address is loaded instead of
+  clicked, after checking http(s) and the paste-only list. The other allowed clicks are cookie "necessary only" buttons and
+  autocomplete options chosen by the executor itself.
 - Unit-test these guards with fixture HTML pages.
 
 ### 9.4 Site notes from 26 Oct 2026
@@ -758,7 +788,7 @@ POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would
 GET      /claude/health          GET /claude/usage
 -- overhaul (28 Oct 2026) --
 GET      /onboarding             state and first open step;  PUT /onboarding/mode {DISCOVER|PROMPT};  POST /onboarding/complete | /reopen
-GET/PUT  /claude/connection...   status; /provider {id}; /api-key {key, model?} (DELETE removes); /api-model; POST /test {provider}
+GET/PUT  /claude/connection...   status; /provider {id}; /gemini-key {key, model?} (DELETE removes); /gemini-model; /cli-model; GET /gemini-models; POST /test {provider}
 GET/PUT  /country                the countries (available or coming soon) and the chosen one
 GET/PUT  /settings/performance   {claudeConcurrency 1..8};  GET/PUT /settings/search {careerPages}
 POST     /applications/approve-all   per document: approved, already approved, or refused with the reason (never all-or-nothing)
@@ -844,7 +874,7 @@ results.topN=10
 
 - Local only; bind 127.0.0.1; CORS limited to the UI origin.
 - Personal data stays on the machine. The only outbound calls are JobTech, sites the user
-  applies to, and the chosen Claude access (the Claude Code CLI, or api.anthropic.com with the user's own key).
-- Secrets (the Anthropic API key, saved portal passwords) live only in the OS credential store; there is no plaintext fallback, and
-  without a store nothing is saved. The browser profile holds cookies; document this in the README.
+  applies to, and the chosen AI access (the Claude Code CLI, or generativelanguage.googleapis.com with the user's own key).
+- Secrets live in the OS credential store. Saved portal passwords live only there (without a store nothing is saved). Only the
+  Gemini key may fall back to an AES-GCM encrypted file in the data folder, with its random key beside it, owner-only (ADR 0017). The browser profile holds cookies; document this in the README.
 - Back up the database with `pg_dump` from a script in `scripts/backup.sh`.

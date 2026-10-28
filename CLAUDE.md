@@ -19,7 +19,8 @@ up to date when a decision changes.
 - Browser automation: Playwright for Java, headed Chromium with a persistent profile
 - PDF: openhtmltopdf (HTML + CSS -> PDF)
 - AI: behind the `ClaudeRunner` interface. Providers: the user's own Claude Code CLI called headless
-  (`claude -p`), or an Anthropic API key the user pastes in (stored in the OS credential store).
+  (`claude -p`, model chosen in Settings as an alias), or a Google AI Studio (Gemini) API key the user pastes in (stored in the
+  OS credential store, ADR 0017).
 - Tests: JUnit 5, Mockito, Testcontainers (PostgreSQL), Vitest, React Testing Library
 
 ## Layout
@@ -45,7 +46,10 @@ packaging/  jpackage installer script, icons (docker-compose.yml is optional, fo
 
 ## Hard rules (never break these)
 
-1. Never click a submit, send or apply button in any external site. The user submits by hand.
+1. Never click a submit, send, register or apply-to-send button in any external site. The user submits by hand.
+   The one exception is navigation (ADR 0018): the "Ansök" / "Apply" link or button of an ad page that only opens the
+   application form may be followed, by `BrowserGuard` alone, and never on a page that already is a form, after JobPilot
+   filled anything, for a submit button, inside a form with inputs, or for a label with a sending word.
    Enforce this in code (see SPEC section 9.3), not only in prompts.
 2. Never create accounts and never handle BankID or any Arbetsförmedlingen login. When a login,
    sign-up or BankID screen appears, pause and show "Waiting for you to sign in" in the UI.
@@ -58,9 +62,10 @@ packaging/  jpackage installer script, icons (docker-compose.yml is optional, fo
    rephrases; it never invents employers, dates, tools, degrees or results.
 5. The aktivitetsrapport automation only saves activities ("Spara"). It never submits the
    monthly report.
-6. Claude is only reached through `ClaudeRunner`. Its providers are the user's own local Claude Code
-   CLI and an Anthropic API key the user supplies. Keys and credentials live only in the OS
-   credential store, never in plain text, the database or logs. No Claude.ai login flow, no key
+6. The AI is only reached through `ClaudeRunner`. Its providers are the user's own local Claude Code
+   CLI and a Google AI Studio (Gemini) API key the user supplies. Keys and credentials live in the OS
+   credential store; only where there is none may the Gemini key (never a portal password) be kept in an
+   AES-GCM encrypted file (ADR 0017). Never in plain text, the database or logs. No Claude.ai login flow, no key
    shipped with the app.
 
 ## Writing rules for generated CVs and letters

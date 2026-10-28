@@ -32,5 +32,6 @@ export const application = (over: Partial<Application> = {}): Application => ({
 
 export const tab = (over: Partial<TabView> = {}): TabView => ({
   jobId: 1, title: 'Software Developer', employer: 'Ravion AB', url: 'https://jobs.example.com/apply/1', status: 'FILLING', message: 'Working out what to fill',
-  done: [], skipped: [], questions: [], passes: 1, phase: 'FILLING', signInHost: null, loginFilled: false, ...over,
+  done: [], skipped: [], questions: [], passes: 1, phase: 'FILLING', signInHost: null, loginFilled: false,
+  stage: 'FINDING_FORM', stageLabel: 'Finding application form', failedStage: null, failure: null, reasons: [], browserVisible: false, ...over,
 })

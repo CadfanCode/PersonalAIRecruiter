@@ -55,7 +55,11 @@ is unverified; see docs/adr/0006-aktivitetsrapport.md.
 Usage: the dashboard and settings show your Claude subscription's session (5 hour) and weekly usage with reset times,
 as reported by the CLI itself (one tiny call per reading, cached for two minutes). No dollar amounts are shown.
 
-Model: JobPilot runs your own `claude` CLI. Without `JOBPILOT_CLAUDE_MODEL` it uses the
+AI access: pick the Claude Code subscription or a Google AI Studio (Gemini) API key in the first-run setup or in Settings. Settings
+has a model selector for each (Claude Code takes the aliases `sonnet`, `opus`, `haiku`, `fable`; a change applies to the next
+request without a restart).
+
+Model (Claude Code): JobPilot runs your own `claude` CLI. Without a model chosen in Settings or `JOBPILOT_CLAUDE_MODEL` it uses the
 CLI's default model (Opus on this machine). Measured on 26 Oct 2026: scoring one ad costs about
 $0.04 on Sonnet (`JOBPILOT_CLAUDE_MODEL=sonnet`), and a run scores up to 50 ads by default. The
 cost at the default model has not been measured but is several times higher, so set the variable

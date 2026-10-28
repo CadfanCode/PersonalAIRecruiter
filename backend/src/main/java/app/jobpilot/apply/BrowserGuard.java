@@ -15,15 +15,19 @@ import com.microsoft.playwright.options.SelectOption;
 /**
  * The single choke point for everything the app does to an external page (CLAUDE.md hard rules 1 to 3, SPEC 9.3).
  * <p>
- * Allowed: fill, select, check, upload on fields found by the extractor, and a click for one of two named
- * purposes: the necessary-only cookie button and a suggestion the executor itself just opened. Everything else is
- * refused here, in code. No other class may call {@code click}, {@code press}, {@code evaluate} and similar on a
+ * Allowed: fill, select, check, upload on fields found by the extractor, going to the application form from an ad page, and a
+ * click for a few named purposes: the necessary-only cookie button, a suggestion the executor itself just opened, and the link
+ * or button that opens the application form (never one that sends it). Everything else is refused here, in code. No other class may call {@code click}, {@code press}, {@code evaluate} and similar on a
  * page (a source-scan test fails the build if one does). Enter is never pressed because it can submit a form.
  */
 public final class BrowserGuard {
 
-    /** Why a click is allowed. AKTIVITET_SPARA is the one M6 adds: the Spara button of the aktivitetsrapport form. */
-    public enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA }
+    /**
+     * Why a click is allowed. AKTIVITET_SPARA is the Spara button of the aktivitetsrapport form. OPEN_APPLICATION_FORM is the
+     * "Ansök" or "Apply" link or button of an ad page that leads to the form: it is refused on a page that already is a form,
+     * after anything was filled, for a submit button, inside a form that has inputs, and for any label with a final-submit word.
+     */
+    public enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA, OPEN_APPLICATION_FORM }
 
     /** @param done true when the action happened; otherwise {@code reason} says why it was refused or failed */
     public record Outcome(boolean done, String reason) {
@@ -414,8 +418,16 @@ public final class BrowserGuard {
             if (type.equals("submit") && purpose != ClickPurpose.AKTIVITET_SPARA) {
                 return Outcome.refused("refused: this is a submit button");
             }
+            // A <button> without a type inside a <form> is a submit button by default.
+            if (purpose != ClickPurpose.AKTIVITET_SPARA && target.locator("xpath=self::button[not(@type)]/ancestor::form").count() > 0) {
+                return Outcome.refused("refused: a button inside a form, which would submit it");
+            }
+            boolean opening = purpose == ClickPurpose.OPEN_APPLICATION_FORM;
             for (String t : List.of(own, value, aria, title, ancestor)) {
-                if (GuardPatterns.isSubmitLike(t)) {
+                // Opening the form is the one purpose that may carry "Ansök" or "Apply", but never a sending word. "Apply now" is
+                // too often the button that sends the application (a modal's last step), so a button with it is never pressed;
+                // a link with that label is still loaded (a GET) by openApplication.
+                if (opening ? GuardPatterns.isFinalSubmit(t) || t.toLowerCase(Locale.ROOT).contains("apply now") : GuardPatterns.isSubmitLike(t)) {
                     return Outcome.refused("refused: '" + t.strip() + "' looks like a submit or apply button");
                 }
             }
@@ -424,6 +436,19 @@ public final class BrowserGuard {
             }
             String label = String.join(" ", own, value, aria, title);
             switch (purpose) {
+                case OPEN_APPLICATION_FORM -> {
+                    if (!GuardPatterns.APPLY_LABEL.matcher(own.isBlank() ? (value.isBlank() ? aria : value) : own).find()) {
+                        return Outcome.refused("refused: not a link or button that opens an application");
+                    }
+                    if (target.locator("xpath=ancestor::form[.//input[not(@type='hidden') and not(@type='submit') and not(@type='button')]"
+                            + " or .//select or .//textarea]").count() > 0) {
+                        return Outcome.refused("refused: inside a form with fields, so it may send the form");
+                    }
+                    // On a page that already shows fields the application has begun: nothing opens another page from here.
+                    if (PageScripts.detect(page).fieldCount() > 0) {
+                        return Outcome.refused("refused: the page already is a form");
+                    }
+                }
                 case COOKIE_NECESSARY -> {
                     if (!GuardPatterns.COOKIE_NECESSARY.matcher(label).find()) {
                         return Outcome.refused("not a necessary-only cookie button");
@@ -457,6 +482,88 @@ public final class BrowserGuard {
             return Outcome.ok();
         } catch (PlaywrightException e) {
             return Outcome.refused("could not click: " + first(e));
+        }
+    }
+
+    // ---- from the ad to the application form ----
+
+    /** What {@link #openApplication} did; {@code popup} is the new tab when the click opened one. */
+    public record Opened(boolean done, String how, Page popup) {
+        static Opened refused(String why) {
+            return new Opened(false, why, null);
+        }
+    }
+
+    private static final int NAVIGATION_TIMEOUT_MS = 20_000;
+    private static final int POPUP_WAIT_MS = 1_500;
+    private static final String CANDIDATE_SELECTOR = "button, a, [role=button], input[type=button], input[type=submit]";
+
+    /**
+     * Goes from an ad to its application form. A link with an address is simply loaded (no click); a button or a link without
+     * an address is clicked with {@link ClickPurpose#OPEN_APPLICATION_FORM}. Refused when the page already is a form, when
+     * JobPilot has already filled something, when the candidate is not an apply link, or when the address is not an allowed one.
+     */
+    public Opened openApplication(ApplyCandidates.Candidate c, boolean pageIsForm, boolean anythingFilled,
+                                  java.util.function.Predicate<String> addressAllowed) {
+        if (pageIsForm) {
+            return Opened.refused("refused: the page already is a form");
+        }
+        if (anythingFilled) {
+            return Opened.refused("refused: something was already filled on this application");
+        }
+        if (!ApplyCandidates.eligible(c)) {
+            return Opened.refused("refused: '" + c.text() + "' is not a link that opens an application");
+        }
+        if (c.anchorWithAddress()) {
+            String url = c.href();
+            if (!addressAllowed.test(url)) {
+                return Opened.refused("refused: " + hostLabel(url) + " is not an address this app opens");
+            }
+            try {
+                page.navigate(url, new Page.NavigateOptions().setTimeout(NAVIGATION_TIMEOUT_MS));
+                return new Opened(true, "loaded " + stripQueryAndHash(url), null);
+            } catch (PlaywrightException e) {
+                return Opened.refused("could not open " + hostLabel(url) + ": " + first(e));
+            }
+        }
+        List<Page> popups = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.function.Consumer<Page> listener = popups::add;
+        page.onPopup(listener);
+        try {
+            Locator target = page.locator(CANDIDATE_SELECTOR).nth(c.index());
+            String now = safeText(target);
+            if (!now.startsWith(c.text().length() > 20 ? c.text().substring(0, 20) : c.text())) {
+                return Opened.refused("the page changed while looking for the apply button");
+            }
+            Outcome outcome = click(target, ClickPurpose.OPEN_APPLICATION_FORM);
+            if (!outcome.done()) {
+                return Opened.refused(outcome.reason());
+            }
+            page.waitForTimeout(POPUP_WAIT_MS); // a button that opens a new tab does so at once
+            return new Opened(true, "clicked '" + c.text() + "'", popups.isEmpty() ? null : popups.get(0));
+        } catch (PlaywrightException e) {
+            return Opened.refused("could not click: " + first(e));
+        } finally {
+            page.offPopup(listener);
+        }
+    }
+
+    /** Waits (briefly, with a hard limit) for the page to finish loading. Never throws. */
+    public void settle() {
+        try {
+            page.waitForLoadState(com.microsoft.playwright.options.LoadState.DOMCONTENTLOADED,
+                    new Page.WaitForLoadStateOptions().setTimeout(8_000));
+        } catch (PlaywrightException ignored) {
+            // a page that never settles is read as it is
+        }
+    }
+
+    private static String hostLabel(String url) {
+        try {
+            String h = java.net.URI.create(url).getHost();
+            return h == null ? "that address" : h;
+        } catch (IllegalArgumentException e) {
+            return "that address";
         }
     }
 

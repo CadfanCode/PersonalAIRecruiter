@@ -87,7 +87,32 @@ class NoUnguardedBrowserCallsTest {
         assertThat(guard).contains(".press(\"ArrowDown\"").doesNotContain("\"Enter\"").doesNotContain("Key.ENTER");
         assertThat(FORM_SUBMIT.matcher(guard).find()).isFalse();
         // the only reasons a click may have; a new one has to change this test on purpose
-        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA }");
+        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA, OPEN_APPLICATION_FORM }");
+    }
+
+    @Test
+    void onlyTheGuardLoadsOrOpensPagesFromAnAdAndNobodyWatchesForPopupsElsewhere() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path file : javaFiles()) {
+            String code = code(file);
+            if (code.contains(".onPopup(") && !is(file, "BrowserGuard.java")) {
+                offenders.add(file + " listens for popups");
+            }
+            // the one other navigation is BrowserService.openTab, the application's own first load of the ad
+            if (Pattern.compile("\\.navigate\\s*\\(").matcher(code).find() && !is(file, "BrowserGuard.java") && !is(file, "BrowserService.java")) {
+                offenders.add(file + " navigates a page");
+            }
+        }
+        assertThat(offenders).isEmpty();
+        String guard = code(MAIN.resolve("app/jobpilot/apply/BrowserGuard.java"));
+        // an address is only loaded after the address check, and a click for OPEN_APPLICATION_FORM only after the page-is-a-form
+        // and something-was-filled refusals
+        int open = guard.indexOf("public Opened openApplication");
+        String method = guard.substring(open, guard.indexOf("public void settle"));
+        assertThat(method.indexOf("pageIsForm")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("anythingFilled")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("addressAllowed.test")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("anythingFilled")).isLessThan(method.indexOf("click(target"));
     }
 
     @Test
@@ -124,19 +149,20 @@ class NoUnguardedBrowserCallsTest {
     }
 
     @Test
-    void pageScriptsRunsOnlyTheTwoFixedScriptsFromTheClasspath() throws IOException {
+    void pageScriptsRunsOnlyTheFixedScriptsFromTheClasspath() throws IOException {
         String scripts = code(MAIN.resolve("app/jobpilot/apply/PageScripts.java"));
 
-        assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(4);
-        assertThat(scripts).contains("read(\"apply/extract-fields.js\")", "read(\"apply/detect-state.js\")", "read(\"apply/read-saved-activities.js\")");
+        assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(5);
+        assertThat(scripts).contains("read(\"apply/extract-fields.js\")", "read(\"apply/detect-state.js\")", "read(\"apply/read-saved-activities.js\")",
+                "read(\"apply/find-apply-candidates.js\")");
         assertThat(scripts).doesNotContainPattern("\\.(click|press|keyboard|mouse|dispatchEvent|submit)\\s*\\(");
         // every call starts with one of the two fixed scripts; nothing is concatenated from other input
-        assertThat(Pattern.compile("\\.evaluate\\s*\\((EXTRACT|DETECT|SAVED)\\b").matcher(scripts).results().count()).isEqualTo(4);
+        assertThat(Pattern.compile("\\.evaluate\\s*\\((EXTRACT|DETECT|SAVED|CANDIDATES)\\b").matcher(scripts).results().count()).isEqualTo(5);
     }
 
     @Test
     void theScriptFilesThemselvesNeverClickTypeOrSubmit() throws IOException {
-        for (String name : List.of("extract-fields.js", "detect-state.js", "read-saved-activities.js")) {
+        for (String name : List.of("extract-fields.js", "detect-state.js", "read-saved-activities.js", "find-apply-candidates.js")) {
             String js = Files.readString(Path.of("src/main/resources/apply/" + name)).replaceAll("(?m)^\\s*//.*$", "");
             assertThat(js).as(name).doesNotContainPattern("\\.(click|submit|requestSubmit|dispatchEvent|focus)\\s*\\(")
                     .doesNotContainPattern("\\.(value|checked)\\s*=[^=]").doesNotContain("fetch(").doesNotContain("XMLHttpRequest");

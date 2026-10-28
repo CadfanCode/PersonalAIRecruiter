@@ -5,6 +5,7 @@ import { type TabView, useCloseTab, useFillPage, useFocusTab, useOpenBatch, useS
 import { useLogins } from '../../api/logins'
 import { Button, TextInput } from '../Form'
 import { WarnIcon } from '../ui/Icons'
+import { ApplyProgress } from './ApplyProgress'
 import { type Phase, PhasePill, phaseOf } from './phase'
 import { loginDeclined, SaveLoginPrompt } from './SaveLoginPrompt'
 
@@ -91,7 +92,28 @@ export function ApplyCard({ app, tab }: { app: Application | undefined; tab: Tab
         </div>
       )}
 
+      {tab && !['CLOSED', 'QUEUED', 'EMAIL_ONLY', 'NO_APPLY_LINK', 'APPLY_MANUALLY'].includes(tab.status) && <ApplyProgress tab={tab} />}
       {tab && <p className="mt-3 text-sm">{tab.message}</p>}
+      {tab?.status === 'ERROR' && (
+        <div role="alert" className="mt-3 rounded-2xl bg-[var(--danger-soft)] p-4 text-sm text-[var(--danger)]">
+          <p className="font-semibold">It stopped{tab.failedStage ? ` while ${tab.stageLabel.toLowerCase()}` : ''}.</p>
+          {tab.failure && <p className="mt-1 text-[var(--ink)]">{tab.failure}</p>}
+          <p className="mt-1 text-[var(--muted)]">Nothing was submitted. You can try again, or open the browser and carry on yourself.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button onClick={() => fill.mutate({ jobId, restart: true })} disabled={fill.isPending}>Try again</Button>
+            <Button variant="ghost" onClick={() => focus.mutate(jobId)} disabled={focus.isPending}>Open the browser to take over</Button>
+          </div>
+        </div>
+      )}
+      {tab?.status === 'NEEDS_MANUAL_APPLY' && (
+        <div className="mt-2"><Button variant="ghost" onClick={() => focus.mutate(jobId)} disabled={focus.isPending}>Open the browser to take over</Button></div>
+      )}
+      {tab && tab.reasons.length > 0 && !['QUEUED', 'CLOSED'].includes(tab.status) && (
+        <details className="mt-2 text-xs text-[var(--muted)]">
+          <summary className="cursor-pointer">Why JobPilot read the page this way</summary>
+          <ul className="mt-1 list-disc pl-5">{tab.reasons.map((r) => <li key={r}>{r}</li>)}</ul>
+        </details>
+      )}
       {tab && (tab.done.length > 0 || tab.skipped.length > 0) && (
         <p className="mt-1 text-xs text-[var(--muted)]">{tab.done.length} filled, {tab.skipped.length} left for you</p>
       )}
@@ -104,7 +126,7 @@ export function ApplyCard({ app, tab }: { app: Application | undefined; tab: Tab
             <p className="mt-1 text-[var(--muted)]">
               Do it yourself in the browser tab. JobPilot never creates accounts or handles BankID, and carries on by itself once you are in.
             </p>
-            <div className="mt-3"><Button onClick={() => focus.mutate(jobId)} disabled={focus.isPending}>Show the tab</Button></div>
+            <div className="mt-3"><Button onClick={() => focus.mutate(jobId)} disabled={focus.isPending}>Show the browser</Button></div>
           </div>
         </div>
       )}
@@ -138,7 +160,7 @@ export function ApplyCard({ app, tab }: { app: Application | undefined; tab: Tab
         {(tab?.status === 'SESSION_EXPIRED' || reopen) && (
           <Button onClick={() => fill.mutate({ jobId, restart: true })} disabled={fill.isPending}>Restart and refill</Button>
         )}
-        {hasTab && <Button variant="ghost" onClick={() => focus.mutate(jobId)}>Show tab</Button>}
+        {hasTab && tab?.status !== 'ERROR' && tab?.status !== 'NEEDS_MANUAL_APPLY' && <Button variant="ghost" onClick={() => focus.mutate(jobId)}>Show tab</Button>}
         {hasTab && <Button variant="ghost" onClick={() => close.mutate(jobId)}>Close tab</Button>}
         {tab?.phase === 'READY_FOR_SUBMISSION' && <Link to="/submit" className="ml-auto text-sm font-medium text-[var(--accent)] hover:underline">Go to Submit ›</Link>}
         {app && !working && !tab && (

@@ -23,7 +23,7 @@ public final class PageScripts {
 
     /** What a page looks like to the sign-in detector. */
     public record PageState(boolean passwordVisible, boolean signInText, boolean bankIdText, boolean createAccountText,
-                            boolean confirmPasswordText, int fieldCount, boolean ansokButton, boolean sessionError,
+                            boolean confirmPasswordText, int fieldCount, boolean applyRoute, boolean sessionError,
                             String url, String title) {
     }
 
@@ -32,6 +32,7 @@ public final class PageScripts {
     private static final String EXTRACT = read("apply/extract-fields.js");
     private static final String DETECT = read("apply/detect-state.js");
     private static final String SAVED = read("apply/read-saved-activities.js");
+    private static final String CANDIDATES = read("apply/find-apply-candidates.js");
 
     private PageScripts() {
     }
@@ -74,8 +75,13 @@ public final class PageScripts {
             }
         }
         return new PageState(b(m, "passwordVisible"), b(m, "signInText"), b(m, "bankIdText"), b(m, "createAccountText"),
-                b(m, "confirmPasswordText"), fields, b(m, "ansokButton"), b(m, "sessionError"),
+                b(m, "confirmPasswordText"), fields, b(m, "applyRoute"), b(m, "sessionError"),
                 String.valueOf(m.get("url")), String.valueOf(m.get("title")));
+    }
+
+    /** The visible links and buttons that might open an application form; read-only. */
+    public static List<ApplyCandidates.Candidate> applyCandidates(Page page) {
+        return MAPPER.convertValue(page.mainFrame().evaluate(CANDIDATES), new TypeReference<List<ApplyCandidates.Candidate>>() { });
     }
 
     /** One saved activity row as text, with its date as yyyy-MM-dd. */

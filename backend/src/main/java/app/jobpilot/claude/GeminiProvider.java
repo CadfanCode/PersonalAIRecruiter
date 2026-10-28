@@ -37,7 +37,8 @@ import app.jobpilot.settings.JobPilotProperties;
 @Component
 public class GeminiProvider implements AiProvider {
 
-    static final int MAX_ATTEMPTS = 3;
+    /** Gemini answers 503 "high demand" in short bursts, so a busy answer is retried with growing pauses before giving up. */
+    static final int MAX_ATTEMPTS = 5;
 
     private static final Logger log = LoggerFactory.getLogger(GeminiProvider.class);
 
@@ -186,7 +187,7 @@ public class GeminiProvider implements AiProvider {
                 if (!retryable || attempt == MAX_ATTEMPTS) {
                     throw failure;
                 }
-                pause(response.headers().firstValue("retry-after").map(GeminiProvider::seconds).orElse(attempt * 3L));
+                pause(response.headers().firstValue("retry-after").map(GeminiProvider::seconds).orElse(Math.min(20L, 2L * attempt * attempt)));
             } catch (IOException e) {
                 failure = new ClaudeCallException("Cannot reach Google AI Studio: " + e.getMessage() + ". Check the internet connection.", null, e);
                 if (attempt == MAX_ATTEMPTS) {
