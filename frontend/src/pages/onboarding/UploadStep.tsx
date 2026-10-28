@@ -30,7 +30,7 @@ export function UploadStep({ files, onFiles, existingEntries, onNext }: {
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Start with your CV</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Start with your CV</h1>
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
         We'll break your CV down into a personal database of your experience, education and skills. For every job you apply to,
         AI picks the most relevant parts to create a tailored CV and cover letter. Nothing is invented: only what is in your CV is ever used.
@@ -40,7 +40,7 @@ export function UploadStep({ files, onFiles, existingEntries, onNext }: {
         onDragOver={(e) => { e.preventDefault(); setOver(true) }}
         onDragLeave={() => setOver(false)}
         onDrop={(e) => { e.preventDefault(); setOver(false); add(e.dataTransfer.files) }}
-        className={`mt-7 flex flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed px-6 py-12 text-center transition ${
+        className={`mt-7 flex flex-col items-center justify-center gap-3 rounded-3xl border border-dashed px-6 py-12 text-center transition ${
           over ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--line)] bg-[var(--panel-2)] hover:border-[var(--muted)]/50'}`}
       >
         <span className="flex h-12 w-12 items-center justify-center rounded-full bg-[var(--accent-soft)] text-[var(--accent)]">

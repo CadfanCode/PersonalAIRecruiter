@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { countryView, onboarded } from '../test/fixtures2'
+import { SetupProvider } from '../setup/SetupProvider'
 import { mockApi } from '../test/mockApi'
 import { OnboardingPage } from './OnboardingPage'
 
@@ -34,12 +35,14 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/welcome']}>
-        <Routes>
-          <Route path="/welcome" element={<OnboardingPage />} />
-          <Route path="/" element={<p>The app</p>} />
-        </Routes>
-      </MemoryRouter>
+      <SetupProvider>
+        <MemoryRouter initialEntries={['/welcome']}>
+          <Routes>
+            <Route path="/welcome" element={<OnboardingPage />} />
+            <Route path="/" element={<p>The app</p>} />
+          </Routes>
+        </MemoryRouter>
+      </SetupProvider>
     </QueryClientProvider>,
   )
 }
@@ -56,8 +59,6 @@ describe('onboarding: your CV', () => {
     expect(await screen.findByRole('heading', { name: 'Start with your CV' })).toBeInTheDocument()
     expect(screen.getByText(/break your CV down into a personal database/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
-    expect(within(screen.getByRole('list', { name: 'Setup progress' })).getAllByRole('listitem')).toHaveLength(4)
-    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Your CV')
   })
 
   it('takes files by browsing or dropping, rejects unsupported ones, and lets them be removed', async () => {

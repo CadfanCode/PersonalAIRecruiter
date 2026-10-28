@@ -50,7 +50,7 @@ function setup(extra: Record<string, unknown> = {}) {
       <ThemeProvider>
         <MemoryRouter initialEntries={['/settings']}>
           <Routes>
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/:section?" element={<SettingsPage />} />
             <Route path="/welcome" element={<p>Welcome steps</p>} />
           </Routes>
         </MemoryRouter>
@@ -105,7 +105,7 @@ describe('settings: Claude connection', () => {
 })
 })
 
-describe('settings: search, speed, logins, appearance and setup', () => {
+describe('settings: search, speed, logins and country', () => {
   it('makes career-page search an opt-in setting and leaves the national job board always on', async () => {
     const calls = setup({ 'PUT /api/settings/search': { careerPages: true } })
     await open('Search')
@@ -121,7 +121,7 @@ describe('settings: search, speed, logins, appearance and setup', () => {
 
   it('shows Sweden as the only country and the others as coming soon', async () => {
     setup()
-    await open('Search')
+    await open('Country')
 
     expect(await screen.findByRole('radio', { name: /Sweden/ })).toHaveAttribute('aria-checked', 'true')
     const norway = screen.getByRole('radio', { name: /Norway/ })
@@ -160,27 +160,12 @@ describe('settings: search, speed, logins, appearance and setup', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
   })
 
-  it('switches between light, dark and the system setting and remembers the choice on this computer', async () => {
+  it('has no Appearance or Setup section: the theme switch is in the top bar and setup is not repeated', async () => {
     setup()
-    await open('Appearance')
 
-    await userEvent.click(await screen.findByRole('radio', { name: /Dark/ }))
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(localStorage.getItem('jobpilot.theme')).toBe('dark')
-    await userEvent.click(screen.getByRole('radio', { name: /Light/ }))
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    await userEvent.click(screen.getByRole('radio', { name: /Same as your computer/ }))
-    expect(localStorage.getItem('jobpilot.theme')).toBeNull()
-  })
-
-  it('reopens the welcome steps without deleting anything', async () => {
-    const calls = setup({ 'POST /api/onboarding/reopen': { ...onboarded, complete: false } })
-    await open('Setup')
-
-    await userEvent.click(await screen.findByRole('button', { name: 'Run setup again' }))
-
-    expect(await screen.findByText('Welcome steps')).toBeInTheDocument()
-    expect(calls.some((c) => c.url === '/api/onboarding/reopen')).toBe(true)
+    await screen.findByRole('button', { name: 'Country' })
+    expect(screen.queryByRole('button', { name: 'Appearance' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Setup' })).not.toBeInTheDocument()
   })
 })
 

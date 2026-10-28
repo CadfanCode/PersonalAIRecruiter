@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
-import { type ImportedEntry, type ImportPreview, useImportCommit, useImportPreview } from '../../api/cv'
+import { useEffect, useState } from 'react'
+import { type ImportedEntry, useImportCommit } from '../../api/cv'
 import { Button } from '../../components/Form'
 import { CheckIcon } from '../../components/ui/Icons'
 import { Processing } from '../../components/ui/Processing'
 import { formatRange } from '../../components/cv/dates'
+import { useSetup } from '../../setup/SetupProvider'
 
 const KIND_LABEL: Record<string, string> = {
   WORK: 'Work', INTERNSHIP: 'Internships and placements', OWN_BUSINESS: 'Own business', PROJECT: 'Projects', EDUCATION: 'Education',
@@ -43,29 +44,25 @@ function useEasedProgress(running: boolean) {
  * Between Claude and the country: the held files are read now that Claude is connected, a short summary is shown, and the user
  * confirms. Anything can be corrected later in the CV database.
  */
-export function ImportStep({ files, onDone, onBack }: { files: File[]; onDone: () => void; onBack: () => void }) {
-  const analyse = useImportPreview()
+export function ImportStep({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
+  const { files, preview, readFiles, readError, readPending, resetRead } = useSetup()
   const commit = useImportCommit()
-  const [preview, setPreview] = useState<ImportPreview | null>(null)
-  const started = useRef(false)
-  const pct = useEasedProgress(analyse.isPending)
+  const pct = useEasedProgress(readPending)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (kind: string) => setOpen((o) => { const n = new Set(o); if (n.has(kind)) n.delete(kind); else n.add(kind); return n })
 
   useEffect(() => {
-    if (started.current || files.length === 0) return
-    started.current = true
-    analyse.mutate(files, { onSuccess: setPreview })
-  }, [files, analyse])
+    if (files.length > 0) readFiles()
+  }, [files, readFiles])
 
-  if (analyse.isError) {
+  if (readError) {
     return (
       <div>
-        <h1 className="text-3xl font-semibold tracking-tight">We could not read your CV</h1>
-        <p role="alert" className="mt-3 rounded-2xl bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">{analyse.error.message}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">We could not read your CV</h1>
+        <p role="alert" className="mt-3 rounded-lg bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">{readError.message}</p>
         <div className="mt-8 flex justify-between">
-          <Button variant="ghost" onClick={onBack}>Choose other files</Button>
-          <Button size="lg" onClick={() => { started.current = false; analyse.reset(); analyse.mutate(files, { onSuccess: setPreview }); started.current = true }}>Try again</Button>
+          <Button variant="ghost" onClick={() => { resetRead(); onBack() }}>Choose other files</Button>
+          <Button size="lg" onClick={() => { resetRead(); readFiles() }}>Try again</Button>
         </div>
       </div>
     )
@@ -85,12 +82,12 @@ export function ImportStep({ files, onDone, onBack }: { files: File[]; onDone: (
   const confirm = () =>
     commit.mutate(
       { previewId: preview.previewId, entries: fresh.map((e) => e.entry), skills: preview.skills, profile: preview.profile },
-      { onSuccess: onDone },
+      { onSuccess: () => { resetRead(); onDone() } },
     )
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">{who ? `Here is what we found, ${who.split(' ')[0]}` : 'Here is what we found'}</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{who ? `Here is what we found, ${who.split(' ')[0]}` : 'Here is what we found'}</h1>
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
         {fresh.length} {fresh.length === 1 ? 'entry' : 'entries'} with {facts} facts and {preview.skills.length} skills. You can correct anything
         later in the CV database.

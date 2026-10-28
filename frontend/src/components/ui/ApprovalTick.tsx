@@ -8,6 +8,6 @@ export function ApprovalTick({ approved, exists, label }: { approved: boolean; e
       <CheckIcon width={14} height={14} strokeWidth={3} />
     </span>
   ) : (
-    <span role="img" aria-label={`${label}: not approved`} className="h-6 w-6 rounded-full border-2 border-[var(--line)]" />
+    <span role="img" aria-label={`${label}: not approved`} className="h-6 w-6 rounded-full border border-[var(--line)]" />
   )
 }

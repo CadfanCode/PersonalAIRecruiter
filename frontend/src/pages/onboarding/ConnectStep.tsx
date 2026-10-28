@@ -28,7 +28,7 @@ export function ConnectStep({ alreadyWorks, onBack, onNext }: { alreadyWorks: bo
 
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">Connect Claude</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Connect Claude</h1>
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
         Claude does the reading, scoring and writing. JobPilot uses your own Claude Code subscription on this computer, so nothing goes through anyone else.
       </p>

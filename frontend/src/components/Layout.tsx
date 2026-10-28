@@ -3,7 +3,10 @@ import { useReadyNotifications } from './apply/notifications'
 import { BottomDock } from './shell/BottomDock'
 import { FlowBar } from './shell/FlowBar'
 
-/** The app shell: the flow across the top, the page, and the menu that slides up from the bottom edge. */
+/**
+ * The app shell, around every screen including setup: the bar across the top (with the theme switch), the page, and the menu that
+ * slides up from the bottom edge. Pages are swapped inside it; the shell itself never remounts.
+ */
 export function Layout() {
   const { pathname } = useLocation()
   useReadyNotifications()
@@ -12,7 +15,7 @@ export function Layout() {
   return (
     <div className="min-h-screen">
       <FlowBar />
-      <main className={`mx-auto pb-28 pt-8 ${wide ? 'max-w-[1800px] px-4' : 'max-w-6xl px-6'}`}>
+      <main className={`mx-auto pb-28 pt-8 ${wide ? 'max-w-[1800px] px-5' : 'max-w-6xl px-6'}`}>
         <div key={pathname} className="animate-rise">
           <Outlet />
         </div>

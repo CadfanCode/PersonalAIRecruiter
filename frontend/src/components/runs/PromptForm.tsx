@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useDraft } from '../../lib/useDraft'
 import { useNavigate } from 'react-router-dom'
 import { DISCOVER_MAX_LIMIT, PROMPT_LIMIT, useStartRun } from '../../api/runs'
 import { Button, Field, TextArea, TextInput } from '../Form'
@@ -20,12 +20,12 @@ const TIPS = [
 
 /** Prompt mode: describe the roles in plain words. Recency and place are read from the words, not from separate fields. */
 export function PromptForm() {
-  const [prompt, setPrompt] = useState('')
-  const [limit, setLimit] = useState('')
+  const [prompt, setPrompt, clearPrompt] = useDraft('mode.prompt', '')
+  const [limit, setLimit, clearLimit] = useDraft('mode.prompt.limit', '')
   const start = useStartRun()
   const navigate = useNavigate()
   const submit = () =>
-    start.mutate({ prompt, mode: 'TARGETED', ...(limit ? { limit: Number(limit) } : {}) }, { onSuccess: ({ id }) => navigate(`/runs/${id}`) })
+    start.mutate({ prompt, mode: 'TARGETED', ...(limit ? { limit: Number(limit) } : {}) }, { onSuccess: ({ id }) => { clearPrompt(); clearLimit(); navigate(`/runs/${id}`) } })
 
   return (
     <div>

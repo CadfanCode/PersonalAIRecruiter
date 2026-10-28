@@ -1,61 +1,77 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/public-sans';
+@import '@fontsource-variable/jetbrains-mono';
 
 /*
- * Design tokens. <html data-theme> always holds the resolved theme (light or dark): index.html sets it before the first paint
- * from the saved choice or the system, and ThemeProvider keeps it in step. Every colour in the app is one of these variables.
+ * Design tokens. <html data-theme> always holds the theme (light unless dark was chosen): index.html sets it before the first
+ * paint and ThemeProvider keeps it in step. Every colour in the app is one of these variables. The look is deliberately plain:
+ * warm paper, white panels with hairline borders, one deep teal accent, small radii, almost no shadow.
  */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @theme {
-  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Public Sans Variable', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   /* "navy" is the old name of the accent colour; it keeps existing utilities working. */
   --color-navy: var(--accent);
   --color-navy-soft: var(--accent-strong);
+  /* Small, even corners everywhere: the older rounded-2xl / rounded-3xl classes land on these. */
+  --radius-md: 5px;
+  --radius-lg: 7px;
+  --radius-xl: 9px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
 }
 
 :root {
   color-scheme: light;
-  --surface: #f5f5f7;
+  --surface: #f6f5f1;
+  --bg: var(--surface);
   --panel: #ffffff;
-  --panel-2: #fafafc;
-  --line: #e4e4ea;
-  --ink: #1d1d1f;
-  --muted: #6e6e73;
-  --accent: #0071e3;
-  --accent-strong: #0062c4;
-  --accent-soft: rgba(0, 113, 227, 0.1);
-  --success: #1e8e4e;
-  --success-soft: rgba(30, 142, 78, 0.12);
-  --warn: #a35a00;
-  --warn-soft: rgba(255, 159, 10, 0.16);
-  --danger: #d70015;
-  --danger-soft: rgba(215, 0, 21, 0.09);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.06);
-  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.06), 0 18px 44px rgba(0, 0, 0, 0.1);
-  --glass: rgba(255, 255, 255, 0.78);
+  --panel-2: #fbfaf8;
+  --hover: #efeee9;
+  --line: #e4e2db;
+  --line-strong: #cdcac0;
+  --ink: #17181a;
+  --muted: #5c6068;
+  --accent: #0b6b5d;
+  --accent-strong: #08524a;
+  --accent-soft: rgba(11, 107, 93, 0.09);
+  --on-accent: #ffffff;
+  --success: #1f7a45;
+  --success-soft: rgba(31, 122, 69, 0.11);
+  --warn: #8f5400;
+  --warn-soft: rgba(196, 118, 0, 0.14);
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --shadow: 0 1px 0 rgba(23, 24, 26, 0.03);
+  --shadow-lift: 0 1px 2px rgba(23, 24, 26, 0.06), 0 8px 24px rgba(23, 24, 26, 0.1);
+  --glass: var(--panel);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --surface: #0b0b0d;
-  --panel: #1c1c1e;
-  --panel-2: #232326;
-  --line: #2f2f34;
-  --ink: #f5f5f7;
-  --muted: #9a9aa2;
-  --accent: #2b8cff;
-  --accent-strong: #5aa5ff;
-  --accent-soft: rgba(43, 140, 255, 0.16);
-  --success: #35c46f;
-  --success-soft: rgba(53, 196, 111, 0.16);
-  --warn: #ffb340;
-  --warn-soft: rgba(255, 179, 64, 0.16);
-  --danger: #ff5a68;
-  --danger-soft: rgba(255, 90, 104, 0.14);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
-  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.6), 0 18px 44px rgba(0, 0, 0, 0.5);
-  --glass: rgba(28, 28, 30, 0.8);
+  --surface: #0e1011;
+  --panel: #161a1b;
+  --panel-2: #1b2022;
+  --hover: #202628;
+  --line: #262c2e;
+  --line-strong: #394143;
+  --ink: #e9ebec;
+  --muted: #9ba3a6;
+  --accent: #3dbba2;
+  --accent-strong: #66cfba;
+  --accent-soft: rgba(61, 187, 162, 0.14);
+  --on-accent: #04201a;
+  --success: #4cc27f;
+  --success-soft: rgba(76, 194, 127, 0.15);
+  --warn: #f0b24a;
+  --warn-soft: rgba(240, 178, 74, 0.15);
+  --danger: #ff7a70;
+  --danger-soft: rgba(255, 122, 112, 0.13);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 28px rgba(0, 0, 0, 0.5);
+  --glass: var(--panel);
 }
 
 html {
@@ -68,16 +84,34 @@ body {
   background: var(--surface);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-feature-settings: 'cv11', 'ss01';
-  letter-spacing: -0.006em;
+  font-size: 14.5px;
+  line-height: 1.5;
 }
 
 h1, h2, h3 {
-  letter-spacing: -0.02em;
+  letter-spacing: -0.015em;
+  text-wrap: balance;
+}
+
+table, .tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+code, kbd, pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Everything clickable says so; everything switched off says that too. */
+button:not(:disabled), [role='button']:not([aria-disabled='true']), [role='radio']:not(:disabled), [role='switch'], summary, label:has(input[type='checkbox']), select:not(:disabled) {
+  cursor: pointer;
+}
+button:disabled, [aria-disabled='true'] {
+  cursor: not-allowed;
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 :focus-visible {
@@ -87,7 +121,7 @@ h1, h2, h3 {
 
 /* Motion: one gentle entrance, and nothing at all for people who ask for less. */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes fade {
@@ -98,7 +132,7 @@ h1, h2, h3 {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
-.animate-rise { animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-rise { animation: rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .animate-fade { animation: fade 0.3s ease both; }
 .shimmer {
   background-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 35%, transparent) 50%, transparent 100%);

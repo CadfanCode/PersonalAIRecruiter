@@ -12,6 +12,12 @@ describe('which stage a page belongs to', () => {
     expect(stageOf('/submit')).toBe('submit')
   })
 
+  it('counts the "not started yet" page of a stage as that stage', () => {
+    expect(stageOf('/not-started/documents')).toBe('documents')
+    expect(stageOf('/not-started/submit')).toBe('submit')
+    expect(stageOf('/not-started/nonsense')).toBeNull()
+  })
+
   it('leaves the pages you maintain outside the flow, and does not mistake Submitted applications for the Submit stage', () => {
     expect(stageOf('/submitted')).toBeNull()
     expect(stageOf('/submitted/3')).toBeNull()

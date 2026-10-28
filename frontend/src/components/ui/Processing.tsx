@@ -40,7 +40,7 @@ export function Processing({ title, percent, message, etaSeconds, fallback = 'Es
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--accent)" strokeWidth="8" strokeLinecap="round"
             strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} style={{ transition: 'stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)' }} />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-3xl font-semibold tabular-nums tracking-tight">{pct}%</span>
+        <span className="absolute inset-0 flex items-center justify-center text-2xl font-semibold tabular-nums tracking-tight">{pct}%</span>
       </div>
       <div className="min-w-0 flex-1">
         <h2 className="text-xl font-semibold tracking-tight">{title}</h2>

@@ -29,12 +29,12 @@ export function ModeStep({ selected, finishing, onBack, onFinish }: {
   const choose = useChooseMode()
   return (
     <div>
-      <h1 className="text-3xl font-semibold tracking-tight">How do you want to search?</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">How do you want to search?</h1>
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">You can switch whenever you start a new search.</p>
       <div role="radiogroup" aria-label="Mode" className="mt-7 grid gap-4 sm:grid-cols-2">
         {MODE_CARDS.map(({ id, title, text, points, icon: Icon }) => (
           <button key={id} type="button" role="radio" aria-checked={selected === id} onClick={() => choose.mutate(id)}
-            className={`flex flex-col items-start gap-3 rounded-3xl border-2 p-6 text-left transition ${
+            className={`flex flex-col items-start gap-3 rounded-3xl border p-6 text-left transition ${
               selected === id ? 'border-[var(--accent)] bg-[var(--accent-soft)] shadow-[var(--shadow)]' : 'border-[var(--line)] bg-[var(--panel)] hover:border-[var(--muted)]/50'}`}>
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--panel)] text-[var(--accent)] shadow-sm"><Icon /></span>
             <span className="text-lg font-semibold tracking-tight">{title}</span>
