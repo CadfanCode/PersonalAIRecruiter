@@ -62,7 +62,7 @@ class ApiClaudeRunnerTest {
         AppSettings appSettings = mock(AppSettings.class);
         org.mockito.Mockito.when(appSettings.get(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString()))
                 .thenAnswer(i -> i.getArgument(1));
-        ApiProperties api = new ApiProperties(wm.baseUrl(), "claude-test-model", 1000);
+        ApiProperties api = new ApiProperties(wm.baseUrl(), "claude-test-model", 1000, 4000);
         JobPilotProperties props = new JobPilotProperties(Path.of("x"), List.of(), new JobPilotProperties.Claude("claude", "", 5, 5, 4));
         runner = new ApiClaudeRunner(api, new ProviderSettings(appSettings, api), secrets, props, new ObjectMapper(), callLog,
                 ClaudeConcurrency.fixed(2));
@@ -152,6 +152,24 @@ class ApiClaudeRunnerTest {
 
         assertThat(runner.run(task()).status()).isEqualTo("ok");
         wm.verify(2, postRequestedFor(urlEqualTo("/v1/messages")));
+    }
+
+    @Test
+    void longTasksGetALargerAnswerBudgetThanOrdinaryOnes() {
+        wm.stubFor(post(urlEqualTo("/v1/messages")).willReturn(aResponse().withBody(toolUse("{\"status\":\"ok\"}"))));
+
+        runner.run(ClaudeTask.longRunning("importCv", "Read this CV.", SCHEMA, Pong.class));
+
+        wm.verify(postRequestedFor(urlEqualTo("/v1/messages")).withRequestBody(com.github.tomakehurst.wiremock.client.WireMock.containing("\"max_tokens\":4000")));
+    }
+
+    @Test
+    void anAnswerCutOffByTheTokenLimitIsReportedAsSuchAndNotRetriedAsProse() {
+        wm.stubFor(post(urlEqualTo("/v1/messages")).willReturn(aResponse()
+                .withBody("{\"stop_reason\":\"max_tokens\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"respond\",\"input\":{\"sta\":1}}]}")));
+
+        assertThatThrownBy(() -> runner.run(task())).isInstanceOf(ClaudeCallException.class).hasMessageContaining("cut off");
+        wm.verify(1, postRequestedFor(urlEqualTo("/v1/messages")));
     }
 
     @Test

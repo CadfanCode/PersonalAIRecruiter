@@ -21,6 +21,10 @@ jobs:
       - name: Linux packaging tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y fakeroot rpm
+      - name: WiX Toolset (Windows .msi)
+        if: runner.os == 'Windows'
+        run: choco install wixtoolset -y --no-progress
+        shell: bash
       - name: Build the installer
         run: packaging/build-installer.sh
         shell: bash
