@@ -1,6 +1,7 @@
 package se.caibirch.jobpilot.aktivitet;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -376,6 +377,27 @@ class AktivitetIT {
                 .put("employerLabel", "Comstream AB").put("municipality", "Stockholm").put("omfattning", "Heltid").put("varFinns", "Sverige")
                 .put("answeredAd", true).put("appliedDate", "2026-10-26"));
         call(post("/api/aktivitet/log"), forced.toString(), 400);
+        assertThat(saved).hasSize(1);
+    }
+
+    @Test
+    void aSubmittedApplicationIsMarkedReportedOnceItWasSavedAndIsNotOfferedAgain() throws Exception {
+        long id = job("Comstream AB", null, "Stockholm", "Heltid", "SHORTLISTED", null);
+        call(post("/api/applications/" + id + "/submitted"), null, 200); // what the user confirms in Submit
+        JsonNode before = call(get("/api/submitted"), null, 200);
+        assertThat(before).hasSize(1);
+        assertThat(before.get(0).get("reportedAt").isNull()).isTrue();
+        assertThat(call(get("/api/submitted?reported=false"), null, 200)).hasSize(1);
+
+        await(confirmAll(id), "DONE", "FAILED");
+
+        assertThat(saved).hasSize(1);
+        JsonNode after = call(get("/api/submitted"), null, 200);
+        assertThat(after.get(0).get("reportedAt").isNull()).as("marked reported with the date it was saved").isFalse();
+        assertThat(call(get("/api/submitted?reported=false"), null, 200)).as("excluded by default from what is left to report").isEmpty();
+        assertThat(call(get("/api/submitted?reported=true"), null, 200)).hasSize(1);
+        assertThat(plan(id).get(0).get("ineligible").asText()).contains("Already logged");
+        call(delete("/api/applications/" + id + "/submitted"), null, 409); // a reported application cannot be un-submitted
         assertThat(saved).hasSize(1);
     }
 

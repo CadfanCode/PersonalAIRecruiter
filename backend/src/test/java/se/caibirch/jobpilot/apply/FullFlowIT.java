@@ -257,12 +257,21 @@ class FullFlowIT {
         assertThat(app.path("roleType").asText("")).isEqualTo(role);
         assertThat(app.get("cv").get("version").asInt()).isEqualTo(1);
 
-        // approve both: only approved documents are uploaded into forms
-        call(post("/api/documents/" + app.get("cv").get("id").asLong() + "/approve"), null, 200);
-        call(post("/api/documents/" + app.get("letter").get("id").asLong() + "/approve"), null, 200);
+        // nothing is approved yet, so nothing goes on to Apply and the reason is given
+        JsonNode notYet = call(post("/api/applications/apply"), "{}", 202);
+        assertThat(notYet.get("started")).isEmpty();
+        assertThat(notYet.get("skipped").get(0).get("reason").asText()).contains("not approved");
+        assertThat(app.get("readyToApply").asBoolean()).isFalse();
 
-        // Finalize: fill the application form from the local fixture, then stop
-        call(post("/api/apply/batch"), "{\"jobIds\":[" + jobId + "]}", 202);
+        // Approve all: both documents are approved, then only approved pairs go on and only approved documents are uploaded
+        JsonNode approvals = call(post("/api/applications/approve-all"), "{}", 200);
+        assertThat(approvals).hasSize(2);
+        approvals.forEach(r -> assertThat(r.get("approved").asBoolean()).as(r.toString()).isTrue());
+
+        // Apply: fill the application form from the local fixture, then stop
+        JsonNode go = call(post("/api/applications/apply"), "{}", 202);
+        assertThat(go.get("started")).hasSize(1);
+        assertThat(go.get("skipped")).isEmpty();
         JsonNode tab = awaitTab(jobId, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "WAITING_FOR_SIGN_IN");
         assertThat(tab.get("status").asText()).as(tab.get("message").asText()).isEqualTo("READY_FOR_USER");
         List<String> uploads = new java.util.ArrayList<>();
@@ -280,6 +289,17 @@ class FullFlowIT {
         assertThat(submitted.get("submittedAt").isNull()).isFalse();
         assertThat(submitted.get("submittedDocs").get("cv").get("file").asText()).endsWith(".pdf");
         assertThat(awaitTab(jobId, "CLOSED").get("message").asText()).contains("Submitted");
+
+        // stored in Submitted applications exactly as sent: the ad text and the PDFs, not yet reported
+        JsonNode stored = call(get("/api/submitted"), null, 200);
+        assertThat(stored).hasSize(1);
+        assertThat(stored.get(0).get("title").asText()).isNotBlank();
+        assertThat(stored.get(0).get("cvVersion").asInt()).isEqualTo(1);
+        assertThat(stored.get(0).get("reportedAt").isNull()).isTrue();
+        long submittedId = stored.get(0).get("id").asLong();
+        assertThat(call(get("/api/submitted/" + submittedId), null, 200).get("adText").asText()).isNotBlank();
+        assertThat(mvc.perform(get("/api/submitted/" + submittedId + "/cv.pdf")).andReturn().getResponse().getContentAsByteArray())
+                .startsWith("%PDF".getBytes(StandardCharsets.US_ASCII));
 
         // ready for the activity report: logged only after the user confirms, with the role's own yrkesroll
         JsonNode plan = call(get("/api/aktivitet/plan").param("jobIds", String.valueOf(jobId)), null, 200).get(0);
