@@ -3,7 +3,7 @@ import type { TabView } from '../../api/apply'
 import { Pill, type Tone } from '../ui/Pill'
 
 /** What an application is doing, in the words the user sees. SUBMITTED comes from the user's own confirmation. */
-export type Phase = 'SUBMITTED' | 'QUEUED' | 'FILLING' | 'NEEDS_LOGIN' | 'NEEDS_ATTENTION' | 'READY_FOR_SUBMISSION' | 'FAILED' | 'CLOSED' | 'NOT_STARTED'
+export type Phase = 'SUBMITTED' | 'BY_HAND' | 'QUEUED' | 'FILLING' | 'NEEDS_LOGIN' | 'NEEDS_ATTENTION' | 'READY_FOR_SUBMISSION' | 'FAILED' | 'CLOSED' | 'NOT_STARTED'
 
 export const PHASE_LABEL: Record<Phase, [string, Tone]> = {
   SUBMITTED: ['Submitted', 'success'],
@@ -11,6 +11,7 @@ export const PHASE_LABEL: Record<Phase, [string, Tone]> = {
   FILLING: ['Filling in', 'accent'],
   NEEDS_LOGIN: ['Needs login', 'warn'],
   NEEDS_ATTENTION: ['Needs attention', 'warn'],
+  BY_HAND: ['Apply by hand', 'accent'],
   READY_FOR_SUBMISSION: ['Ready for submission', 'success'],
   FAILED: ['Failed', 'danger'],
   CLOSED: ['Tab closed', 'neutral'],
@@ -19,6 +20,7 @@ export const PHASE_LABEL: Record<Phase, [string, Tone]> = {
 
 export function phaseOf(app: Application | undefined, tab: TabView | undefined): Phase {
   if (app?.submittedAt) return 'SUBMITTED'
+  if (tab && ['APPLY_MANUALLY', 'EMAIL_ONLY', 'NO_APPLY_LINK'].includes(tab.status)) return 'BY_HAND'
   return tab ? tab.phase : 'NOT_STARTED'
 }
 

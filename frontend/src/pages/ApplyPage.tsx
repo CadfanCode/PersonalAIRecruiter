@@ -9,7 +9,7 @@ import { PageTitle, Panel } from '../components/Panel'
 import { Pill } from '../components/ui/Pill'
 
 /** The most urgent first: what needs the user, then what failed, what is busy, what is ready, what has not started. */
-const ORDER: Phase[] = ['NEEDS_LOGIN', 'NEEDS_ATTENTION', 'FAILED', 'FILLING', 'QUEUED', 'READY_FOR_SUBMISSION', 'NOT_STARTED', 'CLOSED']
+const ORDER: Phase[] = ['NEEDS_LOGIN', 'NEEDS_ATTENTION', 'FAILED', 'FILLING', 'QUEUED', 'BY_HAND', 'READY_FOR_SUBMISSION', 'NOT_STARTED', 'CLOSED']
 
 /** Stage 4, Apply: a browser tab per approved application, filled in from your CV database. Nothing is ever submitted. */
 export function ApplyPage() {
