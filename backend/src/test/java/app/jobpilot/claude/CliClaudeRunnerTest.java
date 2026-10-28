@@ -63,6 +63,20 @@ class CliClaudeRunnerTest {
     }
 
     @Test
+    void theModelAliasIsReadOnEveryCallSoAChangeInSettingsNeedsNoRestart() {
+        JobPilotProperties props = new JobPilotProperties(dir.resolve("data"), List.of(), new JobPilotProperties.Claude("claude", "", 5, 5, 2));
+        java.util.concurrent.atomic.AtomicReference<String> model = new java.util.concurrent.atomic.AtomicReference<>("");
+        CliClaudeRunner runner = new CliClaudeRunner(props, new ObjectMapper(), callLog, ClaudeConcurrency.fixed(1), model::get);
+
+        assertThat(runner.buildCommand(task("x"), false)).doesNotContain("--model");
+        model.set("opus");
+        List<String> command = runner.buildCommand(task("x"), false);
+        assertThat(command).containsSubsequence("--model", "opus");
+        model.set("sonnet");
+        assertThat(runner.buildCommand(task("x"), false)).containsSubsequence("--model", "sonnet");
+    }
+
+    @Test
     void parsesStructuredOutputFromRecordedEnvelope() throws IOException {
         CliClaudeRunner runner = runnerFor(printsFile("out.json", recorded), 10);
 

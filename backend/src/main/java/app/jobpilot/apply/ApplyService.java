@@ -214,6 +214,29 @@ public class ApplyService {
         return state.view();
     }
 
+    /**
+     * A document of this job lost its approval. A form that was already filled had the old file uploaded, so it is sent back to
+     * "needs attention" (the user approves again, then fills again); an application still waiting is simply told that the
+     * file will not be uploaded until it is approved. Returns what to tell the user, or empty when no application is open.
+     */
+    public java.util.Optional<String> documentUnapproved(long jobId, String what) {
+        TabState state = tabs.get(jobId);
+        if (state == null) {
+            return java.util.Optional.empty();
+        }
+        Status now = state.status();
+        if ((now == Status.READY_FOR_USER || now == Status.NEEDS_ANSWERS) && !state.busy.get()) {
+            String message = "The " + what + " was unapproved after this form was filled. Approve it again, then press Fill this page "
+                    + "to upload the current file. Nothing has been submitted.";
+            state.set(Status.NEEDS_MANUAL_APPLY, message);
+            return java.util.Optional.of("An application for this job is open in the browser. " + message);
+        }
+        if (now == Status.CLOSED || now == Status.EMAIL_ONLY || now == Status.NO_APPLY_LINK || now == Status.APPLY_MANUALLY) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of("An application for this job is waiting. The " + what + " will not be uploaded until it is approved again.");
+    }
+
     public void showTab(long jobId) {
         TabState state = state(jobId);
         if (state.status() == Status.QUEUED) {

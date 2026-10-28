@@ -14,7 +14,7 @@ const routes = (onboarding: unknown = onboarded) => ({
   'GET /api/applications': [],
   'GET /api/apply/status': [],
   'GET /api/aktivitet/reminder': { active: false, day: 20, daysLeft: 0, forMonth: '2026-09', message: '' },
-  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null }, api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'test store' } },
+  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: '' }, gemini: { configured: false, keyHint: null, model: 'gemini-flash-latest' }, secureStore: { available: true, name: 'test store' } },
   'GET /api/claude/limits': { limits: null, error: null },
 })
 
@@ -38,8 +38,8 @@ describe('app shell', () => {
 
     const flow = await screen.findByRole('navigation', { name: 'Pipeline' })
     const names = within(flow).getAllByRole('listitem').map((li) => li.textContent)
-    expect(names).toEqual(['Search mode', 'Run search', 'Documents', 'Apply', 'Submit'])
-    expect(within(flow).getByText('Search mode').closest('[aria-current]')).toHaveAttribute('aria-current', 'step')
+    expect(names).toEqual(['Mode', 'Search and ranking', 'Documents', 'Apply', 'Submit'])
+    expect(within(flow).getByText('Mode').closest('[aria-current]')).toHaveAttribute('aria-current', 'step')
     // nothing exists beyond the first stage yet, so the later stages are faded and not links
     expect(within(flow).getByText('Documents').closest('[aria-disabled]')).toHaveAttribute('aria-disabled', 'true')
     expect(within(flow).queryByRole('link', { name: 'Documents' })).not.toBeInTheDocument()
@@ -70,13 +70,13 @@ describe('app shell', () => {
     expect(screen.queryByRole('navigation', { name: 'Pipeline' })).not.toBeInTheDocument()
   })
 
-  it('renders Search mode with both modes and examples from several professions', async () => {
+  it('renders Mode with both modes and examples from several professions', async () => {
     mockApi(routes())
     renderApp()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Find your next role' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Discovery mode/ })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Prompt mode/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: /Discovery Mode/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Prompt Mode/ })).toHaveAttribute('aria-checked', 'true')
     expect(screen.getByText('Nurse positions in Stockholm, last 7 days')).toBeInTheDocument()
     expect(screen.getByText('Accountant in Malmö, part time')).toBeInTheDocument()
     expect(screen.queryByLabelText(/Max age/)).not.toBeInTheDocument()

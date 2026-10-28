@@ -47,7 +47,7 @@ describe('documents page', () => {
     expect(screen.getByDisplayValue('Byggde mikrotjänster i Java och Kotlin.')).toBeInTheDocument()
     const chip = screen.getByLabelText('Source fact 10: Byggde mikrotjänster i Java och Kotlin.')
     expect(chip).toHaveAttribute('title', 'Software Developer (intern): Byggde mikrotjänster i Java och Kotlin.')
-    expect(screen.getByTitle('CV preview')).toHaveAttribute('src', '/api/documents/100/pdf?v=1')
+    expect(screen.getByTitle('CV preview')).toHaveAttribute('src', '/api/documents/100/pdf?v=1#navpanes=0&view=FitH')
   })
 
   it('highlights the text each violation is about and lists them in the report', async () => {
@@ -153,7 +153,7 @@ describe('documents page', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('tab', { name: /Cover letter/ }))
-    expect(screen.getByTitle('Cover letter preview')).toHaveAttribute('src', '/api/documents/101/pdf?v=1')
+    expect(screen.getByTitle('Cover letter preview')).toHaveAttribute('src', '/api/documents/101/pdf?v=1#navpanes=0&view=FitH')
     const p = screen.getByLabelText('Paragraph 2')
     await userEvent.clear(p)
     await userEvent.type(p, 'Ett konkret exempel.')
@@ -223,10 +223,10 @@ describe('documents page', () => {
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({})
   })
 
-  it('asks before regenerating documents that have approvals or edits, and keeps them when declined', async () => {
+  it('asks before regenerating documents that were edited, and keeps them when declined', async () => {
     const calls = mockApi({
       ...base(),
-      'GET /api/jobs/1/documents': jobDocs({ cv: cvDoc({ approved: true }) }),
+      'GET /api/jobs/1/documents': jobDocs({ cv: cvDoc({ version: 2 }) }),
       'POST /api/jobs/1/documents': { runId: 12 },
       'GET /api/runs/12': { run: run({ id: 12, kind: 'DOCUMENTS', jobId: 1, status: 'RUNNING', step: 'SELECT', progress: 10, message: 'Choosing the facts' }), profile: null },
     })
@@ -306,7 +306,7 @@ describe('documents page', () => {
       expect(await screen.findByText('Bytte rubrik till Backendutvecklare.')).toBeInTheDocument()
       expect(screen.getByText(/Approval was removed/)).toBeInTheDocument()
       expect(await screen.findByDisplayValue('Backendutvecklare | Java')).toBeInTheDocument() // the editor shows the new version
-      expect(screen.getByTitle('CV preview')).toHaveAttribute('src', '/api/documents/100/pdf?v=2')
+      expect(screen.getByTitle('CV preview')).toHaveAttribute('src', '/api/documents/100/pdf?v=2#navpanes=0&view=FitH')
       const sent = calls.find((c) => c.url === '/api/documents/100/chat')!.body as { message: string; content: { headline: string }; history: unknown[] }
       expect(sent.message).toBe('Put the most relevant experience first')
       expect(sent.content.headline).toBe('Javautvecklare | Spring Boot')
@@ -366,5 +366,34 @@ describe('documents page', () => {
       expect(screen.queryByText('Done.')).not.toBeInTheDocument()
       expect(screen.getByRole('heading', { name: 'Ask Claude to adjust this letter' })).toBeInTheDocument()
     })
+  })
+
+  it('locks every edit control while approved, and Unapprove unlocks them again exactly as before', async () => {
+    let approved = true
+    const calls = mockApi({
+      ...base(),
+      'GET /api/jobs/1/documents': () => jobDocs({ cv: cvDoc({ approved }) }),
+      'POST /api/documents/100/unapprove': () => {
+        approved = false
+        return { document: cvDoc({ approved: false }), notice: 'An application for this job is open in the browser. Approve it again.' }
+      },
+    })
+    renderPage()
+
+    expect(await screen.findByText(/Approved and locked/)).toBeInTheDocument()
+    const lockedField = document.querySelector('fieldset[disabled]')
+    expect(lockedField).not.toBeNull()
+    expect(within(lockedField as HTMLElement).getByRole('button', { name: 'Send' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Save and re-render' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Regenerate both' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /^Approve CV/ })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Unapprove' }))
+
+    expect(await screen.findByRole('button', { name: 'Approve CV' })).toBeEnabled()
+    expect(calls.some((c) => c.url === '/api/documents/100/unapprove' && c.method === 'POST')).toBe(true)
+    expect(document.querySelector('fieldset[disabled]')).toBeNull()
+    expect(screen.getByRole('alert')).toHaveTextContent('open in the browser')
+    expect(screen.getByRole('button', { name: 'Regenerate both' })).toBeEnabled()
   })
 })

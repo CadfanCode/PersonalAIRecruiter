@@ -51,8 +51,8 @@ export function useFlow(pathname: string) {
   const run = lastRun()
   const open = apps.filter((a) => !a.submittedAt)
   const stages: Stage[] = [
-    { key: 'mode', label: 'Search mode', to: '/' },
-    { key: 'run', label: 'Run search', to: run ? `/runs/${run}` : '/' },
+    { key: 'mode', label: 'Mode', to: '/' },
+    { key: 'run', label: 'Search and ranking', to: run ? `/runs/${run}` : '/' },
     { key: 'documents', label: 'Documents', to: '/documents' },
     { key: 'apply', label: 'Apply', to: '/apply' },
     { key: 'submit', label: 'Submit', to: '/submit' },

@@ -12,6 +12,7 @@ import {
   useJobDocuments,
   useSaveDocument,
   useStartDocuments,
+  useUnapproveDocument,
 } from '../api/documents'
 import { useApplications } from '../api/applications'
 import { useJob, useRun } from '../api/runs'
@@ -55,13 +56,14 @@ export function JobDocumentsPage() {
   // Regenerating replaces both documents, so ask first when that would throw away edits or an approval.
   const regenerate = () => {
     const existing = [docs.data?.cv, docs.data?.letter]
-    const atRisk = existing.some((d) => d && (d.approved || d.version > 1))
-    if (atRisk && !window.confirm('Regenerating replaces both documents, including your edits and approvals. Continue?')) return
+    const atRisk = existing.some((d) => d && d.version > 1)
+    if (atRisk && !window.confirm('Regenerating replaces both documents, including your edits. Continue?')) return
     generate()
   }
 
   const title = job.data?.row.title
   const doc = tab === 'CV' ? docs.data?.cv : docs.data?.letter
+  const anyApproved = !!(docs.data?.cv?.approved || docs.data?.letter?.approved)
 
   return (
     <>
@@ -102,13 +104,16 @@ export function JobDocumentsPage() {
                 {(t === 'CV' ? docs.data?.cv : docs.data?.letter)?.approved && <span className="ml-2 text-xs text-[var(--success)]">approved</span>}
               </button>
             ))}
-            <Button variant="ghost" className="mb-1 ml-auto" onClick={regenerate} disabled={start.isPending || working}>
+            <Button variant="ghost" className="mb-1 ml-auto" onClick={regenerate} disabled={start.isPending || working || anyApproved}
+              title={anyApproved ? 'Unapprove the documents first: approved documents are locked' : undefined}>
               Regenerate both
             </Button>
           </div>
           {doc && <DocEditor key={`${doc.id}-${doc.version}`} doc={doc} jobId={jobId} turns={turns[tab]} onTurns={(t) => setTurns((prev) => ({ ...prev, [tab]: t }))} />}
           <div className="mt-6 max-w-3xl">
-            <SelectionPanel jobId={jobId} docs={docs.data} />
+            <fieldset disabled={!!doc?.approved} className="m-0 min-w-0 border-0 p-0">
+              <SelectionPanel jobId={jobId} docs={docs.data} />
+            </fieldset>
           </div>
         </>
       )}
@@ -131,6 +136,8 @@ function DocEditor({ doc, jobId, turns, onTurns }: { doc: DocView; jobId: number
   const [refused, setRefused] = useState<Report | null>(null)
   const save = useSaveDocument(jobId)
   const approve = useApproveDocument(jobId)
+  const unapprove = useUnapproveDocument(jobId)
+  const [notice, setNotice] = useState<string | null>(null)
   const dirty = JSON.stringify(draft) !== JSON.stringify(doc.content)
   const report = refused ?? doc.report
   const issues = groupIssues(report?.violations)
@@ -144,38 +151,67 @@ function DocEditor({ doc, jobId, turns, onTurns }: { doc: DocView; jobId: number
     })
   }
 
+  const doUnapprove = () => {
+    setRefused(null)
+    setNotice(null)
+    unapprove.mutate(doc.id, { onSuccess: (r) => setNotice(r.notice) })
+  }
+
   return (
-    <div className="grid grid-cols-2 gap-6">
+    <div className="grid gap-6 lg:grid-cols-[minmax(360px,2fr)_minmax(0,3fr)]">
       <div className="min-w-0">
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-4 py-3 shadow-[var(--shadow)]">
           <span className="text-sm font-semibold">{doc.kind === 'CV' ? 'CV' : 'Cover letter'}</span>
           <span className="text-xs text-[var(--muted)]">version {doc.version}</span>
-          <Button variant="ghost" onClick={() => save.mutate({ id: doc.id, content: draft })} disabled={!dirty || save.isPending}>
+          <Button variant="ghost" onClick={() => save.mutate({ id: doc.id, content: draft })} disabled={doc.approved || !dirty || save.isPending}>
             Save and re-render
           </Button>
-          <Button className="ml-auto" size="lg" onClick={doApprove} disabled={doc.approved || dirty || approve.isPending}
-            title={dirty ? 'Save your edits first' : undefined}>
-            {doc.approved ? '✓ Approved' : approve.isPending ? 'Approving…' : `Approve ${doc.kind === 'CV' ? 'CV' : 'cover letter'}`}
-          </Button>
+          {doc.approved ? (
+            <span className="ml-auto flex items-center gap-3">
+              <span className="text-sm font-medium text-[var(--success)]">✓ Approved</span>
+              <Button variant="ghost" onClick={doUnapprove} disabled={unapprove.isPending}
+                title="Unlocks editing. The document stays exactly as it is until you change it.">
+                {unapprove.isPending ? 'Unapproving…' : 'Unapprove'}
+              </Button>
+            </span>
+          ) : (
+            <Button className="ml-auto" size="lg" onClick={doApprove} disabled={dirty || approve.isPending}
+              title={dirty ? 'Save your edits first' : undefined}>
+              {approve.isPending ? 'Approving…' : `Approve ${doc.kind === 'CV' ? 'CV' : 'cover letter'}`}
+            </Button>
+          )}
+          {unapprove.isError && <span role="alert" className="text-sm text-[var(--danger)]">{unapprove.error.message}</span>}
           {save.isError && <span role="alert" className="text-sm text-[var(--danger)]">{save.error.message}</span>}
           {approve.isError && !refused && <span role="alert" className="text-sm text-[var(--danger)]">{approve.error.message}</span>}
         </div>
+        {doc.approved && (
+          <p role="status" className="mb-3 rounded-2xl bg-[var(--success-soft)] px-4 py-2.5 text-sm text-[var(--success)]">
+            Approved and locked. Press Unapprove to edit this {doc.kind === 'CV' ? 'CV' : 'letter'} again.
+          </p>
+        )}
+        {notice && <p role="alert" className="mb-3 rounded-2xl bg-[var(--warn-soft)] px-4 py-2.5 text-sm">{notice}</p>}
         {refused && (
           <p role="alert" className="mb-3 text-sm text-[var(--danger)]">
             Not approved: fix the problems marked in red first.
           </p>
         )}
-        <DocChat doc={doc} jobId={jobId} draft={draft} dirty={dirty} turns={turns} onTurns={onTurns} />
-        {doc.kind === 'CV' ? (
-          <CvEditor content={draft as CvContent} facts={doc.facts} issues={issues} onChange={setDraft} />
-        ) : (
-          <LetterEditor content={draft as LetterContent} facts={doc.facts} issues={issues} onChange={setDraft} />
-        )}
+        {/* A disabled fieldset locks every control inside it: the chat, the text fields, the fact chips and the buttons. */}
+        <fieldset disabled={doc.approved} className="m-0 min-w-0 border-0 p-0">
+          <DocChat doc={doc} jobId={jobId} draft={draft} dirty={dirty} turns={turns} onTurns={onTurns} />
+          {doc.kind === 'CV' ? (
+            <CvEditor content={draft as CvContent} facts={doc.facts} issues={issues} onChange={setDraft} />
+          ) : (
+            <LetterEditor content={draft as LetterContent} facts={doc.facts} issues={issues} onChange={setDraft} />
+          )}
+        </fieldset>
         <div className="mt-5"><ReportPanel report={report} /></div>
       </div>
       <div className="min-w-0">
-        <iframe title={`${doc.kind === 'CV' ? 'CV' : 'Cover letter'} preview`} src={`/api/documents/${doc.id}/pdf?v=${doc.version}`}
-          className="sticky top-4 h-[85vh] w-full rounded-lg border border-[var(--line)] bg-white" />
+        {/* The browser's own PDF viewer: its page-thumbnail side bar starts closed (navpanes=0) and opens with the viewer's toggle;
+            the page fills the width, so a whole A4 page is readable at normal zoom. */}
+        <iframe title={`${doc.kind === 'CV' ? 'CV' : 'Cover letter'} preview`}
+          src={`/api/documents/${doc.id}/pdf?v=${doc.version}#navpanes=0&view=FitH`}
+          className="sticky top-4 h-[calc(100vh-2rem)] min-h-[900px] w-full rounded-lg border border-[var(--line)] bg-white" />
       </div>
     </div>
   )

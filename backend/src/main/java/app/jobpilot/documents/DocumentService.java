@@ -466,6 +466,25 @@ public class DocumentService {
         return fresh;
     }
 
+    /**
+     * Takes the approval back, leaving the document exactly as if it had never been approved: same content and report, edits
+     * unlocked, and a job that was DOCS_READY goes back to SHORTLISTED. Refused once the job is applied for, because then this
+     * is the document that was sent.
+     */
+    public DocumentRepository.Row unapprove(long id) {
+        DocumentRepository.Row row = get(id);
+        String status = jobs.statusOf(row.jobId()).orElse("");
+        if (status.equals("APPLIED") || status.equals("LOGGED")) {
+            throw new app.jobpilot.common.ApiExceptions.ConflictException(
+                    "This job is already marked as applied, so its documents are what was sent and cannot be unapproved.");
+        }
+        if (row.approved()) {
+            documents.setApproved(id, false, row.reportJson());
+            jobs.revertDocsReady(row.jobId());
+        }
+        return get(id);
+    }
+
     public static final class ApprovalRefused extends RuntimeException {
         private final transient Report report;
 

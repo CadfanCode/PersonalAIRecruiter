@@ -506,6 +506,40 @@ class DocumentIT {
     }
 
     @Test
+    void approveUnapproveEditApproveWorksForBothDocumentsAndUnapprovingLeavesNothingBehind() throws Exception {
+        generate(jobId);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+        for (String kind : new String[] {"cv", "letter"}) {
+            long id = docs(jobId).get(kind).get("id").asLong();
+            int version = docs(jobId).get(kind).get("version").asInt();
+            JsonNode content = docs(jobId).get(kind).get("content");
+
+            call(post("/api/documents/" + id + "/approve"), null, 200);
+            assertThat(docs(jobId).get(kind).get("approved").asBoolean()).isTrue();
+
+            JsonNode result = call(post("/api/documents/" + id + "/unapprove"), null, 200);
+            assertThat(result.get("document").get("approved").asBoolean()).isFalse();
+            assertThat(result.get("document").get("version").asInt()).as("unapproving is not an edit").isEqualTo(version);
+            assertThat(result.get("document").get("content")).isEqualTo(content);
+            assertThat(result.get("notice").isNull()).as("no application is open for this job").isTrue();
+            assertThat(application(jobId).get("readyToApply").asBoolean()).isFalse();
+            // unapproving twice changes nothing
+            call(post("/api/documents/" + id + "/unapprove"), null, 200);
+
+            // edit while unapproved, then approve again
+            call(put("/api/documents/" + id), content.toString(), 200);
+            call(post("/api/documents/" + id + "/approve"), null, 200);
+            assertThat(docs(jobId).get(kind).get("approved").asBoolean()).isTrue();
+        }
+        assertThat(application(jobId).get("readyToApply").asBoolean()).isTrue();
+
+        // a pair that is ready goes back to not ready the moment one document is unapproved
+        call(post("/api/documents/" + docs(jobId).get("letter").get("id").asLong() + "/unapprove"), null, 200);
+        assertThat(application(jobId).get("readyToApply").asBoolean()).isFalse();
+        assertThat(application(jobId).get("blockers").toString()).contains("The cover letter is not approved");
+    }
+
+    @Test
     void approveAllApprovesWhatIsCleanAndReportsTheRefusedOnesWithTheirReasonInsteadOfFailingAsAWhole() throws Exception {
         long bad = jobWithABadLetter();
         generate(jobId);

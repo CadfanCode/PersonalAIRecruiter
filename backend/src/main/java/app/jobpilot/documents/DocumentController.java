@@ -37,6 +37,9 @@ public class DocumentController {
     public record ChatResponse(String reply, boolean changed, boolean approvalRevoked, View document) {
     }
 
+    public record UnapproveResponse(View document, String notice) {
+    }
+
     public record SelectionRequest(List<Long> pinned, List<Long> excluded) {
     }
 
@@ -57,9 +60,11 @@ public class DocumentController {
     private final JobRepository jobs;
     private final CvService cv;
     private final ObjectMapper mapper;
+    private final app.jobpilot.apply.ApplyService apply;
 
     public DocumentController(DocumentService service, DocumentChatService chat, DocumentRepository documents, JobRepository jobs, CvService cv,
-                              ObjectMapper mapper) {
+                              ObjectMapper mapper, app.jobpilot.apply.ApplyService apply) {
+        this.apply = apply;
         this.service = service;
         this.chat = chat;
         this.documents = documents;
@@ -118,6 +123,14 @@ public class DocumentController {
     @PostMapping("/documents/{id}/approve")
     public Report approve(@PathVariable long id) {
         return service.approve(id);
+    }
+
+    /** Takes the approval back. The notice tells the user what that means for an application that is already open. */
+    @PostMapping("/documents/{id}/unapprove")
+    public UnapproveResponse unapprove(@PathVariable long id) {
+        DocumentRepository.Row row = service.unapprove(id);
+        String notice = apply.documentUnapproved(row.jobId(), row.kind() == Kind.CV ? "CV" : "cover letter").orElse(null);
+        return new UnapproveResponse(view(row), notice);
     }
 
     @GetMapping("/documents/{id}/pdf")

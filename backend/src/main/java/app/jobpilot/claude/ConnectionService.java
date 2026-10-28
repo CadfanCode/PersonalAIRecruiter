@@ -7,23 +7,22 @@ import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
-import app.jobpilot.credentials.SecretStore;
 import app.jobpilot.settings.JobPilotProperties;
 
-/** Onboarding step 2 and Settings: which provider is used, whether it works, and the API key kept in the OS credential store. */
+/** Onboarding step 2 and Settings: which provider is used, which model, whether it works, and the Gemini key kept in the credential store. */
 @Service
 public class ConnectionService {
 
-    public record CliStatus(boolean found, String path, String version, String help) {
+    public record CliStatus(boolean found, String path, String version, String help, String model) {
     }
 
-    public record ApiStatus(boolean configured, String keyHint, String model) {
+    public record GeminiStatus(boolean configured, String keyHint, String model) {
     }
 
     public record SecureStoreStatus(boolean available, String name) {
     }
 
-    public record Status(String selected, boolean chosen, CliStatus cli, ApiStatus api, SecureStoreStatus secureStore) {
+    public record Status(String selected, boolean chosen, CliStatus cli, GeminiStatus gemini, SecureStoreStatus secureStore) {
     }
 
     /** problem: null when ok, else NOT_INSTALLED, NOT_LOGGED_IN, INVALID_KEY, NO_KEY or OTHER. */
@@ -35,32 +34,34 @@ public class ConnectionService {
 
     private final ProviderRouter router;
     private final ProviderSettings settings;
-    private final ApiClaudeRunner api;
+    private final GeminiProvider gemini;
+    private final ApiKeyVault vault;
     private final ClaudeHealthService health;
-    private final SecretStore secrets;
     private final JobPilotProperties.Claude config;
+    private final GeminiModels models;
 
-    public ConnectionService(ProviderRouter router, ProviderSettings settings, ApiClaudeRunner api, ClaudeHealthService health,
-                             SecretStore secrets, JobPilotProperties props) {
+    public ConnectionService(ProviderRouter router, ProviderSettings settings, GeminiProvider gemini, ApiKeyVault vault,
+                             ClaudeHealthService health, JobPilotProperties props, GeminiModels models) {
         this.router = router;
         this.settings = settings;
-        this.api = api;
+        this.gemini = gemini;
+        this.vault = vault;
         this.health = health;
-        this.secrets = secrets;
         this.config = props.claude();
+        this.models = models;
     }
 
     public Status status() {
-        return new Status(settings.selectedId(), settings.chosen(), cli(), new ApiStatus(api.keyConfigured(),
-                api.keyHint().orElse(null), settings.apiModel()), new SecureStoreStatus(secrets.available(), secrets.description()));
+        return new Status(settings.selectedId(), settings.chosen(), cli(), new GeminiStatus(gemini.keyConfigured(),
+                gemini.keyHint().orElse(null), settings.geminiModel()), new SecureStoreStatus(true, vault.description()));
     }
 
     private CliStatus cli() {
         try {
             String version = health.version();
-            return new CliStatus(true, config.executable(), version, null);
+            return new CliStatus(true, config.executable(), version, null, settings.cliModel());
         } catch (ClaudeCallException e) {
-            return new CliStatus(false, config.executable(), null, installHelp());
+            return new CliStatus(false, config.executable(), null, installHelp(), settings.cliModel());
         }
     }
 
@@ -77,38 +78,49 @@ public class ConnectionService {
 
     public void saveApiKey(String key, String model) {
         if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Paste your Anthropic API key");
+            throw new IllegalArgumentException("Paste your Google AI Studio API key");
         }
         String trimmed = key.trim();
         if (trimmed.length() < 20 || trimmed.chars().anyMatch(Character::isWhitespace)) {
-            throw new IllegalArgumentException("That does not look like an Anthropic API key (they start with sk-ant-)");
+            throw new IllegalArgumentException("That does not look like a Google AI Studio API key");
         }
-        secrets.put(ApiClaudeRunner.KEY_ACCOUNT, trimmed);
-        settings.apiKeyRecorded("…" + trimmed.substring(trimmed.length() - 4));
+        vault.put(trimmed);
+        settings.keyRecorded("…" + trimmed.substring(trimmed.length() - 4));
         settings.forgetTest();
         if (model != null) {
-            settings.apiModel(model);
+            settings.geminiModel(model);
         }
     }
 
     public void deleteApiKey() {
-        secrets.delete(ApiClaudeRunner.KEY_ACCOUNT);
-        settings.apiKeyForgotten();
+        vault.delete();
+        settings.keyForgotten();
         settings.forgetTest();
-        if (ProviderSettings.API.equals(settings.selectedId())) {
+        if (ProviderSettings.GEMINI.equals(settings.selectedId())) {
             settings.select(ProviderSettings.CLI);
         }
     }
 
-    public void apiModel(String model) {
-        settings.apiModel(model);
+    public void geminiModel(String model) {
+        settings.geminiModel(model);
+        settings.forgetTest();
+    }
+
+    /** Takes effect on the next request: the CLI runner asks for the model on every call. */
+    public void cliModel(String model) {
+        settings.cliModel(model);
+    }
+
+    /** The models the saved key can use, for the selector; an empty list when the key is missing or Google cannot be reached. */
+    public java.util.List<GeminiModels.ModelOption> geminiModels() {
+        return models.list();
     }
 
     /** A real (tiny) model call through the given provider; never changes the chosen provider. */
     public TestResult test(String providerId) {
         long started = System.nanoTime();
         AiProvider provider = router.provider(providerId);
-        if (ProviderSettings.API.equals(providerId) && !api.keyConfigured()) {
+        if (ProviderSettings.GEMINI.equals(providerId) && !gemini.keyConfigured()) {
             return new TestResult(false, providerId, "NO_KEY", "No API key is saved yet.", "Paste your key and save it first.", 0);
         }
         try {
@@ -125,7 +137,7 @@ public class ConnectionService {
     }
 
     static TestResult failure(String providerId, String message, long durationMs) {
-        if (ProviderSettings.API.equals(providerId)) {
+        if (ProviderSettings.GEMINI.equals(providerId)) {
             boolean key = message != null && message.contains("rejected the saved key");
             return new TestResult(false, providerId, key ? "INVALID_KEY" : "OTHER", message, null, durationMs);
         }

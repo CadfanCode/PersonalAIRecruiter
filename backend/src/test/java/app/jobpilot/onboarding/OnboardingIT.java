@@ -1,7 +1,7 @@
 package app.jobpilot.onboarding;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
-import static com.github.tomakehurst.wiremock.client.WireMock.urlEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -43,11 +43,13 @@ import app.jobpilot.support.PostgresTestConfig;
 @Import({PostgresTestConfig.class, OnboardingIT.Fakes.class})
 class OnboardingIT {
 
-    static final String KEY = "sk-ant-api03-abcdefghijklmnopqrstuvwxyz-0123";
+    static final String KEY = "AIzaSyTestKeyabcdefghijklmnopqrstuvwxyz-0123";
+    static java.nio.file.Path dataDir;
     static WireMockServer anthropic = new WireMockServer(WireMockConfiguration.options().dynamicPort());
 
     @BeforeAll
-    static void start() {
+    static void start() throws java.io.IOException {
+        dataDir = java.nio.file.Files.createTempDirectory("jobpilot-onboarding");
         anthropic.start();
     }
 
@@ -61,7 +63,15 @@ class OnboardingIT {
         if (!anthropic.isRunning()) {
             anthropic.start();
         }
-        registry.add("jobpilot.api.base-url", anthropic::baseUrl);
+        if (dataDir == null) {
+            try {
+                dataDir = java.nio.file.Files.createTempDirectory("jobpilot-onboarding");
+            } catch (java.io.IOException e) {
+                throw new IllegalStateException(e);
+            }
+        }
+        registry.add("jobpilot.gemini.base-url", anthropic::baseUrl);
+        registry.add("jobpilot.data-dir", () -> dataDir.toString());
     }
 
     @TestConfiguration
@@ -100,9 +110,9 @@ class OnboardingIT {
         return text.isBlank() ? null : mapper.readTree(text);
     }
 
-    void claudeAnswers(String json) {
-        anthropic.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(urlEqualTo("/v1/messages")).willReturn(aResponse().withHeader("Content-Type", "application/json")
-                .withBody("{\"stop_reason\":\"tool_use\",\"content\":[{\"type\":\"tool_use\",\"id\":\"t\",\"name\":\"respond\",\"input\":" + json + "}]}")));
+    void claudeAnswers(String json) throws Exception {
+        anthropic.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(urlPathMatching("/v1beta/models/.*:generateContent")).willReturn(aResponse().withHeader("Content-Type", "application/json")
+                .withBody("{\"candidates\":[{\"finishReason\":\"STOP\",\"content\":{\"parts\":[{\"text\":" + mapper.writeValueAsString(json) + "}]}}]}")));
     }
 
     void addCv() throws Exception {
@@ -124,12 +134,12 @@ class OnboardingIT {
         assertThat(s.get("cv").get("entries").asInt()).isEqualTo(1);
         assertThat(s.get("nextStep").asText()).isEqualTo("CLAUDE");
 
-        call(put("/api/claude/connection/api-key"), "{\"key\":\"" + KEY + "\"}", 200);
-        call(put("/api/claude/connection/provider"), "{\"id\":\"api\"}", 200);
+        call(put("/api/claude/connection/gemini-key"), "{\"key\":\"" + KEY + "\"}", 200);
+        call(put("/api/claude/connection/provider"), "{\"id\":\"gemini\"}", 200);
         assertThat(call(get("/api/onboarding"), null, 200).get("nextStep").asText()).as("chosen but not yet tested").isEqualTo("CLAUDE");
 
         claudeAnswers("{\"status\":\"ok\"}");
-        JsonNode test = call(post("/api/claude/connection/test"), "{\"provider\":\"api\"}", 200);
+        JsonNode test = call(post("/api/claude/connection/test"), "{\"provider\":\"gemini\"}", 200);
         assertThat(test.get("ok").asBoolean()).as(test.toString()).isTrue();
         s = call(get("/api/onboarding"), null, 200);
         assertThat(s.get("claude").get("works").asBoolean()).isTrue();
@@ -152,12 +162,12 @@ class OnboardingIT {
     @Test
     void aFailingConnectionTestKeepsTheClaudeStepOpenWithAHelpfulMessage() throws Exception {
         addCv();
-        call(put("/api/claude/connection/api-key"), "{\"key\":\"" + KEY + "\"}", 200);
-        call(put("/api/claude/connection/provider"), "{\"id\":\"api\"}", 200);
-        anthropic.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(urlEqualTo("/v1/messages")).willReturn(aResponse().withStatus(401)
-                .withBody("{\"error\":{\"type\":\"authentication_error\",\"message\":\"invalid x-api-key\"}}")));
+        call(put("/api/claude/connection/gemini-key"), "{\"key\":\"" + KEY + "\"}", 200);
+        call(put("/api/claude/connection/provider"), "{\"id\":\"gemini\"}", 200);
+        anthropic.stubFor(com.github.tomakehurst.wiremock.client.WireMock.post(urlPathMatching("/v1beta/models/.*:generateContent")).willReturn(aResponse().withStatus(401)
+                .withBody("{\"error\":{\"code\":401,\"message\":\"API key not valid\"}}")));
 
-        JsonNode test = call(post("/api/claude/connection/test"), "{\"provider\":\"api\"}", 200);
+        JsonNode test = call(post("/api/claude/connection/test"), "{\"provider\":\"gemini\"}", 200);
 
         assertThat(test.get("ok").asBoolean()).isFalse();
         assertThat(test.get("problem").asText()).isEqualTo("INVALID_KEY");
@@ -169,17 +179,17 @@ class OnboardingIT {
     @Test
     void changingTheKeyOrTheProviderAfterAPassedTestRequiresTestingAgain() throws Exception {
         addCv();
-        call(put("/api/claude/connection/api-key"), "{\"key\":\"" + KEY + "\"}", 200);
-        call(put("/api/claude/connection/provider"), "{\"id\":\"api\"}", 200);
+        call(put("/api/claude/connection/gemini-key"), "{\"key\":\"" + KEY + "\"}", 200);
+        call(put("/api/claude/connection/provider"), "{\"id\":\"gemini\"}", 200);
         claudeAnswers("{\"status\":\"ok\"}");
-        call(post("/api/claude/connection/test"), "{\"provider\":\"api\"}", 200);
+        call(post("/api/claude/connection/test"), "{\"provider\":\"gemini\"}", 200);
         assertThat(call(get("/api/onboarding"), null, 200).get("claude").get("works").asBoolean()).isTrue();
 
-        call(put("/api/claude/connection/api-key"), "{\"key\":\"" + KEY.replace("0123", "9999") + "\"}", 200);
+        call(put("/api/claude/connection/gemini-key"), "{\"key\":\"" + KEY.replace("0123", "9999") + "\"}", 200);
         assertThat(call(get("/api/onboarding"), null, 200).get("claude").get("works").asBoolean()).isFalse();
 
-        call(post("/api/claude/connection/test"), "{\"provider\":\"api\"}", 200);
-        call(delete("/api/claude/connection/api-key"), null, 200);
+        call(post("/api/claude/connection/test"), "{\"provider\":\"gemini\"}", 200);
+        call(delete("/api/claude/connection/gemini-key"), null, 200);
         JsonNode s = call(get("/api/onboarding"), null, 200);
         assertThat(s.get("claude").get("works").asBoolean()).isFalse();
         assertThat(s.get("claude").get("provider").asText()).isEqualTo("cli");
@@ -188,10 +198,10 @@ class OnboardingIT {
     @Test
     void setupCanBeReopenedFromSettingsWithoutLosingAnything() throws Exception {
         addCv();
-        call(put("/api/claude/connection/api-key"), "{\"key\":\"" + KEY + "\"}", 200);
-        call(put("/api/claude/connection/provider"), "{\"id\":\"api\"}", 200);
+        call(put("/api/claude/connection/gemini-key"), "{\"key\":\"" + KEY + "\"}", 200);
+        call(put("/api/claude/connection/provider"), "{\"id\":\"gemini\"}", 200);
         claudeAnswers("{\"status\":\"ok\"}");
-        call(post("/api/claude/connection/test"), "{\"provider\":\"api\"}", 200);
+        call(post("/api/claude/connection/test"), "{\"provider\":\"gemini\"}", 200);
         call(put("/api/country"), "{\"code\":\"SE\"}", 200);
         call(put("/api/onboarding/mode"), "{\"mode\":\"PROMPT\"}", 200);
         call(post("/api/onboarding/complete"), null, 200);

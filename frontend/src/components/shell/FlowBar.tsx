@@ -23,7 +23,7 @@ function StageItem({ stage, state }: { stage: Stage; state: StageState }) {
   )
 }
 
-/** The flow across the top: Search mode, Run search, Documents, Apply, Submit. The current one is bold, the others are faded. */
+/** The flow across the top: Mode, Search and ranking, Documents, Apply, Submit. The current one is bold, the others are faded. */
 export function FlowBar() {
   const { pathname } = useLocation()
   const { stages, state } = useFlow(pathname)

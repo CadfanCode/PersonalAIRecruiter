@@ -26,7 +26,9 @@ interface SavedView {
   sorting: SortingState
   columnFilters: ColumnFiltersState
   globalFilter: string
-  showAll: boolean
+  /** How many of the best-ranked ads the view shows; null shows every ad. Older saved views have showAll instead. */
+  limit?: number | null
+  showAll?: boolean
 }
 
 const VIEWS_KEY = 'jobpilot.views'
@@ -70,6 +72,17 @@ function storeViews(views: SavedView[]) {
   }
 }
 
+/** Relative column widths: the table is fixed-layout so every column fits at laptop widths, and long text wraps or is cut with a tooltip. */
+const WEIGHT: Record<string, number> = {
+  select: 2.5, rank: 4, score: 8, title: 13, employer: 9, role: 7, location: 7, published: 7.5, deadline: 7.5, language: 3.5,
+  experience: 8.5, fit: 9, gaps: 9, source: 7, status: 8,
+}
+
+/** The best-ranked ads first; unranked ads last, and among equals the higher score. */
+function byRank(a: JobRow, b: JobRow): number {
+  return (a.rank ?? Infinity) - (b.rank ?? Infinity) || (b.score?.total ?? -1) - (a.score?.total ?? -1)
+}
+
 const minScore: FilterFn<JobRow> = (row, _id, value: number) => (row.original.score?.total ?? -1) >= value
 const textMatch: FilterFn<JobRow> = (row, _id, value: string) => {
   const r = row.original
@@ -103,7 +116,8 @@ export function ResultsTable({
       ? Object.fromEntries(jobs.map((j) => [String(j.id), true]))
       : stored
   })
-  const [showAll, setShowAll] = useState(false)
+  // null shows every ad. Discover runs start on their minimum-score filter, everything else on the top N.
+  const [limit, setLimit] = useState<number | null>(defaultMinScore ? null : topN)
   const [openId, setOpenId] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
   const [views, setViews] = useState<SavedView[]>(loadViews)
@@ -114,9 +128,7 @@ export function ResultsTable({
 
   const hasRoles = jobs.some((j) => j.roleType)
   const roleTypes = useMemo(() => [...new Set(jobs.flatMap((j) => (j.roleType ? [j.roleType] : [])))].sort(), [jobs])
-  const filtering = globalFilter !== '' || columnFilters.length > 0
-  // The default view is the top N by score; any filter or "show all" widens it (SPEC 7.4).
-  const data = useMemo(() => (showAll || filtering ? jobs : jobs.slice(0, topN)), [jobs, showAll, filtering, topN])
+  const data = jobs
 
   const columns = useMemo<ColumnDef<JobRow>[]>(
     () => [
@@ -139,13 +151,13 @@ export function ResultsTable({
         filterFn: minScore, cell: ({ row }) => <ScoreBar score={row.original.score} />,
       },
       { id: 'title', header: 'Title', accessorKey: 'title',
-        cell: ({ row }) => <span className="font-medium">{row.original.title}</span> },
+        cell: ({ row }) => <Wrap text={row.original.title} className="font-medium" /> },
       {
         id: 'employer', header: 'Employer', accessorFn: (r) => r.employer ?? '',
         cell: ({ row }) => (
-          <span>
-            {row.original.employer}
-            {row.original.clientEmployer && <span className="block text-xs text-[var(--muted)]">({row.original.clientEmployer})</span>}
+          <span title={[row.original.employer, row.original.clientEmployer].filter(Boolean).join(' ')}>
+            <Wrap text={row.original.employer} />
+            {row.original.clientEmployer && <span className="block truncate text-xs text-[var(--muted)]">({row.original.clientEmployer})</span>}
           </span>
         ),
       },
@@ -164,7 +176,8 @@ export function ResultsTable({
             },
           } satisfies ColumnDef<JobRow>]
         : []),
-      { id: 'location', header: 'Location', accessorFn: (r) => r.municipality ?? r.location ?? '' },
+      { id: 'location', header: 'Location', accessorFn: (r) => r.municipality ?? r.location ?? '',
+        cell: ({ getValue }) => <Wrap text={getValue<string>()} /> },
       { id: 'published', header: 'Published', accessorFn: (r) => r.publishedAt ?? '', cell: ({ row }) => shortDate(row.original.publishedAt) },
       {
         id: 'deadline', header: 'Deadline', accessorFn: (r) => r.deadline ?? '9999', sortUndefined: 'last',
@@ -190,8 +203,8 @@ export function ResultsTable({
       {
         id: 'source', header: 'Source', accessorKey: 'source',
         cell: ({ row }) => (
-          <span>
-            {row.original.source}
+          <span title={row.original.source ?? ''}>
+            <span className="block truncate">{row.original.source}</span>
             {row.original.dateUnverified && <span className="block text-xs text-[var(--warn)]">date unverified</span>}
           </span>
         ),
@@ -222,10 +235,20 @@ export function ResultsTable({
     getFilteredRowModel: getFilteredRowModel(),
   })
 
-  const rows = table.getRowModel().rows
+  const filterValue = (id: string) => columnFilters.find((f) => f.id === id)?.value as string | number | undefined
+  // "Top N" is decided by rank among the ads that pass the filters, whatever column the table is sorted by.
+  const filteredRows = table.getFilteredRowModel().rows
+  const topIds = useMemo(
+    () => (limit === null ? null : new Set([...filteredRows].sort((a, b) => byRank(a.original, b.original)).slice(0, limit).map((r) => r.id))),
+    [filteredRows, limit],
+  )
+  const sortedRows = table.getRowModel().rows
+  const rows = topIds ? sortedRows.filter((r) => topIds.has(r.id)) : sortedRows
+  const minScoreFilter = filterValue('score') as number | undefined
+  const hiddenByScore = minScoreFilter === undefined ? 0 : jobs.filter((j) => !minScore(
+    { original: j } as never, 'score', minScoreFilter, () => undefined)).length
   const setFilter = (id: string, value: string | number | undefined) =>
     setColumnFilters((f) => [...f.filter((x) => x.id !== id), ...(value === undefined || value === '' ? [] : [{ id, value }])])
-  const filterValue = (id: string) => columnFilters.find((f) => f.id === id)?.value as string | number | undefined
 
   const setStatus = (id: number, status: JobStatus) =>
     patch.mutate({ id, status }, { onError: (e) => toast(e.message, 'error') })
@@ -253,7 +276,7 @@ export function ResultsTable({
   const saveView = () => {
     const name = window.prompt('Name this view')?.trim()
     if (!name) return
-    const next = [...views.filter((v) => v.name !== name), { name, sorting, columnFilters, globalFilter, showAll }]
+    const next = [...views.filter((v) => v.name !== name), { name, sorting, columnFilters, globalFilter, limit }]
     setViews(next)
     storeViews(next)
   }
@@ -263,7 +286,7 @@ export function ResultsTable({
     setSorting(v.sorting)
     setColumnFilters(v.columnFilters)
     setGlobalFilter(v.globalFilter)
-    setShowAll(v.showAll)
+    setLimit(v.limit !== undefined ? v.limit : v.showAll ? null : topN)
   }
   const deleteView = (name: string) => {
     const next = views.filter((v) => v.name !== name)
@@ -313,9 +336,23 @@ export function ResultsTable({
             onChange={(e) => setFilter('score', e.target.value === '' ? undefined : Number(e.target.value))}
             className="w-16 rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1 text-sm" />
         </label>
-        <Button variant="ghost" onClick={() => setShowAll(!showAll)} disabled={jobs.length <= topN && !showAll}>
-          {showAll ? `Show top ${topN}` : `Show all (${jobs.length})`}
-        </Button>
+        <span role="group" aria-label="How many ads to show" className="flex items-center gap-1">
+          <Button variant="ghost" aria-pressed={limit === topN && minScoreFilter === undefined}
+            onClick={() => { setFilter('score', undefined); setLimit(topN) }}>
+            Show top {topN}
+          </Button>
+          <Button variant="ghost" aria-pressed={limit === null && minScoreFilter === undefined}
+            onClick={() => { setFilter('score', undefined); setLimit(null) }}>
+            Show all ({jobs.length})
+          </Button>
+        </span>
+        {minScoreFilter !== undefined && (
+          <button type="button" onClick={() => setFilter('score', undefined)}
+            className="flex items-center gap-1.5 rounded-full bg-[var(--accent-soft)] px-3 py-1 text-xs font-medium text-[var(--accent)]"
+            aria-label={`Remove the minimum score ${minScoreFilter}`}>
+            Hiding {hiddenByScore} {hiddenByScore === 1 ? 'ad' : 'ads'} below score {minScoreFilter} <span aria-hidden>×</span>
+          </button>
+        )}
         <span className="ml-auto flex items-center gap-2">
           <select aria-label="Saved views" value="" onChange={(e) => applyView(e.target.value)}
             className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
@@ -375,12 +412,17 @@ export function ResultsTable({
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel)]">
-        <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
+        <table className="w-full min-w-[1100px] table-fixed border-collapse text-left text-sm">
+          <colgroup>
+            {table.getVisibleLeafColumns().map((c) => (
+              <col key={c.id} style={{ width: `${(WEIGHT[c.id] ?? 8) / table.getVisibleLeafColumns().reduce((n, x) => n + (WEIGHT[x.id] ?? 8), 0) * 100}%` }} />
+            ))}
+          </colgroup>
           <thead>
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id} className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
                 {hg.headers.map((h) => (
-                  <th key={h.id} className="px-3 py-2 font-semibold" aria-sort={
+                  <th key={h.id} className="px-2 py-2 align-bottom font-semibold leading-tight" aria-sort={
                     h.column.getIsSorted() === 'asc' ? 'ascending' : h.column.getIsSorted() === 'desc' ? 'descending' : undefined}>
                     {h.column.getCanSort() ? (
                       <button type="button" onClick={h.column.getToggleSortingHandler()} className="flex items-center gap-1 uppercase">
@@ -405,7 +447,7 @@ export function ResultsTable({
                   i === activeIndex ? 'bg-navy/5 outline outline-1 -outline-offset-1 outline-[var(--accent)]' : ''}`}
               >
                 {row.getVisibleCells().map((cell) => (
-                  <td key={cell.id} className="px-3 py-2">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+                  <td key={cell.id} className="overflow-hidden px-2 py-2">{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
                 ))}
               </tr>
             ))}
@@ -424,7 +466,14 @@ export function ResultsTable({
   )
 }
 
+/** Long text that wraps within its column and is cut after three lines; the full text is the tooltip. */
 function Clamp({ text }: { text: string | null | undefined }) {
   if (!text) return null
-  return <span className="line-clamp-3 max-w-xs text-[var(--muted)]" title={text}>{text}</span>
+  return <span className="line-clamp-3 break-words text-xs text-[var(--muted)]" title={text}>{text}</span>
+}
+
+/** Names and places: wrap over two lines, then cut with the full text as the tooltip. */
+function Wrap({ text, className = '' }: { text: string | null | undefined; className?: string }) {
+  if (!text) return null
+  return <span className={`line-clamp-2 break-words ${className}`} title={text}>{text}</span>
 }

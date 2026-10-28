@@ -1,6 +1,6 @@
 import { CheckIcon } from '../../components/ui/Icons'
 
-export const STEPS = ['Your CV', 'Connect Claude', 'Country', 'Search mode'] as const
+export const STEPS = ['Your CV', 'Connect AI', 'Country', 'Mode'] as const
 
 /** Four dots with labels; finished steps get a tick. */
 export function Stepper({ current }: { current: number }) {

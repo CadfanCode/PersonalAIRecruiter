@@ -13,8 +13,8 @@ const fresh = {
 }
 
 const connection = (over = {}) => ({
-  selected: 'cli', chosen: false, cli: { found: true, path: '/bin/claude', version: '2.1.312 (Claude Code)', help: null },
-  api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
+  selected: 'cli', chosen: false, cli: { found: true, path: '/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '' },
+  gemini: { configured: false, keyHint: null, model: 'gemini-flash-latest' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
 })
 
 const ok = { ok: true, provider: 'cli', problem: null, message: 'Connected.', help: null, durationMs: 800 }
@@ -92,7 +92,7 @@ describe('onboarding: connect Claude', () => {
     renderPage()
     await userEvent.upload(await screen.findByLabelText('CV files'), file())
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    await screen.findByRole('heading', { name: 'Connect Claude' })
+    await screen.findByRole('heading', { name: 'Connect your AI' })
     return calls
   }
 
@@ -104,12 +104,12 @@ describe('onboarding: connect Claude', () => {
 
     expect(await screen.findByText('Found')).toBeInTheDocument()
     expect(screen.getByText(/2.1.312/)).toBeInTheDocument()
-    expect(screen.getByText(/secure store: Secret Service, never into a plain file/)).toBeInTheDocument()
+    expect(screen.getByText(/kept in Secret Service, never in plain text/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
 
     await userEvent.click(screen.getByRole('button', { name: 'Test the connection' }))
 
-    expect(await screen.findByText(/Connected. Claude answered./)).toBeInTheDocument()
+    expect(await screen.findByText(/Connected. The AI answered./)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
     expect(calls.find((c) => c.url === '/api/claude/connection/test')!.body).toEqual({ provider: 'cli' })
   })
@@ -139,36 +139,37 @@ describe('onboarding: connect Claude', () => {
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
 
-  it('saves an API key, selects it and tests it, and never shows the key again', async () => {
-    const key = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-0123'
+  it('saves a Google AI Studio key, selects it and tests it, and never shows the key again', async () => {
+    const key = 'AIzaSyTestKeyabcdefghijklmnopqrstuvwxyz-0123'
     const calls = await toConnect({
-      'PUT /api/claude/connection/api-key': connection({ api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } }),
-      'PUT /api/claude/connection/provider': connection({ selected: 'api', chosen: true }),
-      'POST /api/claude/connection/test': { ...ok, provider: 'api' },
+      'PUT /api/claude/connection/gemini-key': connection({ gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } }),
+      'PUT /api/claude/connection/provider': connection({ selected: 'gemini', chosen: true }),
+      'POST /api/claude/connection/test': { ...ok, provider: 'gemini' },
     })
 
-    await userEvent.click(screen.getByRole('radio', { name: /Anthropic API key/ }))
-    const input = screen.getByLabelText('Anthropic API key')
+    await userEvent.click(screen.getByRole('radio', { name: /Google AI Studio API key/ }))
+    const input = screen.getByLabelText('Google AI Studio API key')
     expect(input).toHaveAttribute('type', 'password')
     await userEvent.type(input, key)
     await userEvent.click(screen.getByRole('button', { name: 'Save and test' }))
 
-    expect(await screen.findByText(/Connected. Claude answered./)).toBeInTheDocument()
+    expect(await screen.findByText(/Connected. The AI answered./)).toBeInTheDocument()
     expect(calls.map((c) => `${c.method} ${c.url}`).filter((u) => u.includes('connection/')))
-      .toEqual(['PUT /api/claude/connection/api-key', 'PUT /api/claude/connection/provider', 'POST /api/claude/connection/test'])
-    expect(calls.find((c) => c.url === '/api/claude/connection/api-key')!.body).toEqual({ key })
+      .toEqual(['PUT /api/claude/connection/gemini-key', 'PUT /api/claude/connection/provider', 'POST /api/claude/connection/test'])
+    expect(calls.find((c) => c.url === '/api/claude/connection/gemini-key')!.body).toEqual({ key })
     expect(screen.queryByDisplayValue(key)).not.toBeInTheDocument()
     expect(document.body.textContent).not.toContain(key)
   })
 
-  it('does not offer the API key when the computer has no secure place to keep it', async () => {
-    await toConnect({ 'GET /api/claude/connection': connection({ secureStore: { available: false, name: 'none available' } }) })
+  it('says where the key is kept when there is no OS credential store, and still offers the key field', async () => {
+    await toConnect({ 'GET /api/claude/connection': connection({ secureStore: { available: true, name: 'an encrypted file in the JobPilot data folder' } }) })
 
-    await userEvent.click(screen.getByRole('radio', { name: /Anthropic API key/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /Google AI Studio API key/ }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent('no secure credential store')
-    expect(screen.queryByLabelText('Anthropic API key')).not.toBeInTheDocument()
-  })
+    expect(screen.getByText(/encrypted file in the JobPilot data folder/)).toBeInTheDocument()
+    expect(screen.getByLabelText('Google AI Studio API key')).toBeInTheDocument()
+
+})
 })
 
 describe('onboarding: the whole way through', () => {
@@ -207,6 +208,23 @@ describe('onboarding: the whole way through', () => {
     expect(screen.getByText(/2 entries with 1 facts and 1 skills/)).toBeInTheDocument()
     expect(screen.getByText(/1 entries were already in your database/)).toBeInTheDocument()
     expect(calls.filter((c) => c.url === '/api/cv/import')).toHaveLength(1)
+
+    // each category with entries opens to exactly its entries, by mouse and keyboard; empty ones are not buttons
+    const work = screen.getByRole('button', { name: /Work/ })
+    expect(work).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(work)
+    expect(work).toHaveAttribute('aria-expanded', 'true')
+    const workList = document.getElementById('found-WORK')!
+    expect(within(workList).getByText('Sjuksköterska')).toBeInTheDocument()
+    expect(within(workList).getByText('Triage.')).toBeInTheDocument()
+    expect(screen.queryByText('Old job')).not.toBeInTheDocument() // the duplicate is not counted
+    const edu = screen.getByRole('button', { name: /Education/ })
+    edu.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(edu).toHaveAttribute('aria-expanded', 'true')
+    expect(within(document.getElementById('found-EDUCATION')!).getByText('Sjuksköterskeexamen')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Projects/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Projects')).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /Looks right, continue/ }))
     const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: unknown[]; profile: { fullName: string } }
     expect(commit.entries).toHaveLength(2) // the duplicate is left out
@@ -222,7 +240,7 @@ describe('onboarding: the whole way through', () => {
     // search mode: two cards, then finish
     expect(await screen.findByRole('heading', { name: 'How do you want to search?' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Finish setup' })).toBeDisabled()
-    await userEvent.click(screen.getByRole('radio', { name: /Discovery mode/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /Discovery Mode/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Finish setup' }))
 
     expect(await screen.findByText('The app')).toBeInTheDocument()

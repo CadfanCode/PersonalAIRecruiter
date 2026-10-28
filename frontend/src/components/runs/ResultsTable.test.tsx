@@ -31,6 +31,19 @@ function renderTable(jobs: JobRow[], topN = 10) {
   )
 }
 
+function renderWithMinScore(jobs: JobRow[], defaultMinScore: number) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={['/runs/7']}>
+        <Routes>
+          <Route path="/runs/7" element={<ResultsTable runId={7} jobs={jobs} now={NOW} defaultMinScore={defaultMinScore} />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
 /** Titles in the order they appear in the table body. */
 function titles() {
   return screen.getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell')[3].textContent)
@@ -112,16 +125,44 @@ describe('results table', () => {
     expect(screen.getByText('No ads match.')).toBeInTheDocument()
   })
 
-  it('shows the top N by default and all on request', async () => {
+  it('shows the top N by default and all on request, repeatedly, with a counter that matches', async () => {
     mockApi({})
-    const many = Array.from({ length: 5 }, (_, i) => job({ title: `Job ${i + 1}`, rank: i + 1, total: 90 - i }))
+    const many = Array.from({ length: 75 }, (_, i) => job({ title: `Job ${i + 1}`, rank: i + 1, total: 90 - (i % 40) }))
+    renderTable(many, 10)
+
+    expect(screen.getAllByRole('row')).toHaveLength(11)
+    for (let round = 0; round < 3; round++) {
+      await userEvent.click(screen.getByRole('button', { name: 'Show all (75)' }))
+      expect(screen.getAllByRole('row')).toHaveLength(76)
+      expect(screen.getByText(/Showing 75 of 75/)).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: 'Show top 10' }))
+      expect(screen.getAllByRole('row')).toHaveLength(11)
+      expect(screen.getByText(/Showing 10 of 75/)).toBeInTheDocument()
+    }
+  })
+
+  it('Show top N means the N best-ranked ads even when the table is sorted by another column', async () => {
+    mockApi({})
+    const many = Array.from({ length: 6 }, (_, i) => job({ title: `Job ${i + 1}`, rank: i + 1, total: 90 - i }))
     renderTable(many, 3)
 
-    expect(screen.getAllByRole('row')).toHaveLength(4)
-    await userEvent.click(screen.getByRole('button', { name: 'Show all (5)' }))
-    expect(screen.getAllByRole('row')).toHaveLength(6)
-    await userEvent.click(screen.getByRole('button', { name: 'Show top 3' }))
-    expect(screen.getAllByRole('row')).toHaveLength(4)
+    await userEvent.click(screen.getByRole('button', { name: /^Title/ }))
+    await userEvent.click(screen.getByRole('button', { name: /^Title/ })) // descending
+    expect(titles()).toEqual(['Job 3', 'Job 2', 'Job 1'])
+  })
+
+  it('a Discover run starts on its minimum score, explains what is hidden, and both buttons clear it', async () => {
+    mockApi({})
+    const many = Array.from({ length: 12 }, (_, i) => job({ title: `Job ${i + 1}`, rank: i + 1, total: i < 5 ? 60 : 20 }))
+    renderWithMinScore(many, 40)
+
+    expect(screen.getByText(/Showing 5 of 12/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove the minimum score 40' })).toHaveTextContent('Hiding 7 ads below score 40')
+    await userEvent.click(screen.getByRole('button', { name: 'Show all (12)' }))
+    expect(screen.getByText(/Showing 12 of 12/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Remove the minimum score/ })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Show top 10' }))
+    expect(screen.getByText(/Showing 10 of 12/)).toBeInTheDocument()
   })
 
   it('moves with j and k, shortlists with s and opens with Enter', async () => {

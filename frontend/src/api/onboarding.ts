@@ -6,7 +6,7 @@ export type SearchModeChoice = 'DISCOVER' | 'PROMPT'
 
 export interface OnboardingState {
   cv: { present: boolean; entries: number; facts: number; skills: number }
-  claude: { chosen: boolean; provider: 'cli' | 'api'; works: boolean }
+  claude: { chosen: boolean; provider: 'cli' | 'gemini'; works: boolean }
   country: { chosen: boolean; code: string }
   mode: { chosen: boolean; mode: SearchModeChoice }
   complete: boolean

@@ -130,6 +130,25 @@ export function useApproveDocument(jobId: number) {
   })
 }
 
+export interface UnapproveResult {
+  document: DocView
+  /** What the unapproval means for an application that is already open, or null when there is none. */
+  notice: string | null
+}
+
+export function useUnapproveDocument(jobId: number) {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => api<UnapproveResult>(`/api/documents/${id}/unapprove`, { method: 'POST' }),
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ['job-documents', jobId] })
+      void client.invalidateQueries({ queryKey: ['runs'] })
+      void client.invalidateQueries({ queryKey: ['applications'] })
+      void client.invalidateQueries({ queryKey: ['apply'] })
+    },
+  })
+}
+
 export function useSaveSelection(jobId: number) {
   const client = useQueryClient()
   return useMutation({

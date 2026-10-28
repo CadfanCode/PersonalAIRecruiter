@@ -36,7 +36,7 @@ public class ClaudeHealthService {
         String version = null;
         try {
             // The version check only makes sense for the CLI; with an API key there is no local program.
-            version = ProviderSettings.CLI.equals(providers.selectedId()) ? version() : "Anthropic API";
+            version = ProviderSettings.CLI.equals(providers.selectedId()) ? version() : "Google AI Studio";
             HealthAnswer answer = runner.run(ClaudeTask.of("health",
                     ClaudeResources.prompt("health", java.util.Map.of()),
                     ClaudeResources.schema("health"), HealthAnswer.class));

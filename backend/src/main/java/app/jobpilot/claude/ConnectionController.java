@@ -46,22 +46,34 @@ public class ConnectionController {
     }
 
     /** The key goes straight to the OS credential store and is never returned, logged or written to the database. */
-    @PutMapping("/api-key")
+    @PutMapping("/gemini-key")
     public ConnectionService.Status saveKey(@RequestBody ApiKeyInput input) {
         service.saveApiKey(input.key(), input.model());
         return service.status();
     }
 
-    @DeleteMapping("/api-key")
+    @DeleteMapping("/gemini-key")
     public ConnectionService.Status deleteKey() {
         service.deleteApiKey();
         return service.status();
     }
 
-    @PutMapping("/api-model")
-    public ConnectionService.Status model(@RequestBody ModelInput input) {
-        service.apiModel(input.model());
+    @PutMapping("/gemini-model")
+    public ConnectionService.Status geminiModel(@RequestBody ModelInput input) {
+        service.geminiModel(input.model());
         return service.status();
+    }
+
+    /** Claude Code model alias (sonnet, opus, fable) or blank for the CLI's own default. */
+    @PutMapping("/cli-model")
+    public ConnectionService.Status cliModel(@RequestBody ModelInput input) {
+        service.cliModel(input.model());
+        return service.status();
+    }
+
+    @GetMapping("/gemini-models")
+    public java.util.List<GeminiModels.ModelOption> geminiModels() {
+        return service.geminiModels();
     }
 
     /** Always 200: {@code ok=false} carries what is wrong and how to fix it. */

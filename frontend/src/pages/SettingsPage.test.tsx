@@ -26,8 +26,8 @@ const limits = {
   error: null,
 }
 const connection = (over = {}) => ({
-  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null },
-  api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
+  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '' },
+  gemini: { configured: false, keyHint: null, model: 'gemini-flash-latest' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
 })
 
 function setup(extra: Record<string, unknown> = {}) {
@@ -74,34 +74,34 @@ describe('settings: Claude connection', () => {
 
     expect(await screen.findByText(/Found 2.1.312 \(Claude Code\)/)).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: 'Claude Code subscription' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Anthropic API key' })).toBeDisabled() // no key saved yet
+    expect(screen.getByRole('radio', { name: 'Google AI Studio API key' })).toBeDisabled() // no key saved yet
     expect(await screen.findByRole('progressbar', { name: 'Session (5 hours)' })).toHaveAttribute('aria-valuenow', '7')
     expect(screen.getByRole('progressbar', { name: 'Week (7 days)' })).toHaveAttribute('aria-valuenow', '96')
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
   })
 
-  it('saves an API key without ever showing it back, then lets the user switch to it and test it', async () => {
-    const key = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-0123'
+  it('saves a Google AI Studio key without ever showing it back, then lets the user switch to it and test it', async () => {
+    const key = 'AIzaSyTestKeyabcdefghijklmnopqrstuvwxyz-0123'
     let saved = false
     const calls = setup({
-      'GET /api/claude/connection': () => connection(saved ? { api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } } : {}),
-      'PUT /api/claude/connection/api-key': () => {
+      'GET /api/claude/connection': () => connection(saved ? { gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } } : {}),
+      'PUT /api/claude/connection/gemini-key': () => {
         saved = true
-        return connection({ api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } })
+        return connection({ gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } })
       },
-      'PUT /api/claude/connection/provider': connection({ selected: 'api', api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } }),
-      'POST /api/claude/connection/test': { ok: true, provider: 'api', problem: null, message: 'Connected.', help: null, durationMs: 900 },
+      'PUT /api/claude/connection/provider': connection({ selected: 'gemini', gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } }),
+      'POST /api/claude/connection/test': { ok: true, provider: 'gemini', problem: null, message: 'Connected.', help: null, durationMs: 900 },
     })
 
-    await userEvent.type(await screen.findByLabelText('Anthropic API key'), key)
+    await userEvent.type(await screen.findByLabelText('Google AI Studio API key'), key)
     await userEvent.click(screen.getByRole('button', { name: 'Save key' }))
     expect(await screen.findByText('…0123')).toBeInTheDocument()
     expect(screen.queryByDisplayValue(key)).not.toBeInTheDocument()
-    expect(calls.find((c) => c.url === '/api/claude/connection/api-key')!.body).toEqual({ key })
+    expect(calls.find((c) => c.url === '/api/claude/connection/gemini-key')!.body).toEqual({ key })
 
-    await userEvent.click(screen.getByRole('radio', { name: 'Anthropic API key' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Google AI Studio API key' }))
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/provider')).toBe(true))
-    expect(calls.find((c) => c.url === '/api/claude/connection/provider')!.body).toEqual({ id: 'api' })
+    expect(calls.find((c) => c.url === '/api/claude/connection/provider')!.body).toEqual({ id: 'gemini' })
   })
 
   it('tests the connection and explains a failure with what to do about it', async () => {
@@ -119,12 +119,15 @@ describe('settings: Claude connection', () => {
     expect(alert).toHaveTextContent('sign in with your Claude account')
   })
 
-  it('says so when this computer has no secure place to keep a key', async () => {
-    setup({ 'GET /api/claude/connection': connection({ secureStore: { available: false, name: 'none available' } }) })
+  it('changes the Claude Code model and sends it to the server for the next request', async () => {
+    const calls = setup({ 'PUT /api/claude/connection/cli-model': connection({ cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: 'opus' } }) })
 
-    expect(await screen.findByText(/No secure credential store is available/)).toBeInTheDocument()
-    expect(screen.queryByLabelText('Anthropic API key')).not.toBeInTheDocument()
-  })
+    await userEvent.selectOptions(await screen.findByLabelText('Claude model'), 'opus')
+
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/cli-model')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/claude/connection/cli-model')!.body).toEqual({ model: 'opus' })
+
+})
 })
 
 describe('settings: search, speed, logins, appearance and setup', () => {

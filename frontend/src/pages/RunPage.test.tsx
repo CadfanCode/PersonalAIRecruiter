@@ -191,7 +191,7 @@ describe('run page', () => {
       })
       renderRun('/')
 
-      await userEvent.click(await screen.findByRole('radio', { name: /Discovery mode/ }))
+      await userEvent.click(await screen.findByRole('radio', { name: /Discovery Mode/ }))
       expect(screen.getByRole('button', { name: 'Find roles' })).toBeEnabled()
       expect(screen.queryByLabelText('Also search career pages (slower)')).not.toBeInTheDocument()
       await userEvent.click(screen.getByLabelText(/Go wider/))

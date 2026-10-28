@@ -7,7 +7,7 @@ export function Placeholder({ title, description }: { title: string; milestone?:
     <>
       <PageTitle>{title}</PageTitle>
       <Panel>
-        <p className="text-sm text-[var(--muted)]">{description} <Link className="text-[var(--accent)] underline" to="/">Back to Search mode</Link></p>
+        <p className="text-sm text-[var(--muted)]">{description} <Link className="text-[var(--accent)] underline" to="/">Back to Mode</Link></p>
       </Panel>
     </>
   )

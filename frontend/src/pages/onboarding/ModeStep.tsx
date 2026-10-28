@@ -5,21 +5,21 @@ import { CheckIcon, SearchIcon, SparkIcon } from '../../components/ui/Icons'
 export const MODE_CARDS: { id: SearchModeChoice; title: string; text: string; points: string[]; icon: typeof SearchIcon }[] = [
   {
     id: 'DISCOVER',
-    title: 'Discovery mode',
+    title: 'Discovery Mode',
     text: 'AI reads your whole CV and suggests roles you would be a strong match for, in your own field and beyond it.',
     points: ['Each suggestion shows a match score, why, and the obvious gaps', 'You pick which roles to search for', 'Nothing to configure: the search is set up for you'],
     icon: SparkIcon,
   },
   {
     id: 'PROMPT',
-    title: 'Prompt mode',
+    title: 'Prompt Mode',
     text: 'You describe the roles you want and where. JobPilot turns that into a search and shows you the plan first.',
     points: ['Write it like you would tell a friend', 'Recency, place and seniority come from your words', 'Review the search plan before anything runs'],
     icon: SearchIcon,
   },
 ]
 
-/** Step 4 (and the choice on the Search mode page): two cards. Choosing one saves it. */
+/** Step 4 (and the choice on the Mode page): two cards. Choosing one saves it. */
 export function ModeStep({ selected, finishing, onBack, onFinish }: {
   selected: SearchModeChoice | null
   finishing: boolean
@@ -31,7 +31,7 @@ export function ModeStep({ selected, finishing, onBack, onFinish }: {
     <div>
       <h1 className="text-3xl font-semibold tracking-tight">How do you want to search?</h1>
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">You can switch whenever you start a new search.</p>
-      <div role="radiogroup" aria-label="Search mode" className="mt-7 grid gap-4 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="Mode" className="mt-7 grid gap-4 sm:grid-cols-2">
         {MODE_CARDS.map(({ id, title, text, points, icon: Icon }) => (
           <button key={id} type="button" role="radio" aria-checked={selected === id} onClick={() => choose.mutate(id)}
             className={`flex flex-col items-start gap-3 rounded-3xl border-2 p-6 text-left transition ${
