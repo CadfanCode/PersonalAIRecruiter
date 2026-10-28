@@ -604,7 +604,7 @@ JobPilot's own dialog (never read from the portal's field); the password goes to
 the host and username to `saved_login`. Later, when a tab waits at a login on exactly that host, JobPilot's own code
 (`BrowserGuard.fillSavedLogin`, never a model-proposed action, never in a prompt) types the username and password into a login
 form with one password field and at most three inputs, and nothing else: it does not press Log in (rule 1) and refuses on any
-other host, on a sign-up form, or on a BankID page. Saved logins are listed and deleted in Settings.
+other host or on a sign-up form (a second password field, or more than three inputs); a BankID-only page has no password field and is skipped by the same rule. Saved logins are listed and deleted in Settings.
 
 ### 9.3 Guardrails enforced in code
 

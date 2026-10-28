@@ -52,7 +52,7 @@ export function ImportStep({ files, onDone, onBack }: { files: File[]; onDone: (
   }
 
   if (!preview) {
-    return <Processing title="Reading your CV" percent={pct} message="Splitting it into experience, education and skills. This takes a minute or so." />
+    return <Processing title="Reading your CV" percent={pct} etaSeconds={null} fallback="This usually takes a minute or two." message="Splitting it into experience, education and skills." />
   }
 
   const fresh = preview.entries.filter((e) => e.duplicateOfEntryId === null)

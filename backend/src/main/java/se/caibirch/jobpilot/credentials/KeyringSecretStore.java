@@ -27,7 +27,7 @@ public class KeyringSecretStore implements SecretStore {
                     try {
                         keyring = Keyring.create();
                     } catch (BackendNotSupportedException | RuntimeException | LinkageError e) {
-                        log.warn("No OS credential store available: {}", e.toString());
+                        log.warn("No OS credential store available", e);
                     }
                     tried = true;
                 }

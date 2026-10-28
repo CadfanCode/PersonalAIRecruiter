@@ -133,19 +133,13 @@ describe('CV database page', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('startYm must be YYYY-MM or YYYY')
   })
 
-  it('offers the seed loader when the database is empty and posts the file as the body', async () => {
-    const calls = mockApi({
-      ...baseRoutes([], { ...profile, id: null, fullName: '' }),
-      'POST /api/cv/seed': { entries: 15 },
-    })
+  it('points an empty database at the import and does not offer the author\'s seed file', async () => {
+    mockApi(baseRoutes([], { ...profile, id: null, fullName: '' }))
     renderPage()
 
     expect(await screen.findByText('Your CV database is empty')).toBeInTheDocument()
-    const file = new File(['{"profile":{}}'], 'cv_database_seed.json', { type: 'application/json' })
-    await userEvent.upload(screen.getByLabelText('Seed file'), file)
-
-    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/cv/seed')).toBe(true))
-    expect(calls.find((c) => c.url === '/api/cv/seed')!.body).toEqual({ profile: {} })
+    expect(screen.getByText(/Read your CV in the Import tab/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Seed file')).not.toBeInTheDocument()
   })
 
   it('saves known gaps one per line', async () => {

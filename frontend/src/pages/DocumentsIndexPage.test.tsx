@@ -95,6 +95,21 @@ describe('documents overview for the selected jobs', () => {
     expect(calls.some((c) => c.method === 'POST' && c.url === '/api/applications/apply')).toBe(true)
   })
 
+  it('asks for permission to show a system notification when the user presses Apply, so "ready for submission" can reach them', async () => {
+    const request = vi.fn()
+    vi.stubGlobal('Notification', class { static permission = 'default'; static requestPermission = request })
+    mockApi({
+      'GET /api/documents': [],
+      'GET /api/applications': [ready({ jobId: 1, title: 'Nurse' })],
+      'POST /api/applications/apply': { started: [{ jobId: 1 }], skipped: [] },
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Apply (1)' }))
+
+    await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1))
+  })
+
   it('cannot go on to Apply before something is approved', async () => {
     mockApi({ 'GET /api/documents': [], 'GET /api/applications': [application()] })
     renderPage()

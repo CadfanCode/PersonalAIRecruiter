@@ -213,6 +213,9 @@ describe('run page', () => {
       expect(within(outside).getByText('Gaps: No teaching licence.')).toBeInTheDocument()
       expect(screen.getByRole('region', { name: 'Hybrid roles' })).toBeInTheDocument()
       expect(screen.getByRole('button', { name: 'Search 1 selected role' })).toBeEnabled()
+      // the search plan of a Discovery run is made and accepted for the user: it is not shown
+      expect(screen.queryByText(/Where and when to search/)).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Save profile' })).not.toBeInTheDocument()
     })
 
     it('selects all, lets the user add and edit roles, then saves them and continues the search', async () => {

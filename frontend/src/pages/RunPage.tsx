@@ -135,14 +135,6 @@ export function RunPage() {
           )}
         </div>
       )}
-      {profile && discover && waiting && (
-        <details className="mb-8 max-w-4xl rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-5 py-3">
-          <summary className="cursor-pointer text-sm font-medium text-[var(--muted)]">Where and when to search (made for you; optional to change)</summary>
-          <div className="mt-3"><ProfileSection profile={profile} waiting saving={edit.isPending} error={edit.isError ? edit.error.message : null}
-            onSave={save} onContinue={() => {}} continuing={false} showContinue={false} /></div>
-        </details>
-      )}
-
       {jobs.data && jobs.data.length > 0 && <ResultsTable runId={runId} jobs={jobs.data} preselectAll={manual}
         defaultMinScore={discover ? (run.options.aggressive ? DISCOVER_AGGRESSIVE_MIN_SCORE : DISCOVER_MIN_SCORE) : undefined} />}
       {run.status === 'DONE' && jobs.data?.length === 0 && !jobs.isFetching && (

@@ -12,7 +12,7 @@ Date: 2026-10-28. Status: accepted. Relaxes CLAUDE.md hard rule 2 (the user auth
 - **When it is typed.** Only by Java code in `BrowserGuard.fillSavedLogin`, never as a model-proposed action (`ActionValidator`
   still blocks password fields for anything the model proposes, and its tests are unchanged). Only when the tab's host equals the
   saved host exactly (no parent domains, no "www" guessing), only on a page with one visible password field in a form with at most
-  three inputs (a sign-up form has a second password field or more inputs), and never on a BankID or confirm-password page.
+  three inputs (a sign-up form has a second password field or more inputs). A page that offers BankID next to an ordinary account login is fine; a BankID-only page has no password field, so the one-password-field rule already skips it. JobPilot never types anything for BankID.
 - **Enforced by tests.** `NoUnguardedBrowserCallsTest` checks the method types exactly twice, never clicks or presses a key, checks
   the host first and never logs, and that only `ApplyService` calls it, from one place that first looks the login up by host.
 - **The user can see and remove it.** Settings lists saved logins by site and username and deletes them (removing the secret too).

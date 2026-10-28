@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { type ReactNode, useRef } from 'react'
 
 /** "About 2 minutes left", "About 40 seconds left", or null when there is no estimate yet. */
 export function etaText(seconds: number | null | undefined): string | null {
@@ -15,16 +15,23 @@ const C = 2 * Math.PI * R
  * The processing view of a stage: a ring with the percentage, what is happening now, the time left, and room for what is
  * already there (results that appear while the run goes on).
  */
-export function Processing({ title, percent, message, etaSeconds, children, onCancel }: {
+export function Processing({ title, percent, message, etaSeconds, fallback = 'Estimating the time left…', children, onCancel }: {
   title: string
   percent: number
   message?: string | null
+  /** Seconds left when the caller knows; null: it knows there is no estimate; undefined: estimate from the time since this view opened. */
   etaSeconds?: number | null
+  /** What to say while there is no estimate. */
+  fallback?: string
   children?: ReactNode
   onCancel?: () => void
 }) {
   const pct = Math.max(0, Math.min(100, Math.round(percent)))
-  const eta = etaText(etaSeconds)
+  const opened = useRef(Date.now())
+  // Without a figure from the server, the time left follows from how long this view has taken for the share that is done.
+  const elapsed = (Date.now() - opened.current) / 1000
+  const own = etaSeconds === undefined && pct >= 10 && pct < 100 && elapsed >= 5 ? Math.round((elapsed * (100 - pct)) / pct) : null
+  const eta = etaText(etaSeconds ?? own)
   return (
     <section aria-label={title} className="animate-rise flex items-center gap-7 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-[var(--shadow)]">
       <div role="progressbar" aria-label={`${title} progress`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} className="relative h-32 w-32 shrink-0">
@@ -42,7 +49,7 @@ export function Processing({ title, percent, message, etaSeconds, children, onCa
           <div className="shimmer h-full rounded-full" style={{ width: `${Math.max(pct, 6)}%` }} />
         </div>
         <div className="mt-2 flex items-center gap-3 text-sm text-[var(--muted)]">
-          <span>{eta ?? 'Estimating the time left…'}</span>
+          <span>{eta ?? fallback}</span>
           {onCancel && (
             <button type="button" onClick={onCancel} className="ml-auto rounded-full px-3 py-1 text-[var(--danger)] transition hover:bg-[var(--danger-soft)]">
               Cancel

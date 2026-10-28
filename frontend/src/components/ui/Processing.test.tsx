@@ -1,6 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { etaText, Processing } from './Processing'
 
 describe('time left', () => {
@@ -13,6 +13,8 @@ describe('time left', () => {
     expect(etaText(600)).toBe('About 10 minutes left')
   })
 })
+
+afterEach(() => vi.useRealTimers())
 
 describe('processing view', () => {
   it('shows the percentage, what is happening and the time left, and can be cancelled', async () => {
@@ -35,5 +37,26 @@ describe('processing view', () => {
     expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0')
     expect(screen.getByText('Estimating the time left…')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
+
+  it('estimates the time left itself from how long this view has taken for the share that is done, when nobody gave a figure', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-28T10:00:00Z'))
+    const { rerender } = render(<Processing title="Writing" percent={5} />)
+    expect(screen.getByText('Estimating the time left…')).toBeInTheDocument() // too early to say
+
+    vi.setSystemTime(new Date('2026-10-28T10:01:00Z')) // 60 s in, half done: about 60 s left
+    rerender(<Processing title="Writing" percent={50} />)
+    expect(screen.getByText('About 60 seconds left')).toBeInTheDocument()
+  })
+
+  it('does not guess when the caller knows there is no figure, and shows its own words instead', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-10-28T10:00:00Z'))
+    const { rerender } = render(<Processing title="Reading" percent={50} etaSeconds={null} fallback="This usually takes a minute or two." />)
+    vi.setSystemTime(new Date('2026-10-28T10:05:00Z'))
+    rerender(<Processing title="Reading" percent={50} etaSeconds={null} fallback="This usually takes a minute or two." />)
+
+    expect(screen.getByText('This usually takes a minute or two.')).toBeInTheDocument()
   })
 })

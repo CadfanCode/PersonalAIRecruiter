@@ -30,7 +30,7 @@ cp backend/target/jobpilot-*.jar "$INPUT/jobpilot.jar"
 COMMON=(--name JobPilot --app-version "$VERSION" --vendor JobPilot --input "$INPUT" --main-jar jobpilot.jar
   --main-class org.springframework.boot.loader.launch.PropertiesLauncher
   --java-options "-Dloader.main=se.caibirch.jobpilot.desktop.DesktopLauncher" --java-options "-Xmx1g"
-  --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.localedata,jdk.management,jdk.net
+  --add-modules java.se,jdk.unsupported,jdk.crypto.ec,jdk.crypto.cryptoki,jdk.localedata,jdk.management,jdk.net,jdk.security.auth,jdk.security.jgss,jdk.charsets,jdk.zipfs,jdk.naming.dns
   --description "Job applications, tailored and filled in for you")
 
 ICON=()
@@ -49,5 +49,13 @@ echo "==> Packaging the app-image (runnable folder with its own Java)"
 if [ "$KIND" = "installer" ]; then
   echo "==> Packaging the $NATIVE installer"
   "$JPACKAGE" --type "$NATIVE" "${COMMON[@]}" "${ICON[@]}" "${EXTRA[@]}" --dest dist/installer
+fi
+# The trimmed Java runtime must still have what the libraries load by name. jdk.security.auth is what the credential store needs to
+# talk to the Linux Secret Service (dbus-java reads the user id through it); without it the store reports "none available".
+if [ -f dist/app/JobPilot/lib/runtime/release ] || [ -f "dist/app/JobPilot.app/Contents/runtime/Contents/Home/release" ]; then
+  REL="$(cat dist/app/JobPilot/lib/runtime/release 2>/dev/null || cat dist/app/JobPilot.app/Contents/runtime/Contents/Home/release)"
+  for m in jdk.security.auth jdk.crypto.ec jdk.unsupported; do
+    echo "$REL" | grep -q "$m" || { echo "The Java runtime in the app-image lacks $m" >&2; exit 1; }
+  done
 fi
 echo "Done: $ROOT/dist"

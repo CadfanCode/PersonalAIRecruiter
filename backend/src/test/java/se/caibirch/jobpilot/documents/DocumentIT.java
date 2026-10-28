@@ -620,6 +620,39 @@ class DocumentIT {
     }
 
     @Test
+    void aLicenceAndACourseGoIntoTheEducationSectionOfTheCvLikeAnyOtherEntry() throws Exception {
+        long licence = id(call(post("/api/cv/entries"), """
+                {"kind":"LICENCE","title":"Sjuksköterskelegitimation","titleEn":"Nursing licence","organisation":"Socialstyrelsen","startYm":"2019-06"}""", 201));
+        long licenceFact = id(call(post("/api/cv/entries/" + licence + "/facts"),
+                "{\"textEn\":\"Licensed as a registered nurse in Sweden.\",\"textSv\":\"Legitimerad sjuksköterska i Sverige.\"}", 201));
+        long course = id(call(post("/api/cv/entries"), """
+                {"kind":"COURSE","title":"HLR-kurs","titleEn":"CPR course","organisation":"Röda Korset","startYm":"2025-03","endYm":"2025-03"}""", 201));
+        long courseFact = id(call(post("/api/cv/entries/" + course + "/facts"),
+                "{\"textEn\":\"Completed an advanced CPR course.\",\"textSv\":\"Genomförde en avancerad HLR-kurs.\"}", 201));
+        claude.respond("selectFacts", t -> "{\"entries\":[{\"entryId\":" + licence + ",\"factIds\":[" + licenceFact + "],\"use\":\"both\",\"reason\":\"required\"},"
+                + "{\"entryId\":" + course + ",\"factIds\":[" + courseFact + "],\"use\":\"cv\",\"reason\":\"relevant\"},"
+                + "{\"entryId\":" + personal + ",\"factIds\":[" + fPersonal + "],\"use\":\"letter\",\"reason\":\"shows the person\"}]}");
+        claude.respond("writeCv", t -> """
+                {"language":"sv","headline":"Sjuksköterska","profileParagraphs":["Legitimerad sjuksköterska."],"sections":[
+                 {"heading":"Utbildning och legitimation","kind":"EDUCATION","items":[
+                  {"entryId":%d,"title":"","meta":"","dateLabel":"","bullets":[{"text":"Legitimerad sjuksköterska i Sverige.","factIds":[%d]}]},
+                  {"entryId":%d,"title":"","meta":"","dateLabel":"","bullets":[{"text":"Genomförde en avancerad HLR-kurs.","factIds":[%d]}]}]}]}"""
+                .formatted(licence, licenceFact, course, courseFact));
+        claude.respond("writeLetter", t -> """
+                {"language":"sv","subject":"Ansökan: Sjuksköterska","subline":"Comstream AB, Stockholm","greeting":"Hej,",
+                 "paragraphs":["Jag är legitimerad sjuksköterska.","Det tydligaste exemplet är min legitimation.","Jag är oftast ute på sjön."],
+                 "closing":"Vänliga hälsningar,","signature":"Cai Birch","factIdsUsed":[%d,%d]}""".formatted(licenceFact, fPersonal));
+
+        JsonNode run = generate(jobId);
+
+        assertThat(run.get("run").get("status").asText()).as(run.get("run").get("message").asText()).isEqualTo("DONE");
+        JsonNode cv = docs(jobId).get("cv");
+        assertThat(codes(cv)).as("no finding for the new kinds").doesNotContain("unselected_entry", "unknown_fact", "unknown_entry");
+        String text = pdfText(mvc.perform(get("/api/documents/" + cv.get("id").asLong() + "/pdf")).andReturn().getResponse().getContentAsByteArray());
+        assertThat(text).contains("Sjuksköterskelegitimation", "HLR-kurs", "Legitimerad sjuksköterska i Sverige.");
+    }
+
+    @Test
     void selectingAJobTwiceKeepsOneApplicationAndRemovingItLeavesTheDocuments() throws Exception {
         call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
         call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);

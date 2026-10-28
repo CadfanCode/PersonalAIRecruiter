@@ -11,6 +11,7 @@ import {
   useCreateDocuments,
 } from '../api/applications'
 import { useDocOverview } from '../api/documents'
+import { enableSystemNotifications } from '../components/apply/notifications'
 import { Button } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
 import { ApprovalTick } from '../components/ui/ApprovalTick'
@@ -39,7 +40,10 @@ export function DocumentsIndexPage() {
   const writingPercent = selected.length === 0 ? 0 : Math.round(selected.reduce((sum, a) => sum + (isGenerating(a) ? (a.generation?.progress ?? 0) : 100), 0) / selected.length)
 
   const approveEverything = () => approveAll.mutate(undefined, { onSuccess: setResults })
-  const goApply = () => apply.mutate(undefined, { onSuccess: (r) => navigate('/apply', { state: { skipped: r.skipped } }) })
+  const goApply = () => {
+    enableSystemNotifications() // asked for here, on the click, so the "ready for submission" notification can reach the user later
+    apply.mutate(undefined, { onSuccess: (r) => navigate('/apply', { state: { skipped: r.skipped } }) })
+  }
   const refused = (results ?? []).filter((r) => !r.approved)
   const newlyApproved = (results ?? []).filter((r) => r.approved && !r.alreadyApproved).length
 

@@ -83,7 +83,7 @@ one automatic rewrite before failing:
 
 - Package root `se.caibirch.jobpilot`. Feature packages: `profile`, `cvdb`, `search`, `jobs`,
   `ranking`, `documents`, `apply`, `applications`, `aktivitet`, `claude`, `pipeline`, `discovery`, `manual`,
-  `settings`, `desktop` (and the packages added by the overhaul, see SPEC).
+  `settings`, `desktop`, `country`, `credentials`, `onboarding`.
 - Constructor injection, records for DTOs, no Lombok.
 - Every Claude call has a JSON Schema in `backend/src/main/resources/claude/schemas/` and a
   prompt template in `backend/src/main/resources/claude/prompts/`. Never parse free text.
