@@ -2,7 +2,7 @@ import type { SearchProfile } from '../../api/runs'
 import { Button } from '../Form'
 import { SearchProfileCard } from './SearchProfileCard'
 
-/** The profile card, with Save and "Continue to search" while the run waits for review. */
+/** The search plan, with Save and "Approve and search" while the run waits for the user's review. */
 export function ProfileSection({
   profile,
   waiting,
@@ -11,6 +11,7 @@ export function ProfileSection({
   onSave,
   onContinue,
   continuing,
+  showContinue = true,
 }: {
   profile: SearchProfile
   waiting: boolean
@@ -19,15 +20,17 @@ export function ProfileSection({
   onSave: (p: SearchProfile) => void
   onContinue: () => void
   continuing: boolean
+  /** A Discover run continues from the role picker instead. */
+  showContinue?: boolean
 }) {
   return (
     <>
       <SearchProfileCard key={JSON.stringify(profile)} profile={profile} editable={waiting} saving={saving} onSave={onSave} />
-      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
-      {waiting && (
-        <div className="mt-4 flex items-center gap-3">
-          <Button onClick={onContinue} disabled={continuing}>Continue to search</Button>
-          <span className="text-sm text-[var(--muted)]">Check the titles, municipalities and queries first: they decide what is found.</span>
+      {error && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
+      {waiting && showContinue && (
+        <div className="mt-5 flex flex-wrap items-center gap-4">
+          <Button size="lg" onClick={onContinue} disabled={continuing}>{continuing ? 'Starting…' : 'Approve and search'}</Button>
+          <span className="max-w-md text-sm text-[var(--muted)]">Check the titles, places and search words first: they decide what is found. Approving starts the search.</span>
         </div>
       )}
     </>

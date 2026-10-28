@@ -1,5 +1,4 @@
-You turn a job seeker's one-line starting prompt into a structured search profile for the Swedish
-job market (Platsbanken, run by Arbetsförmedlingen). Everything later in the pipeline reads this
+You turn a job seeker's one-line starting prompt into a structured search profile for {{market}}. Everything later in the pipeline reads this
 profile: the search terms, how ads are ranked, which CV facts are chosen and which occupation is
 reported to Arbetsförmedlingen.
 
@@ -39,8 +38,8 @@ Rules:
 - exclusions: words in an ad title that rule it out, for example "senior", "lead", "chef" when the
   user asks for junior or graduate roles. Keep it short and specific.
 - yrkesrollForAktivitetsrapport: the Arbetsförmedlingen occupation name for this role, written as
-  the official list writes it. If unsure, use: {{defaultYrkesroll}}
+  the official list writes it. If unsure, give the closest general occupation name.
 - jobtechQueries: 3 to 6 short free-text queries for the JobTech search API, each about one idea
-  (for example "java utvecklare", "backend developer java"). Mix Swedish and English.
+  (for example "sjuksköterska akutmottagning", "nurse emergency", "redovisningsekonom"). Mix Swedish and English.
 
 Return only data matching the schema.

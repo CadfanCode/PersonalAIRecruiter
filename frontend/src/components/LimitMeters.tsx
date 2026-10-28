@@ -12,7 +12,7 @@ function Meter({ label, window }: { label: string; window: LimitWindow | null })
     )
   }
   const percent = Math.round(window.utilization * 100)
-  const warn = window.utilization >= 0.9 ? 'bg-red-600' : window.utilization >= 0.75 ? 'bg-amber-500' : 'bg-navy'
+  const warn = window.utilization >= 0.9 ? 'bg-[var(--danger)]' : window.utilization >= 0.75 ? 'bg-amber-500' : 'bg-navy'
   return (
     <div>
       <dt className="text-xs text-[var(--muted)]">{label}</dt>
@@ -47,7 +47,7 @@ export function LimitMeters() {
         <span>Read from your Claude subscription through the CLI; a reading is one tiny call.</span>
       </div>
       {(data?.error || query.isError) && (
-        <p className="mt-1 text-xs text-red-600">{data?.error ?? 'Cannot reach the JobPilot API.'}</p>
+        <p className="mt-1 text-xs text-[var(--danger)]">{data?.error ?? 'Cannot reach the JobPilot API.'}</p>
       )}
     </div>
   )

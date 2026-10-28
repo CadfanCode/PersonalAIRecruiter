@@ -14,6 +14,9 @@ mkdir -p "$LOGS" "$PROFILE"
 # Optional per-user settings, e.g. JOBPILOT_CLAUDE_MODEL=opus or JOBPILOT_BROWSER=chromium.
 [ -f "$HOME/.config/jobpilot/env" ] && . "$HOME/.config/jobpilot/env"
 
+# A desktop icon starts with a minimal PATH; the Claude Code CLI usually lives in ~/.local/bin.
+export PATH="$HOME/.local/bin:$HOME/.claude/local:$HOME/.npm-global/bin:$PATH"
+
 say() { notify-send -a JobPilot -i jobpilot "JobPilot" "$1" 2>/dev/null || echo "JobPilot: $1" >&2; }
 fail() { say "$1"; exit 1; }
 

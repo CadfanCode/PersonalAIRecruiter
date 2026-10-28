@@ -12,7 +12,7 @@ import {
 } from '@tanstack/react-table'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useOpenApplications } from '../../api/apply'
+import { useCreateDocuments } from '../../api/applications'
 import { JOB_STATUSES, type JobRow, type JobStatus, usePatchJob } from '../../api/runs'
 import { Button } from '../Form'
 import { useToast } from '../Toasts'
@@ -30,13 +30,35 @@ interface SavedView {
 }
 
 const VIEWS_KEY = 'jobpilot.views'
-const MAX_TABS = 5
 
 function loadViews(): SavedView[] {
   try {
     return JSON.parse(localStorage.getItem(VIEWS_KEY) ?? '[]') as SavedView[]
   } catch {
     return []
+  }
+}
+
+const selectionKey = (runId: number) => `jobpilot.selection.${runId}`
+
+/** The ticked rows of a run are remembered in this browser, so leaving the page and coming back keeps them. */
+function loadSelection(runId: number, jobs: JobRow[]): RowSelectionState {
+  try {
+    const ids = JSON.parse(localStorage.getItem(selectionKey(runId)) ?? '[]') as number[]
+    const known = new Set(jobs.map((j) => j.id))
+    return Object.fromEntries(ids.filter((id) => known.has(id)).map((id) => [String(id), true]))
+  } catch {
+    return {}
+  }
+}
+
+function storeSelection(runId: number, selection: RowSelectionState) {
+  try {
+    const ids = Object.keys(selection).filter((k) => selection[k]).map(Number)
+    if (ids.length === 0) localStorage.removeItem(selectionKey(runId))
+    else localStorage.setItem(selectionKey(runId), JSON.stringify(ids))
+  } catch {
+    // private window or blocked storage: the selection simply is not remembered
   }
 }
 
@@ -59,16 +81,28 @@ export function ResultsTable({
   jobs,
   topN = 10,
   now = new Date(),
+  defaultMinScore,
+  preselectAll,
 }: {
   runId: number
   jobs: JobRow[]
   topN?: number
   now?: Date
+  /** Discover runs start with a minimum score filter, so the broad search does not bury the good ads. */
+  defaultMinScore?: number
+  /** A run with a single pasted job starts with that job ticked, so the next step is one click away. */
+  preselectAll?: boolean
 }) {
   const [sorting, setSorting] = useState<SortingState>([{ id: 'rank', desc: false }])
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>(() =>
+    defaultMinScore ? [{ id: 'score', value: defaultMinScore }] : [])
   const [globalFilter, setGlobalFilter] = useState('')
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({})
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>(() => {
+    const stored = loadSelection(runId, jobs)
+    return preselectAll && Object.keys(stored).length === 0 && localStorage.getItem(selectionKey(runId)) === null
+      ? Object.fromEntries(jobs.map((j) => [String(j.id), true]))
+      : stored
+  })
   const [showAll, setShowAll] = useState(false)
   const [openId, setOpenId] = useState<number | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
@@ -76,8 +110,10 @@ export function ResultsTable({
   const patch = usePatchJob(runId)
   const toast = useToast()
   const navigate = useNavigate()
-  const openApplications = useOpenApplications()
+  const createDocuments = useCreateDocuments()
 
+  const hasRoles = jobs.some((j) => j.roleType)
+  const roleTypes = useMemo(() => [...new Set(jobs.flatMap((j) => (j.roleType ? [j.roleType] : [])))].sort(), [jobs])
   const filtering = globalFilter !== '' || columnFilters.length > 0
   // The default view is the top N by score; any filter or "show all" widens it (SPEC 7.4).
   const data = useMemo(() => (showAll || filtering ? jobs : jobs.slice(0, topN)), [jobs, showAll, filtering, topN])
@@ -113,13 +149,28 @@ export function ResultsTable({
           </span>
         ),
       },
+      ...(hasRoles
+        ? [{
+            id: 'role', header: 'Role type', accessorFn: (r: JobRow) => r.roleType ?? '', filterFn: 'equalsString' as const,
+            cell: ({ row }: { row: { original: JobRow } }) => {
+              const all = row.original.roleTypes ?? []
+              const others = all.filter((t) => t !== row.original.roleType)
+              return (
+                <span>
+                  {row.original.roleType}
+                  {others.length > 0 && <span className="block text-xs text-[var(--muted)]" title={all.join(', ')}>also found for {others.join(', ')}</span>}
+                </span>
+              )
+            },
+          } satisfies ColumnDef<JobRow>]
+        : []),
       { id: 'location', header: 'Location', accessorFn: (r) => r.municipality ?? r.location ?? '' },
       { id: 'published', header: 'Published', accessorFn: (r) => r.publishedAt ?? '', cell: ({ row }) => shortDate(row.original.publishedAt) },
       {
         id: 'deadline', header: 'Deadline', accessorFn: (r) => r.deadline ?? '9999', sortUndefined: 'last',
         cell: ({ row }) => {
           const close = deadlineIsClose(row.original.deadline, now)
-          return <span className={close ? 'font-semibold text-red-600' : ''}>{shortDate(row.original.deadline)}</span>
+          return <span className={close ? 'font-semibold text-[var(--danger)]' : ''}>{shortDate(row.original.deadline)}</span>
         },
       },
       {
@@ -141,14 +192,14 @@ export function ResultsTable({
         cell: ({ row }) => (
           <span>
             {row.original.source}
-            {row.original.dateUnverified && <span className="block text-xs text-amber-600">date unverified</span>}
+            {row.original.dateUnverified && <span className="block text-xs text-[var(--warn)]">date unverified</span>}
           </span>
         ),
       },
       { id: 'status', header: 'Status', accessorKey: 'status', filterFn: 'equalsString',
         cell: ({ row }) => <StatusChip status={row.original.status} /> },
     ],
-    [now],
+    [now, hasRoles],
   )
 
   const table = useReactTable({
@@ -158,7 +209,12 @@ export function ResultsTable({
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: (updater) =>
+      setRowSelection((old) => {
+        const next = typeof updater === 'function' ? updater(old) : updater
+        storeSelection(runId, next)
+        return next
+      }),
     globalFilterFn: textMatch,
     getRowId: (r) => String(r.id),
     getCoreRowModel: getCoreRowModel(),
@@ -226,11 +282,11 @@ export function ResultsTable({
           placeholder="Search title, employer, place"
           value={globalFilter}
           onChange={(e) => setGlobalFilter(e.target.value)}
-          className="w-64 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+          className="w-64 rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm"
         />
         <select aria-label="Filter by status" value={(filterValue('status') as string) ?? ''}
           onChange={(e) => setFilter('status', e.target.value)}
-          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+          className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
           <option value="">All statuses</option>
           {JOB_STATUSES.map((s) => (
             <option key={s} value={s}>{s.replace('_', ' ').toLowerCase()}</option>
@@ -238,23 +294,31 @@ export function ResultsTable({
         </select>
         <select aria-label="Filter by language" value={(filterValue('language') as string) ?? ''}
           onChange={(e) => setFilter('language', e.target.value)}
-          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+          className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
           <option value="">Any language</option>
           <option value="sv">Swedish</option>
           <option value="en">English</option>
         </select>
+        {hasRoles && (
+          <select aria-label="Filter by role type" value={(filterValue('role') as string) ?? ''}
+            onChange={(e) => setFilter('role', e.target.value)}
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
+            <option value="">All role types</option>
+            {roleTypes.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+        )}
         <label className="flex items-center gap-1.5 text-sm text-[var(--muted)]">
           Min score
           <input aria-label="Minimum score" type="number" min={0} max={100} value={(filterValue('score') as number) ?? ''}
             onChange={(e) => setFilter('score', e.target.value === '' ? undefined : Number(e.target.value))}
-            className="w-16 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm" />
+            className="w-16 rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1 text-sm" />
         </label>
         <Button variant="ghost" onClick={() => setShowAll(!showAll)} disabled={jobs.length <= topN && !showAll}>
           {showAll ? `Show top ${topN}` : `Show all (${jobs.length})`}
         </Button>
         <span className="ml-auto flex items-center gap-2">
           <select aria-label="Saved views" value="" onChange={(e) => applyView(e.target.value)}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
             <option value="">Saved views</option>
             {views.map((v) => <option key={v.name}>{v.name}</option>)}
           </select>
@@ -270,30 +334,47 @@ export function ResultsTable({
       </div>
 
       {selectedCount > 0 && (
-        <div className="mb-3 flex items-center gap-2 rounded-md bg-navy/10 px-3 py-2 text-sm">
-          <span>{selectedCount} selected</span>
-          <Button variant="ghost" onClick={() => {
-            table.getSelectedRowModel().rows.forEach((r) => setStatus(r.original.id, 'SHORTLISTED'))
-            setRowSelection({})
-          }}>Shortlist selected</Button>
-          <Button variant="ghost" disabled={selectedCount > MAX_TABS || openApplications.isPending}
-            title={selectedCount > MAX_TABS ? `At most ${MAX_TABS} applications can be opened at once` : 'Opens the selected ads in the JobPilot browser. Nothing is submitted.'}
-            onClick={() => openApplications.mutate(table.getSelectedRowModel().rows.map((r) => r.original.id), {
-              onSuccess: () => { setRowSelection({}); navigate('/apply') },
-              onError: (e) => toast(e.message, 'error'),
-            })}>
-            Open applications
-          </Button>
-          <Button variant="ghost" disabled={appliedSelected.length === 0}
-            title={appliedSelected.length === 0 ? 'Only jobs marked as applied can be logged' : 'Opens the confirmation step; nothing is saved yet'}
-            onClick={() => navigate(`/aktivitet?jobs=${appliedSelected.map((r) => r.original.id).join(',')}`)}>
-            Log in aktivitetsrapport ({appliedSelected.length})
-          </Button>
-          <Button variant="ghost" onClick={() => setRowSelection({})}>Clear</Button>
+        <div role="region" aria-label="Selected jobs"
+          className="sticky top-16 z-20 mb-4 rounded-2xl border border-[var(--accent)]/50 bg-[var(--glass)] px-4 py-3 text-sm shadow-[var(--shadow-lift)] backdrop-blur-xl">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              disabled={createDocuments.isPending}
+              title="Writes a tailored CV and cover letter for each selected job, then takes you to them"
+              onClick={() => createDocuments.mutate(
+                { jobIds: table.getSelectedRowModel().rows.map((r) => r.original.id), runId },
+                { onSuccess: () => { table.resetRowSelection(true); navigate('/documents?new=1') }, onError: (e) => toast(e.message, 'error') },
+              )}>
+              {createDocuments.isPending
+                ? 'Starting...'
+                : `Create tailored documents for ${selectedCount} selected ${selectedCount === 1 ? 'job' : 'jobs'}`}
+            </Button>
+            <span className="text-[var(--muted)]">{selectedCount} selected</span>
+            <span className="ml-auto flex items-center gap-2">
+              <Button variant="ghost" onClick={() => {
+                table.getSelectedRowModel().rows.forEach((r) => setStatus(r.original.id, 'SHORTLISTED'))
+                table.resetRowSelection(true)
+              }}>Shortlist selected</Button>
+              <Button variant="ghost" disabled={appliedSelected.length === 0}
+                title={appliedSelected.length === 0 ? 'Only jobs marked as applied can be logged' : 'Opens the confirmation step; nothing is saved yet'}
+                onClick={() => navigate(`/aktivitet?jobs=${appliedSelected.map((r) => r.original.id).join(',')}`)}>
+                Log in aktivitetsrapport ({appliedSelected.length})
+              </Button>
+              <Button variant="ghost" onClick={() => table.resetRowSelection(true)}>Clear</Button>
+            </span>
+          </div>
+          <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Jobs to continue with">
+            {table.getSelectedRowModel().rows.map((r) => (
+              <li key={r.id} className="flex items-center gap-1 rounded-full bg-navy/10 py-0.5 pl-2.5 pr-1 text-xs">
+                <span className="max-w-[16rem] truncate">{r.original.title}{r.original.employer ? `, ${r.original.employer}` : ''}</span>
+                <button type="button" aria-label={`Deselect ${r.original.title}`} onClick={() => r.toggleSelected(false)}
+                  className="rounded-full px-1.5 text-[var(--muted)] hover:bg-navy/20 hover:text-[var(--ink)]">×</button>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--line)] bg-[var(--panel)]">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel)]">
         <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (

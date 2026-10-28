@@ -8,7 +8,7 @@
         "properties": {
           "kind": {
             "type": "string",
-            "enum": ["EDUCATION", "WORK", "INTERNSHIP", "PROJECT", "OWN_BUSINESS", "VOLUNTEER", "CERTIFICATION",
+            "enum": ["EDUCATION", "WORK", "INTERNSHIP", "PROJECT", "OWN_BUSINESS", "VOLUNTEER", "CERTIFICATION", "LICENCE", "COURSE",
                      "AWARD", "PUBLICATION", "CONFERENCE", "LANGUAGE", "OTHER"]
           },
           "title": { "type": "string" },
@@ -37,6 +37,20 @@
         "required": ["kind", "title", "ongoing", "tags", "facts"],
         "additionalProperties": false
       }
+    },
+    "profile": {
+      "type": ["object", "null"],
+      "properties": {
+        "fullName": { "type": ["string", "null"] },
+        "headline": { "type": ["string", "null"] },
+        "email": { "type": ["string", "null"] },
+        "phone": { "type": ["string", "null"] },
+        "city": { "type": ["string", "null"] },
+        "website": { "type": ["string", "null"] },
+        "linkedin": { "type": ["string", "null"] },
+        "github": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
     },
     "skills": {
       "type": "array",

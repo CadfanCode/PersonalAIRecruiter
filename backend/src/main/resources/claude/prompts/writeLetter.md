@@ -31,7 +31,7 @@ or facts:
 Write the letter as JSON:
 - language: "{{language}}".
 - subject: "{{subjectPrefix}} <the job title from the ad>".
-- subline: "{{employer}}" followed by the city if the ad names one, for example "Comstream AB, Stockholm".
+- subline: "{{employer}}" followed by the city if the ad names one, for example "Example AB, Stockholm".
 - greeting: "{{greeting}}"
 - paragraphs: four or five paragraphs. First: friendly, humble but professional. Say who the candidate is by
   expertise, why this role, and what qualifies them. Never start with "My name is" or "Jag heter". Second: one

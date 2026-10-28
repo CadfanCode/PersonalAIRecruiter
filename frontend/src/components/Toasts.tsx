@@ -22,7 +22,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <div
             key={t.id}
             role="status"
-            className={`rounded-md px-3 py-2 text-sm shadow-lg ${t.tone === 'error' ? 'bg-red-600 text-white' : 'bg-navy text-white'}`}
+            className={`rounded-md px-3 py-2 text-sm shadow-lg ${t.tone === 'error' ? 'bg-[var(--danger)] text-white' : 'bg-navy text-white'}`}
           >
             {t.text}
           </div>

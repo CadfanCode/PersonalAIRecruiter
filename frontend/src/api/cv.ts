@@ -8,6 +8,8 @@ export const KINDS = [
   'PROJECT',
   'EDUCATION',
   'CERTIFICATION',
+  'LICENCE',
+  'COURSE',
   'AWARD',
   'CONFERENCE',
   'PUBLICATION',
@@ -73,7 +75,6 @@ export interface Profile {
   github: string | null
   linkedin: string | null
   workAuthorisation: string | null
-  securityVetting: string | null
   languages: Language[]
 }
 
@@ -103,11 +104,24 @@ export interface ImportedEntry {
   facts: ImportedFact[]
 }
 
+/** The person's own contact details as the documents state them; any field may be null. */
+export interface ImportedProfile {
+  fullName: string | null
+  headline: string | null
+  email: string | null
+  phone: string | null
+  city: string | null
+  website: string | null
+  linkedin: string | null
+  github: string | null
+}
+
 export interface ImportPreview {
   previewId: string
   files: string[]
   entries: { entry: ImportedEntry; duplicateOfEntryId: number | null }[]
   skills: { name: string; category: string | null }[]
+  profile: ImportedProfile | null
 }
 
 const KEY = ['cv'] as const
@@ -160,9 +174,9 @@ export const useImportPreview = () =>
     },
   })
 export const useImportCommit = () =>
-  useCvMutation(({ previewId, entries, skills }: { previewId: string; entries: ImportedEntry[]; skills: ImportPreview['skills'] }) =>
-    api<{ entryIds: number[]; facts: number; skills: number }>(`/api/cv/import/${previewId}/commit`, {
+  useCvMutation(({ previewId, entries, skills, profile }: { previewId: string; entries: ImportedEntry[]; skills: ImportPreview['skills']; profile?: ImportedProfile | null }) =>
+    api<{ entryIds: number[]; facts: number; skills: number; profileFilled: boolean }>(`/api/cv/import/${previewId}/commit`, {
       method: 'POST',
-      body: { entries, skills },
+      body: { entries, skills, profile: profile ?? null },
     }),
   )

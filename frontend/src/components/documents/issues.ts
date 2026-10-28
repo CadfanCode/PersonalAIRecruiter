@@ -11,5 +11,5 @@ export function groupIssues(violations: Violation[] | undefined): IssueMap {
 /** Outline colour for a field: red when it has a FAIL, amber for WARN only. */
 export function issueClass(issues: Violation[] | undefined): string {
   if (!issues || issues.length === 0) return ''
-  return issues.some((v) => v.severity === 'FAIL') ? 'ring-2 ring-red-500' : 'ring-2 ring-amber-400'
+  return issues.some((v) => v.severity === 'FAIL') ? 'ring-2 ring-[var(--danger)]' : 'ring-2 ring-[var(--warn)]'
 }

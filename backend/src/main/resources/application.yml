@@ -3,8 +3,9 @@ spring:
     name: jobpilot
   datasource:
     url: ${JOBPILOT_DB_URL:jdbc:postgresql://127.0.0.1:5432/jobpilot}
-    username: ${JOBPILOT_DB_USER:jobpilot}
-    password: ${JOBPILOT_DB_PASSWORD:jobpilot}
+    # No credentials are shipped: the embedded database needs none, and an external one is configured through these variables.
+    username: ${JOBPILOT_DB_USER:}
+    password: ${JOBPILOT_DB_PASSWORD:}
   flyway:
     enabled: true
   servlet:
@@ -18,6 +19,9 @@ server:
   port: ${SERVER_PORT:8080}
 
 jobpilot:
+  db:
+    # true: PostgreSQL runs inside the app, data in <data-dir>/db. false: use the datasource URL above (docker compose, tests).
+    embedded: ${JOBPILOT_DB_EMBEDDED:true}
   data-dir: ${JOBPILOT_DATA_DIR:${user.home}/.jobpilot}
   # Set by the installed desktop app: the built UI is served from here.
   web-dir: ${JOBPILOT_WEB_DIR:}
@@ -31,12 +35,12 @@ jobpilot:
     model: ${JOBPILOT_CLAUDE_MODEL:}
     timeout-seconds: 180
     web-timeout-seconds: 600
-    concurrency: 2
+    # Model calls running at once (1-8); changeable in Settings. Raised from 2 to 4; tune after a real run.
+    concurrency: 4
   search:
     default-max-age-days: 7
-    default-limit: 50
+    default-limit: 20
     results-top-n: 10
-    default-yrkesroll: Systemutvecklare/Programmerare
   jobtech:
     base-url: ${JOBPILOT_JOBTECH_URL:https://jobsearch.api.jobtechdev.se}
     taxonomy-url: ${JOBPILOT_TAXONOMY_URL:https://taxonomy.api.jobtechdev.se}
@@ -47,6 +51,12 @@ jobpilot:
     max-tabs: 5
     allow-file-urls: false
     suggestion-wait-millis: 5000
+  manual:
+    paste-only-hosts:
+      - linkedin.com
+    allow-private-hosts: false
+    max-page-bytes: 2000000
+    fetch-timeout-seconds: 15
   aktivitet:
     form-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet
     list-url: https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera

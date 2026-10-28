@@ -1,0 +1,82 @@
+{
+  "type": "object",
+  "properties": {
+    "isJobAd": {
+      "type": "boolean"
+    },
+    "title": {
+      "type": "string"
+    },
+    "employer": {
+      "type": "string"
+    },
+    "location": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "municipality": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "language": {
+      "type": "string",
+      "enum": [
+        "sv",
+        "en"
+      ]
+    },
+    "employmentType": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        "Heltid",
+        "Deltid",
+        "Timmar vid behov",
+        null
+      ]
+    },
+    "publishedDate": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "deadline": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+    },
+    "applyUrl": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "description": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "isJobAd",
+    "title",
+    "employer",
+    "location",
+    "municipality",
+    "language",
+    "employmentType",
+    "publishedDate",
+    "deadline",
+    "applyUrl",
+    "description"
+  ],
+  "additionalProperties": false
+}

@@ -1,10 +1,10 @@
 # JobPilot specification
 
-Version 1.0, 26 October 2026. Owner: Cai Birch.
+Version 2.0, 28 October 2026 (the overhaul, sections 2.2, 4.2, 5.5, 9.5, 10.1 and 17; the rest is as of 1.0 and 27 October). Owner: Cai Birch.
 
 ## 1. Goal
 
-A local web app that turns one starting prompt ("new-grad Java roles in Stockholm posted in the
+A desktop app (everything stays on the user's computer, for any profession) that turns one starting prompt ("new-grad Java roles in Stockholm posted in the
 last 7 days", "PE teacher roles in Nacka", "logistics coordinator, Uppsala, part time") into:
 
 1. a ranked, polished results table of matching job ads,
@@ -39,23 +39,72 @@ Out of scope for v1: multi-user, hosting, email sending, auto-submit, LinkedIn s
 7. **Log**: when the user marks a job "Applied", JobPilot can save it to the aktivitetsrapport
    (the user must already be signed in with BankID in the JobPilot browser profile).
 
+### 2.1 The guided pipeline (2026-10-27)
+
+The UI is one pipeline with four stages, each ending in one obvious action:
+
+1. **New run** (three modes): *Targeted search* (the prompt above), *Discover roles* (section 6.3) or *Paste a job link*
+   (section 6.4). All three end in a ranked results table.
+2. **Results**: the user ticks jobs (remembered per run in the browser). The selection bar shows what is selected, lets the user
+   deselect, and offers "Create tailored documents for N selected jobs": one batch writes a CV and a letter per job (one
+   failure does not stop the others) and opens Documents.
+3. **Documents**: progress and retry per selected job, the unchanged editor and PDF preview per job, "Ask Claude" chat
+   (section 8.6) and "Continue to Finalize Applications".
+4. **Finalize Applications** (was "Apply monitor"): every selected job with its documents and status; "Fill all" fills the
+   forms, at most five browser tabs at a time, the rest queue. The pause before submit is permanent (CLAUDE.md rule 1).
+   The user submits by hand and confirms with "I submitted it", which records the application (job, company, role type,
+   search mode, date, documents used) for the Activity Report. Logging in Arbetsförmedlingen stays a separate, prefilled
+   confirmation step (section 10).
+
+### 2.2 The product (2026-10-28, ADRs 0012 to 0016)
+
+JobPilot is installed like any app (one installer per OS, no Docker, no database or server to set up) and is for any profession.
+
+**First run (onboarding)**, one step per screen with a progress indicator, shown once: (1) drop or browse the CV (PDF, DOCX, TXT,
+MD); the files are held in the browser and read after step 2, because reading needs Claude; (2) connect Claude: the Claude Code
+subscription (found in the usual folders on every OS, with an install command when missing, and "not installed" told apart
+from "not signed in") or an Anthropic API key (kept only in the OS credential store); a real test call must pass before
+continuing; then the CV is read, a short summary of what was found is shown and confirmed (the person's contact details fill
+only blank profile fields); (3) the country (Sweden live, others "coming soon"); (4) the search mode.
+`GET /api/onboarding` reports the state and the first open step; returning users never see it unless they run setup again.
+
+**The pipeline**, five stages across the top (current bold, others faded, completed ones open): *Search mode* (Discovery or
+Prompt; paste-a-link is a secondary action) -> *Run search* (progress with percent and time left, results appear as they are
+scored, the selection basket) -> *Documents* (a tailored CV and cover letter per selected job; the overview shows "CV approved" and
+"Cover letter approved" per job, "Approve all", and an **Apply** button) -> *Apply* (a browser tab per approved application,
+filled in; per-application status: filling, needs login, needs attention, ready for submission, failed) -> *Submit* (the user
+presses the employer's own submit button and confirms; the application is stored with a snapshot). Only applications whose CV
+and cover letter are **both** approved go on to Apply; the UI says which do not and why. A hidden menu at the bottom edge holds
+CV database, Submitted applications, Extra features (the activity report) and Settings; it opens on hover at the bottom edge,
+on the handle (click or focus) and when Tab reaches it.
+
+**Prompt mode**: a text box with tips and examples from several professions; ads to score default to 20 (cap 150); recency and
+place come from the words; the search plan (the `SearchProfile`) is always shown for review and approving it starts the search.
+Platsbanken is always searched; employer career pages are an opt-in Settings choice. **Discovery mode**: the profile is made
+and accepted for the user; they only pick roles (section 6.3), optionally "go wider" (the aggressive option).
+
 ## 3. Architecture
 
 ```
-React UI (5173) --REST/JSON--> Spring Boot API (8080) --JDBC--> PostgreSQL
-                                   |
-                                   +-- ClaudeRunner ---- ProcessBuilder ---> local `claude -p` CLI
+React UI (served by the API in the installed app; 5173 in development) --REST/JSON--> Spring Boot API (18080 installed, 8080 dev)
+                                   |                                                       --JDBC--> embedded PostgreSQL 16
+                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI  |  Anthropic Messages API (ADR 0014)
+                                   +-- CountryRegistry -- JobSource ------> one job board per country (Sweden: JobTech/Platsbanken)
+                                   +-- SecretStore ------ java-keyring ----> OS credential store (API key, saved portal logins)
                                    +-- JobTechClient --- HTTPS ------------> jobsearch.api.jobtechdev.se
                                    +-- BrowserService -- Playwright -------> headed Chromium (persistent profile)
                                    +-- PdfRenderer ----- openhtmltopdf ----> ~/.jobpilot/documents/*.pdf
 ```
 
 Single process and single user. Bind to 127.0.0.1 only. No authentication on the local API, but
-reject requests whose `Origin` is not `http://localhost:5173` or `http://127.0.0.1:5173`
-(CSRF protection for a localhost app).
+reject requests whose `Origin` is not the app's own address or the development UI's
+(CSRF protection for a localhost app). The installed app is one jpackage image with its own Java runtime:
+`DesktopLauncher` takes a single-instance lock, picks the first free port from 18080, starts the database and the API and opens
+the UI in its own window of any Chromium-based browser (Playwright's Chromium as the fallback); closing the window stops it
+(ADR 0012).
 
-Data directory: `~/.jobpilot/` (configurable) containing `documents/`, `browser-profile/` and
-`logs/`.
+Data directory: `~/.jobpilot/` (configurable) containing `db/` (the embedded PostgreSQL data), `documents/`,
+`browser-profile/`, `app-window/` and `logs/`.
 
 ## 4. Data model (PostgreSQL, Flyway migrations)
 
@@ -104,7 +153,7 @@ aktivitet_log(id, job_id, yrkesroll, employer_label, municipality, omfattning,
               answered_ad, applied_date, saved_at, result, message)
 
 -- added in V2 (milestone 2), to hold the whole seed:
---   profile: phone_international, work_authorisation, security_vetting
+--   profile: phone_international, work_authorisation
 --   cv_entry: title_en, note (note is an owner to-do, internal only, never sent to a prompt)
 --   start_ym / end_ym hold "YYYY-MM", or "YYYY" when the month is unknown
 known_gap(id, text, sort_order)
@@ -121,11 +170,39 @@ Tables for settings and the answers memory are added by the milestones that need
 `dedupe_key` = lowercase(employer + "|" + normalised title + "|" + municipality). Keep the
 source with the richest description when duplicates collide.
 
+### 4.1 Additions of 2026-10-27 (migrations V6 to V8)
+
+```
+pipeline_run.mode (TARGETED | DISCOVER | MANUAL), pipeline_run.source_url (MANUAL: the pasted address)
+application(job_id PK -> job, run_id, search_mode, role_type, selected_at, submitted_at, docs_json)
+  -- the pipeline basket. submitted_at is set only by the user's own "I submitted it" click; docs_json records the document
+  -- ids, versions and file names used then.
+role_suggestion(id, run_id, title, category RELATED|HYBRID|OUTSIDE_FIELD|CUSTOM, match_score, reasoning, gaps, selected,
+                user_added, profile_json, search_profile_id, sort_order)
+run_job.role_suggestion_id          -- the role an ad was scored and is tailored against (its best-relevance role)
+run_job_role(run_id, job_id, role_suggestion_id)   -- every role that found the ad
+```
+
+### 4.2 Additions of 2026-10-28 (migrations V9 to V11)
+
+```
+app_setting(key, value, updated_at)      -- claude.provider, claude.tested, claude.concurrency, api.model, country, search.mode,
+                                            search.careerPages, onboarding.complete
+profile: security_vetting dropped;  job_score.tech renamed skills;  cv_entry.kind adds LICENCE and COURSE;
+role_suggestion.category OUTSIDE_TECH renamed OUTSIDE_FIELD
+pipeline_run.step_started_at             -- when the current step began (time-left estimate while scoring)
+submitted_application(id, job_id -> job ON DELETE SET NULL, title, employer, municipality, url, apply_url, language, ad_text,
+   search_mode, role_type, score_total, submitted_at, cv_version, cv_file, cv_content_json, cv_pdf BYTEA,
+   letter_version, letter_file, letter_content_json, letter_pdf BYTEA)
+   -- written once, when the user confirms they submitted; never changed by later edits, regeneration or undo of the document
+saved_login(host PK, username, created_at, last_used_at)   -- the password is in the OS credential store, not here
+```
+
 ## 5. Claude integration
 
 ### 5.1 ClaudeRunner
 
-All AI work goes through one class that shells out to the user's local Claude Code:
+All AI work goes through `ClaudeRunner`; `ProviderRouter` hands each call to the provider the user chose (section 5.5). The CLI provider shells out to the user's local Claude Code:
 
 ```
 claude -p <prompt>
@@ -153,7 +230,8 @@ Implementation requirements:
   stdin with `--input-format text` if it exceeds the argument length limit (use stdin when the
   prompt is over 100 kB).
 - Configurable binary path (`settings.claude.path`, default `claude` on PATH), timeout (default
-  180 s, web discovery and CV import 600 s), and max concurrency (default 2, a `Semaphore`).
+  180 s, web discovery and CV import 600 s), and max concurrency (default 4, range 1 to 8, one shared limiter
+  `ClaudeConcurrency` behind every model call; changeable in Settings while the app runs).
 - Parse with Jackson. If `is_error` is true, `subtype` is not success, the exit code is not
   zero, or `structured_output` is missing, throw `ClaudeCallException` with stderr attached.
 - Validate `structured_output` against the same schema again (networknt json-schema-validator).
@@ -284,6 +362,15 @@ FormActions:
 }
 ```
 
+### 5.5 Providers (ADR 0014)
+
+`AiProvider` has two implementations: `cli` (above) and `api` (the Anthropic Messages API over HTTPS, the user's key from the OS
+credential store, structured output forced by one `respond` tool whose `input_schema` is the task's JSON Schema, the server-side
+`web_search` tool for career-page discovery, a larger answer budget for long tasks, 429/529 retried, an explicit error when an
+answer is cut off). Both share one adjustable call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings). The choice, the
+API model and the last passed connection test are in `app_setting`. `GET/PUT /api/claude/connection...` serve onboarding and Settings;
+the key is never returned (only its last four characters), never logged and never written to the database.
+
 ## 6. Job search
 
 ### 6.1 JobTech JobSearch API (primary, Platsbanken)
@@ -323,6 +410,39 @@ unverified" and sorted last.
 Lesson from 26 Oct 2026: aggregator snapshot pages (jooble, ledigajobb category pages) give
 stale or relative dates, and reposted ads keep old IDs. Trust the ad's own published date.
 
+### 6.3 Discover roles
+
+For users with a broad background. One `suggestRoles` call reads the WHOLE CV digest (education, work, projects,
+certifications, languages, skills, tags) and returns role types in three groups (closely related, hybrid, outside tech), each
+with a match score, reasoning, gaps and its own search fields. The run pauses in step SUGGEST. The user ticks roles (select
+all), renames, and adds roles of their own (their search fields come from one batched `profileRoles` call). Continue then:
+
+- builds one SearchProfile per chosen role on top of the run's base profile (the user's locations, age limit and employment
+  types), validated against the same schema as every profile; `relevantTags` are filtered to tags that exist;
+- searches each role with the normal collector and prefilter, merges by dedupe key (an ad keeps its best-relevance role as
+  primary and is tagged with every role that found it);
+- scores at most `limit` ads (default 60, aggressive 150, hard cap 150), round-robin across roles, each ad against its primary
+  role's profile. Every later profile lookup for an ad (drawer, tailoring, yrkesroll, application score) goes through the role.
+
+Aggressive: 24 instead of 12 suggestions with a lower bar, a 14-day default age limit, a larger default budget and a lower
+default minimum score filter in the results (25 instead of 40). Suggestions stay with the run (`GET /runs/{id}/roles`).
+
+### 6.4 Paste a job link
+
+`POST /import {url, text?}` adds one job the user found themselves. The address is read once, only when allowed: http(s)
+only, public addresses only (re-checked at every redirect), size and time limits. Sites in `jobpilot.manual.paste-only-hosts`
+(default linkedin.com) are never fetched and never opened by the apply browser (Finalize shows "Apply on the site yourself");
+the run waits in step FETCH for the user to paste the ad text. The same wait happens when a page cannot be read or is too thin.
+`extractJob` turns the text into an ad (with the municipality spelled as Platsbanken spells it), then the usual profile and
+score steps run in a MANUAL run and the job appears in the results like any other. An ad already stored is linked, not
+overwritten, and an explicit employer apply link in the ad is used for filling.
+
+### 6.5 Countries (ADR 0013)
+
+`CountryRegistry` lists the known countries; one with a `JobSource` bean is available, the rest show as "coming soon". The chosen
+country (onboarding, Settings) decides which `JobSource` searches, how prompts describe the market, and whether the activity report
+exists (`activityReport`, Sweden only). Adding a country is one `JobSource` bean and one registry entry.
+
 ## 7. Ranking
 
 1. Pre-filter in Java: drop ads older than maxAgeDays, past deadline, matching exclusions, or
@@ -332,8 +452,8 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
    with the profile's municipality list; an ad without a municipality is kept.
 2. Build a compact CV digest (entries, facts and skills as JSON, at most around 8k tokens) once
    per run.
-3. Call `scoreJob` per remaining ad (concurrency 2). Cache by (job id, CV database version,
-   SearchProfile id). The run option `limit` (default 50) is the number of ads scored, best JobTech
+3. Call `scoreJob` per remaining ad (as many at a time as the concurrency setting allows, default 4). Cache by (job id, CV database version,
+   SearchProfile id). The run option `limit` (default 20, at most 150 in every mode) is the number of ads scored, best JobTech
    relevance first, unverified web dates last; other ads that passed the filters are stored and
    listed unscored. Measured 26 Oct 2026 on Sonnet: about $0.04 per scored ad.
 4. Default results view: top 10 by total, with a toggle to show all.
@@ -357,7 +477,8 @@ stale or relative dates, and reposted ads keep old IDs. Trust the ad's own publi
 
 ### 8.2 Generation
 
-`writeCv` and `writeLetter` receive only the selected facts. Language = the ad's language. The
+`writeCv` and `writeLetter` receive only the selected facts and are called at the same time (each with its own validation
+and single rewrite); a batch of jobs also runs up to three jobs at once. The model-call limit is the only throttle. Language = the ad's language. The
 example letter (the user's Knowit letter, in `seed/`) is passed as a structure example, never as
 text to copy.
 
@@ -415,6 +536,15 @@ sv: "brinner för", "passionerad", "drivs av", "inte bara ... utan också", "i d
 - Example letters (`resources/claude/examples`): the Knowit letter for Swedish ads, the Ravion
   letter for English ads. They show shape only.
 
+### 8.6 Ask Claude (document chat)
+
+`POST /documents/{id}/chat {message, content?, history?}` revises the CV or letter as the user asks. The model sees the draft
+on screen, the ad, the writing rules and every fact of every entry the user has not excluded for this job, and must cite only
+those. Java then validates the answer against the writeCv/writeLetter schema, passes a CV through `CvAssembler` (database-owned
+fields cannot change), runs the validator with one automatic rewrite, adds entries the revision now uses to the job's selection,
+renders and stores a new version. Approval is revoked, as for any edit; the page says so and offers an undo (the previous content
+is saved back). A request that needs something not in the CV database changes nothing and says what is missing.
+
 ## 9. Applying in the browser
 
 ### 9.1 Browser
@@ -457,6 +587,24 @@ a different value is left alone. The Ja and Nej buttons of a radio group are one
 uploads the page is read again; fields that appeared (Ponty's category selects) get one more mapping
 pass, never more. Each pass is stored in `application_form_snapshot`. A job becomes FILLED after a
 fill that left no questions, never APPLIED.
+
+### 9.2.1 Batches and queueing
+
+`POST /apply/batch` ("Fill all") accepts any number of jobs. At most `browser.max-tabs` (5) tabs are open at once; the rest are
+QUEUED and start by themselves, in order, when a tab is closed or its application is confirmed as submitted. Form filling has its
+own two-thread executor, so a long documents batch or discovery run cannot starve it. A tab the user closed by hand is
+reconciled to CLOSED (Focus gives a message, Close is idempotent, "Restart and refill" reopens it). Jobs whose link is on the
+paste-only list get status APPLY_MANUALLY and no tab.
+
+### 9.5 Saved portal logins (ADR 0016)
+
+When a portal needs a sign-in, the tab waits (`NEEDS_LOGIN`) and the user signs in or signs up themselves; JobPilot never creates
+accounts and never touches BankID. Afterwards it asks whether to remember that login. The user types the username and password into
+JobPilot's own dialog (never read from the portal's field); the password goes to the OS credential store under the portal's host,
+the host and username to `saved_login`. Later, when a tab waits at a login on exactly that host, JobPilot's own code
+(`BrowserGuard.fillSavedLogin`, never a model-proposed action, never in a prompt) types the username and password into a login
+form with one password field and at most three inputs, and nothing else: it does not press Log in (rule 1) and refuses on any
+other host or on a sign-up form (a second password field, or more than three inputs); a BankID-only page has no password field and is skipped by the same rule. Saved logins are listed and deleted in Settings.
 
 ### 9.3 Guardrails enforced in code
 
@@ -551,6 +699,13 @@ Before logging, check the saved list on
 `/for-arbetssokande/mina-sidor/aktivitetsrapportera` for an identical employer and date to avoid
 duplicates.
 
+### 10.1 Reported status (2026-10-28)
+
+A submitted application (`submitted_application`, section 4.2) is *reported* once an aktivitet run saved it (`aktivitet_log`
+`SAVED`); `reportedAt` is read from the log. The Activity report lists what still has to be reported and keeps reported ones in a
+collapsed "Already reported" list; the confirmation step refuses a job that was already saved ("Already logged"), so nothing is
+reported twice. The feature only exists for countries with `activityReport`.
+
 ## 11. REST API (prefix /api)
 
 ```
@@ -578,6 +733,15 @@ GET      /documents              overview of jobs that have documents
 GET/PUT  /documents/{id}         edit content -> re-render
 POST     /documents/{id}/approve
 GET      /documents/{id}/pdf
+POST     /runs                   also {mode: TARGETED|DISCOVER, aggressive?}; Discover needs no prompt
+GET/PUT  /runs/{id}/roles        Discover: the suggested roles; PUT = the user's complete list (ticked, renamed, added)
+POST     /import                 {url, text?} -> {id} of a MANUAL run;  POST /import/{runId}/text {text}
+GET      /applications           the selected jobs with documents, generation progress, role type, mode, submission
+POST     /applications           {jobIds, runId?} select;  DELETE /applications/{jobId}
+POST     /applications/documents {jobIds, runId?} select and write documents as one batch (202)
+POST     /applications/{jobId}/submitted   the user's confirmation that they submitted by hand;  DELETE undoes it
+POST     /documents/{id}/chat    {message, content?, history?} -> {reply, changed, approvalRevoked, document}
+POST     /apply/batch            {jobIds:[...]} any number; five tabs at a time, the rest queue
 POST     /apply                  {jobIds:[...]} (at most 5) -> opens tabs and fills
 POST     /apply/{jobId}/focus    bring the tab to the front;  POST /apply/{jobId}/close
 POST     /apply/{jobId}/fill     re-scan and fill the current page (?restart=true reloads the application first)
@@ -592,39 +756,42 @@ GET/POST /settings/banned-phrases  PUT .../{id} {enabled}, DELETE .../{id}
 POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would choose (nothing stored)
          (Claude CLI path, model and the other SPEC 13 values are still environment variables, not editable in the UI)
 GET      /claude/health          GET /claude/usage
+-- overhaul (28 Oct 2026) --
+GET      /onboarding             state and first open step;  PUT /onboarding/mode {DISCOVER|PROMPT};  POST /onboarding/complete | /reopen
+GET/PUT  /claude/connection...   status; /provider {id}; /api-key {key, model?} (DELETE removes); /api-model; POST /test {provider}
+GET/PUT  /country                the countries (available or coming soon) and the chosen one
+GET/PUT  /settings/performance   {claudeConcurrency 1..8};  GET/PUT /settings/search {careerPages}
+POST     /applications/approve-all   per document: approved, already approved, or refused with the reason (never all-or-nothing)
+POST     /applications/apply     opens only applications with both documents approved; the rest come back as skipped with a reason
+GET      /submitted[?reported=]  GET /submitted/{id}  GET /submitted/{id}/cv.pdf | letter.pdf   the frozen record of what was sent
+GET/PUT  /logins                 DELETE /logins/{host}   saved portal logins (host and username only; the password never comes back)
+GET      /runs/{id}              also etaSeconds while ads are scored
 ```
 
 ## 12. Frontend
 
-Pages (React Router), styled with Tailwind, light and dark themes, responsive down to 1280 px
-(desktop tool):
+React 19, Tailwind 4 with design tokens (CSS variables, light and dark; `<html data-theme>` always holds the resolved theme and is
+set before the first paint), Inter, rounded cards, one gentle entrance animation that respects "reduce motion". The shell is a
+flow bar (Search mode, Run search, Documents, Apply, Submit) and the bottom menu (CV database, Submitted applications, Extra
+features, Settings). Pages:
 
-1. **Dashboard**: new-run prompt box with example chips ("New-grad Java, Stockholm, 7 days",
-   "PE teacher, Nacka", "Logistics, Uppsala, part time"), recent runs, an aktivitetsrapport
-   window reminder, and Claude health and usage.
-2. **Run view**: step tracker (Profile -> Search -> Rank -> Done), an editable SearchProfile card
-   (chips for titles, skills, tags, locations; yrkesroll field), and live progress.
-3. **Results table** (TanStack Table): columns Rank, Score (stacked bar tech/exp/eligibility with
-   tooltip), Title, Employer (end client), Location, Published, Deadline (red if within 3 days),
-   Language flag, Experience asked, Fit, Gaps, Source, Status chip. Sorting, column filters, text
-   search, saved views, row selection, and a side drawer with the full ad, score breakdown,
-   apply link, notes and actions (Shortlist, Generate documents, Open application, Mark applied,
-   Log in aktivitetsrapport). CSV and XLSX export.
-4. **Documents**: side-by-side PDF preview and editable paragraphs, validator report, fact
-   citations on hover (bullet -> source fact), Approve, Regenerate, and per-job pin/exclude of
-   CV entries.
-5. **Apply monitor**: one card per open tab: status (Filling, Waiting for sign-in, Needs answers,
-   Ready for you to submit), filled and skipped counts, questions for the user with answer
-   inputs, "Fill this page" and "Focus tab" buttons.
-6. **CV database**: timeline of entries grouped by kind, an inline editor for entries and facts
-   (English and Swedish text), tag and skill pickers, import wizard (upload -> preview -> commit),
-   and a "Preview selection for…" tool that shows which facts would be chosen for a pasted ad.
-7. **Settings**: Claude CLI path, model, timeouts, concurrency, data directory, style rules and
-   banned phrases editor, default yrkesroll, JobTech API key (optional).
+1. **Welcome** (`/welcome`): the four onboarding steps (section 2.2).
+2. **Search mode** (`/`): Discovery or Prompt, the form of the chosen mode, "add a job from a link", recent searches, the
+   activity-report reminder (only where it exists).
+3. **Run search** (`/runs/{id}`): the processing view (ring, percent, what is happening, time left, cancel), results as they are
+   scored (TanStack Table with selection basket and "Create tailored documents for N selected jobs"), the search-plan review for
+   Prompt mode ("Approve and search"), the role picker for Discovery.
+4. **Documents** (`/documents`, `/documents/job/{id}`): the overview with the two approval columns, "Approve all" and "Apply (N)";
+   per job the editor and PDF preview with "Ask Claude" and a prominent Approve button.
+5. **Apply** (`/apply`): a card per application with its status, login alerts, questions, "Save your login?" after a sign-in,
+   and the tab controls. **Submit** (`/submit`): the applications waiting for the user's own click, "Open the application" and
+   "I submitted it" with a confirmation.
+6. **Submitted applications** (`/submitted`, `/submitted/{id}`), **Extra features** (`/extras`), **Activity report** (`/aktivitet`).
+7. **CV database** (`/cv`) as before, and **Settings** (`/settings`): Claude connection, search, speed and usage, saved logins,
+   writing rules, appearance (system, light, dark), run the setup again.
 
-UI polish: Inter font, navy `#1F3A5F` accent, status colours (new = grey, shortlisted = blue,
-docs ready = violet, applied = green, logged = teal, rejected = red), skeleton loaders, toasts,
-keyboard shortcuts (j/k to move rows, s to shortlist, g to generate).
+Notifications: when an application becomes ready for submission the app shows a message and, if the user allowed it, a system
+notification (Web Notifications; asked for at the first Apply). The app-wide watcher runs in the shell.
 
 ## 13. Settings defaults
 
@@ -633,12 +800,12 @@ claude.path=claude
 claude.model=            (empty = Claude Code default)
 claude.timeoutSeconds=180
 claude.webTimeoutSeconds=600
-claude.concurrency=2
+claude.concurrency=4
 data.dir=~/.jobpilot
 search.defaultMaxAgeDays=7
-search.defaultLimit=50
+search.defaultLimit=20          (at most 150)
 results.topN=10
-aktivitet.defaultYrkesroll=Systemutvecklare/Programmerare
+(no default yrkesroll: the search plan's occupation, else the ad's own title)
 ```
 
 ## 14. Testing
@@ -677,6 +844,7 @@ aktivitet.defaultYrkesroll=Systemutvecklare/Programmerare
 
 - Local only; bind 127.0.0.1; CORS limited to the UI origin.
 - Personal data stays on the machine. The only outbound calls are JobTech, sites the user
-  applies to, and Claude Code.
-- Store no passwords. The browser profile holds cookies; document this in the README.
+  applies to, and the chosen Claude access (the Claude Code CLI, or api.anthropic.com with the user's own key).
+- Secrets (the Anthropic API key, saved portal passwords) live only in the OS credential store; there is no plaintext fallback, and
+  without a store nothing is saved. The browser profile holds cookies; document this in the README.
 - Back up the database with `pg_dump` from a script in `scripts/backup.sh`.

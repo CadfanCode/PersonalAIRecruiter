@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "changed": { "type": "boolean" },
+    "reply": { "type": "string" },
+    "document": { "type": "object" }
+  },
+  "required": ["changed", "reply", "document"],
+  "additionalProperties": false
+}

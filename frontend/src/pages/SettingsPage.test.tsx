@@ -1,7 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ThemeProvider } from '../theme/ThemeProvider'
+import { countryView, onboarded } from '../test/fixtures2'
 import { mockApi } from '../test/mockApi'
 import { SettingsPage } from './SettingsPage'
 
@@ -22,37 +25,191 @@ const limits = {
   },
   error: null,
 }
+const connection = (over = {}) => ({
+  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null },
+  api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
+})
 
 function setup(extra: Record<string, unknown> = {}) {
   const calls = mockApi({
+    'GET /api/claude/connection': connection(),
     'GET /api/claude/usage': usage,
     'GET /api/claude/limits': limits,
     'GET /api/settings/style-rules': rules,
     'GET /api/settings/banned-phrases': phrases,
+    'GET /api/settings/performance': { claudeConcurrency: 4, min: 1, max: 8 },
+    'GET /api/settings/search': { careerPages: false },
+    'GET /api/logins': [],
+    'GET /api/country': countryView,
+    'GET /api/onboarding': onboarded,
     ...extra,
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><SettingsPage /></QueryClientProvider>)
+  render(
+    <QueryClientProvider client={client}>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/settings']}>
+          <Routes>
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/welcome" element={<p>Welcome steps</p>} />
+          </Routes>
+        </MemoryRouter>
+      </ThemeProvider>
+    </QueryClientProvider>,
+  )
   return calls
 }
 
-afterEach(() => vi.unstubAllGlobals())
+const open = (name: string) => userEvent.click(screen.getByRole('button', { name }))
 
-describe('settings page', () => {
-  it('shows usage per task and explains where the CLI model is set', async () => {
+afterEach(() => {
+  vi.unstubAllGlobals()
+  localStorage.clear()
+  document.documentElement.removeAttribute('data-theme')
+})
+
+describe('settings: Claude connection', () => {
+  it('shows which access is used, that the CLI was found, and the subscription usage', async () => {
     setup()
 
-    expect(await screen.findByText('JobPilot has made 29 calls, 0 failed.')).toBeInTheDocument()
-    expect(screen.getByText('scoreJob')).toBeInTheDocument()
-    expect(screen.getByText('123,456')).toBeInTheDocument()
-    expect(screen.queryByText(/\$/)).not.toBeInTheDocument() // the subscription has no per-call price
+    expect(await screen.findByText(/Found 2.1.312 \(Claude Code\)/)).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Claude Code subscription' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: 'Anthropic API key' })).toBeDisabled() // no key saved yet
     expect(await screen.findByRole('progressbar', { name: 'Session (5 hours)' })).toHaveAttribute('aria-valuenow', '7')
     expect(screen.getByRole('progressbar', { name: 'Week (7 days)' })).toHaveAttribute('aria-valuenow', '96')
-    expect(screen.getByText(/JOBPILOT_CLAUDE_MODEL/)).toBeInTheDocument()
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
   })
 
+  it('saves an API key without ever showing it back, then lets the user switch to it and test it', async () => {
+    const key = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-0123'
+    let saved = false
+    const calls = setup({
+      'GET /api/claude/connection': () => connection(saved ? { api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } } : {}),
+      'PUT /api/claude/connection/api-key': () => {
+        saved = true
+        return connection({ api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } })
+      },
+      'PUT /api/claude/connection/provider': connection({ selected: 'api', api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } }),
+      'POST /api/claude/connection/test': { ok: true, provider: 'api', problem: null, message: 'Connected.', help: null, durationMs: 900 },
+    })
+
+    await userEvent.type(await screen.findByLabelText('Anthropic API key'), key)
+    await userEvent.click(screen.getByRole('button', { name: 'Save key' }))
+    expect(await screen.findByText('…0123')).toBeInTheDocument()
+    expect(screen.queryByDisplayValue(key)).not.toBeInTheDocument()
+    expect(calls.find((c) => c.url === '/api/claude/connection/api-key')!.body).toEqual({ key })
+
+    await userEvent.click(screen.getByRole('radio', { name: 'Anthropic API key' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/provider')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/claude/connection/provider')!.body).toEqual({ id: 'api' })
+  })
+
+  it('tests the connection and explains a failure with what to do about it', async () => {
+    setup({
+      'POST /api/claude/connection/test': {
+        ok: false, provider: 'cli', problem: 'NOT_LOGGED_IN', message: 'Claude Code is installed but not signed in.',
+        help: 'Open a terminal, type  claude  and sign in with your Claude account, then test again.', durationMs: 4000,
+      },
+    })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Test the connection' }))
+
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('installed but not signed in')
+    expect(alert).toHaveTextContent('sign in with your Claude account')
+  })
+
+  it('says so when this computer has no secure place to keep a key', async () => {
+    setup({ 'GET /api/claude/connection': connection({ secureStore: { available: false, name: 'none available' } }) })
+
+    expect(await screen.findByText(/No secure credential store is available/)).toBeInTheDocument()
+    expect(screen.queryByLabelText('Anthropic API key')).not.toBeInTheDocument()
+  })
+})
+
+describe('settings: search, speed, logins, appearance and setup', () => {
+  it('makes career-page search an opt-in setting and leaves the national job board always on', async () => {
+    const calls = setup({ 'PUT /api/settings/search': { careerPages: true } })
+    await open('Search')
+
+    expect(await screen.findByText(/national job board of your country is always searched/)).toBeInTheDocument()
+    const box = screen.getByRole('checkbox', { name: /Also search employers' own career pages/ })
+    expect(box).not.toBeChecked()
+    await userEvent.click(box)
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/settings/search')).toBe(true))
+    expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ careerPages: true })
+  })
+
+  it('shows Sweden as the only country and the others as coming soon', async () => {
+    setup()
+    await open('Search')
+
+    expect(await screen.findByRole('radio', { name: /Sweden/ })).toHaveAttribute('aria-checked', 'true')
+    const norway = screen.getByRole('radio', { name: /Norway/ })
+    expect(norway).toBeDisabled()
+    expect(within(norway).getByText('Coming soon')).toBeInTheDocument()
+  })
+
+  it('changes how many Claude calls run at once, and shows usage per task', async () => {
+    const calls = setup({ 'PUT /api/settings/performance': { claudeConcurrency: 6, min: 1, max: 8 } })
+    await open('Speed and usage')
+
+    const slider = await screen.findByLabelText('Calls at the same time')
+    expect(slider).toHaveValue('4')
+    fireEvent.change(slider, { target: { value: '6' } })
+    fireEvent.pointerUp(slider)
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/settings/performance')).toBe(true))
+    expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ claudeConcurrency: 6 })
+    expect(await screen.findByText('JobPilot has made 29 calls, 0 failed.')).toBeInTheDocument()
+    expect(screen.getByText('123,456')).toBeInTheDocument()
+  })
+
+  it('lists saved logins by site and username, never a password, and deletes one', async () => {
+    const calls = setup({
+      'GET /api/logins': [{ host: 'jobs.example.com', username: 'cai@example.com', createdAt: '2026-10-20T10:00:00Z', lastUsedAt: '2026-10-25T10:00:00Z' }],
+      'DELETE /api/logins/jobs.example.com': null,
+    })
+    await open('Saved logins')
+
+    expect(await screen.findByText('jobs.example.com')).toBeInTheDocument()
+    expect(screen.getByText('cai@example.com')).toBeInTheDocument()
+    expect(screen.queryByText(/password:/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/You still press Log in yourself/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Delete the login for jobs.example.com' }))
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
+  })
+
+  it('switches between light, dark and the system setting and remembers the choice on this computer', async () => {
+    setup()
+    await open('Appearance')
+
+    await userEvent.click(await screen.findByRole('radio', { name: /Dark/ }))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+    expect(localStorage.getItem('jobpilot.theme')).toBe('dark')
+    await userEvent.click(screen.getByRole('radio', { name: /Light/ }))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    await userEvent.click(screen.getByRole('radio', { name: /Same as your computer/ }))
+    expect(localStorage.getItem('jobpilot.theme')).toBeNull()
+  })
+
+  it('reopens the welcome steps without deleting anything', async () => {
+    const calls = setup({ 'POST /api/onboarding/reopen': { ...onboarded, complete: false } })
+    await open('Setup')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Run setup again' }))
+
+    expect(await screen.findByText('Welcome steps')).toBeInTheDocument()
+    expect(calls.some((c) => c.url === '/api/onboarding/reopen')).toBe(true)
+  })
+})
+
+describe('settings: writing rules', () => {
   it('saves an edited writing rule and can switch it off', async () => {
     const calls = setup({ 'PUT /api/settings/style-rules/1': rules })
+    await open('Writing rules')
 
     const box = await screen.findByLabelText('Rule no_dashes')
     expect(screen.getAllByRole('button', { name: 'Save rule' })[0]).toBeDisabled()
@@ -67,6 +224,7 @@ describe('settings page', () => {
 
   it('lists banned phrases by language and toggles and deletes them', async () => {
     const calls = setup({ 'PUT /api/settings/banned-phrases/1': null, 'DELETE /api/settings/banned-phrases/2': null })
+    await open('Writing rules')
 
     await userEvent.click(await screen.findByLabelText('Enable phrase brinner för'))
     await userEvent.click(screen.getByLabelText('Delete phrase leverage'))
@@ -78,6 +236,7 @@ describe('settings page', () => {
 
   it('adds a phrase in the chosen language', async () => {
     const calls = setup({ 'POST /api/settings/banned-phrases': { id: 9, language: 'en', phrase: 'game changer', enabled: true } })
+    await open('Writing rules')
 
     await userEvent.selectOptions(await screen.findByLabelText('Phrase language'), 'en')
     await userEvent.type(screen.getByLabelText('Phrase'), 'game changer')

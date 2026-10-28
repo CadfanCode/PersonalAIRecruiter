@@ -6,7 +6,7 @@
 </head>
 <body class="letter">
 <div class="header">
-    <h1 class="name" th:text="${name}">CAI BIRCH</h1>
+    <h1 class="name" th:text="${name}">JOHN DOE</h1>
     <p class="contact" th:text="${contact}">Stockholm | phone | email</p>
 </div>
 <p class="subject" th:text="${letter.subject}">Ansökan: Title</p>
@@ -14,6 +14,6 @@
 <p class="greeting" th:text="${letter.greeting}">Hej,</p>
 <p class="para" th:each="paragraph : ${letter.paragraphs}" th:text="${paragraph}">Paragraph</p>
 <p class="closing" th:text="${letter.closing}">Vänliga hälsningar,</p>
-<p class="signature" th:text="${letter.signature}">Cai Birch</p>
+<p class="signature" th:text="${letter.signature}">John Doe</p>
 </body>
 </html>

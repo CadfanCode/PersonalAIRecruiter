@@ -6,7 +6,7 @@
 </head>
 <body class="cv" th:with="hasSkills=${!cv.sections.{? #this.kind == 'SKILLS'}.isEmpty()}">
 <div class="header">
-    <h1 class="name" th:text="${name}">CAI BIRCH</h1>
+    <h1 class="name" th:text="${name}">JOHN DOE</h1>
     <p class="headline" th:if="${cv.headline != null and !cv.headline.isEmpty()}" th:text="${cv.headline}">Headline</p>
     <p class="contact" th:text="${contact}">Stockholm | phone | email</p>
 </div>

@@ -33,7 +33,7 @@ export function SearchProfileCard({
     )
 
   return (
-    <Panel title="Search profile">
+    <Panel title="Your search plan">
       <p className="mb-3 text-sm text-[var(--muted)]">{draft.roleSummary}</p>
       <div className="grid grid-cols-2 gap-3">
         {chips('Titles', 'titles')}
@@ -59,14 +59,14 @@ export function SearchProfileCard({
             disabled={!editable}
             value={draft.seniority}
             onChange={(e) => set('seniority', e.target.value as SearchProfile['seniority'])}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm"
           >
             {SENIORITY.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
         </Field>
-        <Field label="Yrkesroll for aktivitetsrapport">
+        <Field label="Occupation for the activity report (yrkesroll)">
           <TextInput
             disabled={!editable}
             value={draft.yrkesrollForAktivitetsrapport}

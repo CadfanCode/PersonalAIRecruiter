@@ -4,9 +4,8 @@ import { EntryList } from '../components/cv/EntryList'
 import { ImportWizard } from '../components/cv/ImportWizard'
 import { PreviewSelection } from '../components/cv/PreviewSelection'
 import { ProfileForm } from '../components/cv/ProfileForm'
-import { SeedLoader } from '../components/cv/SeedLoader'
 import { SkillsAndGaps } from '../components/cv/SkillsAndGaps'
-import { PageTitle } from '../components/Panel'
+import { PageTitle, Panel } from '../components/Panel'
 
 const TABS = ['Entries', 'Profile', 'Skills and gaps', 'Import', 'Preview selection'] as const
 
@@ -20,7 +19,7 @@ export function CvDatabase() {
     return (
       <>
         <PageTitle>CV database</PageTitle>
-        <p role="alert" className="text-sm text-red-600">Cannot reach the JobPilot API. Is the backend running?</p>
+        <p role="alert" className="text-sm text-[var(--danger)]">Cannot reach the JobPilot API. Is the backend running?</p>
       </>
     )
   }
@@ -34,7 +33,9 @@ export function CvDatabase() {
       <PageTitle>CV database</PageTitle>
       {empty && (
         <div className="mb-5 max-w-3xl">
-          <SeedLoader />
+          <Panel title="Your CV database is empty">
+            <p className="text-sm text-[var(--muted)]">Read your CV in the Import tab, or add entries by hand.</p>
+          </Panel>
         </div>
       )}
       <div role="tablist" className="mb-5 flex gap-1 border-b border-[var(--line)]">

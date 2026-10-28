@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from './client'
 
 export type TabStatus =
+  | 'QUEUED'
   | 'OPENING'
   | 'FILLING'
   | 'WAITING_FOR_SIGN_IN'
@@ -11,6 +12,7 @@ export type TabStatus =
   | 'SESSION_EXPIRED'
   | 'EMAIL_ONLY'
   | 'NO_APPLY_LINK'
+  | 'APPLY_MANUALLY'
   | 'CLOSED'
   | 'ERROR'
 
@@ -25,9 +27,14 @@ export interface TabView {
   skipped: { fieldId: string; label: string; reason: string }[]
   questions: { fieldId: string; question: string }[]
   passes: number
+  /** The coarse state shown to the user: FILLING, NEEDS_LOGIN, NEEDS_ATTENTION, READY_FOR_SUBMISSION, FAILED, QUEUED, CLOSED. */
+  phase: 'QUEUED' | 'FILLING' | 'NEEDS_LOGIN' | 'NEEDS_ATTENTION' | 'READY_FOR_SUBMISSION' | 'FAILED' | 'CLOSED'
+  /** The portal a tab is waiting at for a sign-in, so a login can be saved for it. */
+  signInHost: string | null
+  loginFilled: boolean
 }
 
-const WORKING: TabStatus[] = ['OPENING', 'FILLING']
+const WORKING: TabStatus[] = ['QUEUED', 'OPENING', 'FILLING']
 
 /** Polls while a tab is working or waiting for the user to sign in, so the card updates by itself. */
 export const useApplyStatus = () =>
@@ -45,6 +52,9 @@ function useApplyMutation<V, R = unknown>(fn: (v: V) => Promise<R>) {
 
 export const useOpenApplications = () =>
   useApplyMutation((jobIds: number[]) => api<TabView[]>('/api/apply', { method: 'POST', body: { jobIds } }))
+/** "Run all": every job is accepted; the ones beyond the tab limit wait as QUEUED and start by themselves. */
+export const useOpenBatch = () =>
+  useApplyMutation((jobIds: number[]) => api<TabView[]>('/api/apply/batch', { method: 'POST', body: { jobIds } }))
 export const useFillPage = () =>
   useApplyMutation(({ jobId, restart }: { jobId: number; restart?: boolean }) =>
     api<TabView>(`/api/apply/${jobId}/fill${restart ? '?restart=true' : ''}`, { method: 'POST' }),

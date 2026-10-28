@@ -1,36 +1,32 @@
+Application: Operations Coordinator
 
-Application: Software Developer
-
-Ravion Nordic AB, Stockholm
+Harbourline Logistics AB, Gothenburg
 
 Hello,
-I'm a Java developer focused on Spring Boot back-end services, with experience building,
-containerising and deploying microservices in a health-tech environment and three years of
-earlier software development in research. Your Software Developer role matches the core of
-my work: Java and Spring, RESTful APIs, and getting Java applications running reliably in the
-cloud.
-The clearest example of how I work is Skepparklar, an e-learning platform for Swedish boating
-licence courses that I built from scratch. The back end is a REST API in Java 21 and Spring
-Boot 4 on PostgreSQL, the front end is React and TypeScript, and payments run through
-Stripe with webhooks. Every change goes through a GitHub Actions pipeline and is deployed
-automatically to a Linux server behind nginx and Cloudflare. Because I run it on my own, I've
-had to own the whole chain, from design to fixing things in production.
+I'm an operations coordinator who has spent six years planning shifts, deliveries and stock for
+busy warehouses, most recently in a chilled-food distribution centre. Your Operations
+Coordinator role caught my eye because it sits where I'm strongest: keeping a team and a
+timetable moving when the day doesn't go to plan.
 
-During my internship at Braive I built and deployed Spring Boot microservices in Java and
-Kotlin, containerised them with Docker and shipped them through Kubernetes-based
-pipelines. I also tracked down and fixed race conditions in the logging flows. At Omika Health I
-built a peer-to-peer video chat with WebRTC and secure authentication. I haven't worked with
-J2EE or NoSQL databases such as MongoDB or Cosmos DB yet, but my relational database
-and Spring background is solid, and I'd be glad to learn them on the job.
+The clearest example of how I work is the re-planning of our evening dispatch at Nordfrost. Orders
+were leaving the building late because pick lists were released in one batch. I split them by
+delivery route, agreed new cut-off times with the drivers and trained two colleagues on the new
+routine. Within a quarter the last truck left on time on most days, and the number of
+missed delivery windows fell clearly.
 
-I like working in teams where people help each other and talk openly about problems. Working
-as a prison officer and as a lab teacher taught me to stay calm and careful under pressure,
-and I have passed a security vetting under the Swedish Protective Security Act. English is my
-native language and I speak and write Swedish fluently. When I'm not coding I'm usually out
-on the water, which may explain why my biggest side project is about boats.
+At Nordfrost I also managed a team of eight, booked carriers and handled customer complaints. Before
+that I worked as a warehouse operator, so I know the floor from the inside. I haven't used SAP
+yet, but I've worked in two other warehouse systems and I'm used to learning new ones quickly.
+I'd be glad to learn yours.
+
+I like working in teams where people say early when something is wrong, and I try to do the
+same. Colleagues tend to describe me as calm and clear, which helps on the busy days. I speak
+and write both English and Swedish, and I hold a forklift licence and a full driving licence. In
+my free time I coach a youth football team, which has taught me a lot about getting a group
+to pull in the same direction.
 
 Thank you for considering my application. I hope to hear from you.
 
 Kind regards,
 
-Cai Birch
+John Doe

@@ -1,0 +1,16 @@
+#!/bin/sh
+# Adds JobPilot to the application menu. On a system without a desktop (a server, a minimal container) there is no menu to add it
+# to; that must not make the installation fail.
+set -e
+case "$1" in
+    configure)
+        xdg-desktop-menu install /opt/jobpilot/lib/jobpilot-JobPilot.desktop >/dev/null 2>&1 || true
+    ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+    ;;
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+    ;;
+esac
+exit 0

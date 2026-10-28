@@ -4,7 +4,9 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AktivitetEntry, AktivitetLogRow, AktivitetPlan } from '../api/aktivitet'
+import type { SubmittedSummary } from '../api/submitted'
 import { run } from '../test/fixtures'
+import { countryView, onboarded } from '../test/fixtures2'
 import { mockApi } from '../test/mockApi'
 import { AktivitetPage } from './AktivitetPage'
 import { Dashboard } from './Dashboard'
@@ -37,16 +39,53 @@ function renderPage(path = '/aktivitet?jobs=1,2,3') {
 }
 
 const inactive = { active: false, day: 20, daysLeft: 0, forMonth: '2026-10', message: '' }
-const quiet = { 'GET /api/aktivitet/log': [] as AktivitetLogRow[], 'GET /api/aktivitet/reminder': inactive }
+const quiet = { 'GET /api/aktivitet/log': [] as AktivitetLogRow[], 'GET /api/aktivitet/reminder': inactive, 'GET /api/submitted': [] as SubmittedSummary[], 'GET /api/country': countryView }
 
 afterEach(() => vi.unstubAllGlobals())
+
+const submittedRow = (id: number, over: Partial<SubmittedSummary> = {}): SubmittedSummary => ({
+  id, jobId: id, title: `Job ${id}`, employer: 'Comstream AB', municipality: 'Stockholm', url: null, applyUrl: null, language: 'sv',
+  searchMode: 'DISCOVER', roleType: 'Lärare', scoreTotal: 80, submittedAt: '2026-10-27T09:00:00Z', cvVersion: 2, cvFile: 'CV.pdf',
+  letterVersion: 1, letterFile: 'Brev.pdf', reportedAt: null, ...over,
+})
+
+describe('activity report: applications you submitted', () => {
+  it('lists what still has to be reported, keeps the reported ones out of the way, and links to logging only the unreported', async () => {
+    mockApi({ ...quiet, 'GET /api/submitted': [submittedRow(1), submittedRow(2, { reportedAt: '2026-10-28T09:00:00Z' }), submittedRow(3)] })
+    renderPage('/aktivitet')
+
+    const panel = (await screen.findByText('Ready to report')).closest('section') as HTMLElement
+    expect(within(panel).getByRole('link', { name: 'Job 1' })).toHaveAttribute('href', '/submitted/1')
+    expect(within(panel).getByRole('link', { name: 'Job 3' })).toBeInTheDocument()
+    expect(within(panel).queryByRole('link', { name: 'Job 2' })).not.toBeInTheDocument() // already reported: excluded by default
+    expect(within(panel).getByRole('link', { name: 'Report 2 to Arbetsförmedlingen' })).toHaveAttribute('href', '/aktivitet?jobs=1,3')
+
+    const reported = screen.getByText('Already reported (1)').closest('details') as HTMLElement
+    expect(within(reported).getByText('Job 2')).toBeInTheDocument()
+    expect(within(reported).getByText(/Reported 2026-10-28/)).toBeInTheDocument()
+  })
+
+  it('says so when everything has been reported', async () => {
+    mockApi({ ...quiet, 'GET /api/submitted': [submittedRow(1, { reportedAt: '2026-10-28T09:00:00Z' })] })
+    renderPage('/aktivitet')
+
+    expect(await screen.findByText('Everything you submitted has been reported.')).toBeInTheDocument()
+  })
+
+  it('is only for countries that have an activity report', async () => {
+    mockApi({ ...quiet, 'GET /api/country': { ...countryView, selected: 'NO', activityReport: false } })
+    renderPage('/aktivitet')
+
+    expect(await screen.findByText(/only available for Sweden/)).toBeInTheDocument()
+  })
+})
 
 describe('aktivitet page', () => {
   it('says that the monthly report is never submitted and shows an empty state', async () => {
     mockApi(quiet)
     renderPage('/aktivitet')
 
-    expect(await screen.findByText(/Mark jobs as applied/)).toBeInTheDocument()
+    expect(await screen.findByText(/Applications you confirm as submitted show up here/)).toBeInTheDocument()
     expect(screen.getByText(/never submits the monthly report/)).toBeInTheDocument()
   })
 
@@ -87,7 +126,7 @@ describe('aktivitet page', () => {
 
     const post = calls.find((c) => c.method === 'POST')!
     expect(post.body).toEqual({ entries: [entry(1, 'Comstream AB', { omfattning: 'Deltid', answeredAd: false })] })
-    expect(await screen.findByRole('progressbar', { name: 'Logging progress' })).toHaveAttribute('aria-valuenow', '30')
+    expect(await screen.findByRole('progressbar', { name: 'Saving to the activity report progress' })).toHaveAttribute('aria-valuenow', '30')
     expect(screen.getByText('Logging 1 of 1: Comstream')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Save \d in the aktivitetsrapport/ })).not.toBeInTheDocument()
   })
@@ -109,7 +148,7 @@ describe('aktivitet page', () => {
 
     await userEvent.click(await screen.findByRole('button', { name: 'Save 1 in the aktivitetsrapport' }))
 
-    expect(await screen.findByText(/Waiting for you to sign in to Arbetsförmedlingen \(BankID\)/)).toHaveClass('text-amber-700')
+    expect(await screen.findByText(/Waiting for you to sign in to Arbetsförmedlingen \(BankID\)/)).toBeInTheDocument()
   })
 
   it('shows the result per job when the run is done, including duplicates and failures', async () => {
@@ -132,7 +171,7 @@ describe('aktivitet page', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Save 1 in the aktivitetsrapport' }))
 
     expect(await screen.findByText(/Saved 1 of 3/)).toBeInTheDocument()
-    const progress = screen.getByText('Progress').closest('section')!
+    const progress = screen.getByRole('heading', { name: 'Result' }).closest('section')!
     expect(within(progress).getByText('saved')).toBeInTheDocument()
     expect(within(progress).getByText('duplicate')).toBeInTheDocument()
     expect(within(progress).getByText('failed')).toBeInTheDocument()
@@ -187,7 +226,8 @@ describe('reminder banner', () => {
   function renderDashboard(reminder: unknown) {
     mockApi({
       'GET /api/runs': [],
-      'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
+      'GET /api/onboarding': onboarded,
+      'GET /api/country': countryView,
       'GET /api/aktivitet/reminder': reminder,
     })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -215,7 +255,7 @@ describe('reminder banner', () => {
   it('is hidden outside the window', async () => {
     renderDashboard({ active: false, day: 17, daysLeft: 0, forMonth: '2026-10', message: '' })
 
-    await screen.findByText('New run')
+    await screen.findByRole('heading', { level: 1, name: 'Find your next role' })
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 })

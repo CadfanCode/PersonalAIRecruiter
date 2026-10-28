@@ -2,10 +2,14 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { type AktivitetEntry, useAktivitetLog, useAktivitetPlan, useStartLogging } from '../api/aktivitet'
+import { useCountry } from '../api/country'
+import { useSubmitted } from '../api/submitted'
 import { useRun } from '../api/runs'
 import { Button, TextInput } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
 import { ReminderBanner } from '../components/ReminderBanner'
+import { Pill } from '../components/ui/Pill'
+import { Processing } from '../components/ui/Processing'
 
 const OMFATTNING = ['Heltid', 'Deltid', 'Timmar vid behov'] as const
 
@@ -33,22 +37,30 @@ export function AktivitetPage() {
   const chosen = entries.filter((e) => !excluded.has(e.jobId))
   const set = (jobId: number, patch: Partial<AktivitetEntry>) => setEdits({ ...edits, [jobId]: { ...edits[jobId], ...patch } })
   const state = runId !== null ? run.data?.run : undefined
+  const country = useCountry()
   const working = state?.status === 'QUEUED' || state?.status === 'RUNNING' || state?.status === 'WAITING_FOR_USER'
   const thisRun = (log.data ?? []).filter((r) => r.runId === runId)
 
+  if (country.data && !country.data.activityReport) {
+    return (
+      <>
+        <PageTitle>Activity report</PageTitle>
+        <Panel><p className="text-sm text-[var(--muted)]">The activity report is only available for Sweden (Arbetsförmedlingen).</p></Panel>
+      </>
+    )
+  }
+
   return (
     <>
-      <PageTitle>Aktivitetsrapport</PageTitle>
+      <PageTitle subtitle="JobPilot saves each application you submitted under 'Sökta jobb' on Arbetsförmedlingen and stops there. It never submits the monthly report: do that yourself. You sign in with BankID yourself, in the JobPilot browser.">
+        Activity report
+      </PageTitle>
       <ReminderBanner />
-      <p className="-mt-2 mb-5 max-w-3xl text-sm text-[var(--muted)]">
-        JobPilot saves each applied job under "Sökta jobb" and stops there. It never submits the monthly report: do that yourself on
-        Arbetsförmedlingen. You must be signed in with BankID in the JobPilot browser.
-      </p>
 
       {jobIds.length === 0 && runId === null && (
         <Panel>
           <p className="text-sm text-[var(--muted)]">
-            Mark jobs as applied in a <Link className="underline" to="/runs">run</Link>, select them and choose "Log in aktivitetsrapport".
+            Applications you confirm as submitted show up here, ready to be reported. Start from <Link className="text-[var(--accent)] underline" to="/submit">Submit</Link>.
           </p>
         </Panel>
       )}
@@ -74,30 +86,75 @@ export function AktivitetPage() {
               onClick={() => start.mutate(chosen, { onSuccess: ({ runId: id }) => setRunId(id) })}>
               Save {chosen.length} in the aktivitetsrapport
             </Button>
-            {start.isError && <span role="alert" className="text-sm text-red-600">{start.error.message}</span>}
+            {start.isError && <span role="alert" className="text-sm text-[var(--danger)]">{start.error.message}</span>}
           </div>
         </Panel>
       )}
 
-      {state && (
-        <Panel title="Progress">
-          {working && (
-            <div role="progressbar" aria-label="Logging progress" aria-valuenow={state.progress} aria-valuemin={0} aria-valuemax={100}
-              className="mb-2 h-2 overflow-hidden rounded-full bg-[var(--line)]">
-              <div className="h-full bg-navy transition-all" style={{ width: `${state.progress}%` }} />
-            </div>
-          )}
-          <p role="status" className={`text-sm ${state.status === 'FAILED' ? 'text-red-600' : state.status === 'WAITING_FOR_USER' ? 'text-amber-700' : ''}`}>
-            {state.message}
-          </p>
-          {!working && thisRun.length > 0 && <ResultTable rows={thisRun} />}
+      {state && working && <div className="mb-6"><Processing title="Saving to the activity report" percent={state.progress} message={state.message} /></div>}
+      {state && !working && (
+        <Panel title="Result" className="mb-6">
+          <p role="status" className={`text-sm ${state.status === 'FAILED' ? 'text-[var(--danger)]' : ''}`}>{state.message}</p>
+          {thisRun.length > 0 && <ResultTable rows={thisRun} />}
         </Panel>
       )}
+
+      <SubmittedApplications />
 
       {(log.data?.length ?? 0) > 0 && (
         <Panel title="Everything logged so far">
           <ResultTable rows={log.data!} />
         </Panel>
+      )}
+    </>
+  )
+}
+
+/** What the user submitted, split into what still has to be reported and what already was. Reported ones are left out by default. */
+function SubmittedApplications() {
+  const submitted = useSubmitted()
+  const all = submitted.data ?? []
+  const todo = all.filter((a) => a.reportedAt === null && a.jobId !== null)
+  const reported = all.filter((a) => a.reportedAt !== null)
+  if (all.length === 0) return null
+  return (
+    <>
+      <Panel title="Ready to report">
+        {todo.length === 0 ? (
+          <p className="text-sm text-[var(--muted)]">Everything you submitted has been reported.</p>
+        ) : (
+          <>
+            <ul className="flex flex-col divide-y divide-[var(--line)]">
+              {todo.map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 py-2.5 text-sm">
+                  <Link to={`/submitted/${a.id}`} className="font-medium hover:text-[var(--accent)]">{a.title}</Link>
+                  <span className="text-[var(--muted)]">{a.employer}</span>
+                  <span className="ml-auto text-xs text-[var(--muted)]">submitted {new Date(a.submittedAt).toLocaleDateString('sv-SE')}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-sm">
+              <Link className="inline-flex" to={`/aktivitet?jobs=${todo.map((a) => a.jobId).join(',')}`}>
+                <Button size="lg">Report {todo.length} to Arbetsförmedlingen</Button>
+              </Link>
+              <span className="ml-3 text-xs text-[var(--muted)]">You confirm every value before anything is saved.</span>
+            </p>
+          </>
+        )}
+      </Panel>
+      {reported.length > 0 && (
+        <details className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel)] px-5 py-3">
+          <summary className="cursor-pointer text-sm font-medium text-[var(--muted)]">Already reported ({reported.length})</summary>
+          <ul className="mt-2 flex flex-col divide-y divide-[var(--line)]">
+            {reported.map((a) => (
+              <li key={a.id} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                <Link to={`/submitted/${a.id}`} className="font-medium hover:text-[var(--accent)]">{a.title}</Link>
+                <span className="text-[var(--muted)]">{a.employer}</span>
+                <Pill tone="success" className="ml-auto">Reported {new Date(a.reportedAt as string).toLocaleDateString('sv-SE')}</Pill>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
     </>
   )
@@ -127,14 +184,14 @@ function PlanRow({ entry, included, onInclude, onChange }: {
           <TextInput aria-label={`Ort for ${label}`} value={entry.municipality} onChange={(e) => onChange({ municipality: e.target.value })} /></label>
         <label className="flex flex-col gap-1">Omfattning
           <select aria-label={`Omfattning for ${label}`} value={entry.omfattning} onChange={(e) => onChange({ omfattning: e.target.value as AktivitetEntry['omfattning'] })}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)]">
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-[var(--ink)]">
             {OMFATTNING.map((o) => <option key={o}>{o}</option>)}
           </select></label>
         <label className="flex flex-col gap-1">Var finns jobbet?
           <TextInput aria-label={`Var finns jobbet for ${label}`} value={entry.varFinns} disabled /></label>
         <label className="flex flex-col gap-1">Svarade du på en annons?
           <select aria-label={`Annons for ${label}`} value={entry.answeredAd ? 'Ja' : 'Nej'} onChange={(e) => onChange({ answeredAd: e.target.value === 'Ja' })}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm text-[var(--ink)]">
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm text-[var(--ink)]">
             <option>Ja</option><option>Nej</option>
           </select></label>
         <label className="flex flex-col gap-1">Vilket datum sökte du jobbet?
@@ -145,8 +202,8 @@ function PlanRow({ entry, included, onInclude, onChange }: {
 }
 
 const STYLE: Record<string, string> = {
-  SAVED: 'bg-emerald-100 text-emerald-800', DUPLICATE: 'bg-sky-100 text-sky-800', SKIPPED: 'bg-slate-200 text-slate-700',
-  UNCONFIRMED: 'bg-amber-100 text-amber-800', FAILED: 'bg-red-100 text-red-800',
+  SAVED: 'bg-[var(--success-soft)] text-[var(--success)]', DUPLICATE: 'bg-[var(--accent-soft)] text-[var(--accent)]', SKIPPED: 'bg-[var(--line)] text-[var(--muted)]',
+  UNCONFIRMED: 'bg-[var(--warn-soft)] text-[var(--warn)]', FAILED: 'bg-[var(--danger-soft)] text-[var(--danger)]',
 }
 
 function ResultTable({ rows }: { rows: { id: number; employerLabel: string; appliedDate: string | null; result: string; message: string | null }[] }) {

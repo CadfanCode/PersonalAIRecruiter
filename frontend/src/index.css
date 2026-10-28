@@ -1,34 +1,116 @@
 @import 'tailwindcss';
 @import '@fontsource-variable/inter';
 
+/*
+ * Design tokens. <html data-theme> always holds the resolved theme (light or dark): index.html sets it before the first paint
+ * from the saved choice or the system, and ThemeProvider keeps it in step. Every colour in the app is one of these variables.
+ */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
 @theme {
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
-  --color-navy: #1f3a5f;
-  --color-navy-soft: #2c4f7c;
+  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  /* "navy" is the old name of the accent colour; it keeps existing utilities working. */
+  --color-navy: var(--accent);
+  --color-navy-soft: var(--accent-strong);
 }
 
 :root {
-  --surface: #f6f7f9;
+  color-scheme: light;
+  --surface: #f5f5f7;
   --panel: #ffffff;
-  --line: #e2e6ec;
-  --ink: #16202e;
-  --muted: #5d6a7c;
-  --accent: #1f3a5f;
+  --panel-2: #fafafc;
+  --line: #e4e4ea;
+  --ink: #1d1d1f;
+  --muted: #6e6e73;
+  --accent: #0071e3;
+  --accent-strong: #0062c4;
+  --accent-soft: rgba(0, 113, 227, 0.1);
+  --success: #1e8e4e;
+  --success-soft: rgba(30, 142, 78, 0.12);
+  --warn: #a35a00;
+  --warn-soft: rgba(255, 159, 10, 0.16);
+  --danger: #d70015;
+  --danger-soft: rgba(215, 0, 21, 0.09);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.06);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.06), 0 18px 44px rgba(0, 0, 0, 0.1);
+  --glass: rgba(255, 255, 255, 0.78);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --surface: #0f141b;
-    --panel: #171e28;
-    --line: #283140;
-    --ink: #e8edf4;
-    --muted: #93a0b3;
-    --accent: #7fa6d6;
-  }
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --surface: #0b0b0d;
+  --panel: #1c1c1e;
+  --panel-2: #232326;
+  --line: #2f2f34;
+  --ink: #f5f5f7;
+  --muted: #9a9aa2;
+  --accent: #2b8cff;
+  --accent-strong: #5aa5ff;
+  --accent-soft: rgba(43, 140, 255, 0.16);
+  --success: #35c46f;
+  --success-soft: rgba(53, 196, 111, 0.16);
+  --warn: #ffb340;
+  --warn-soft: rgba(255, 179, 64, 0.16);
+  --danger: #ff5a68;
+  --danger-soft: rgba(255, 90, 104, 0.14);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.6), 0 18px 44px rgba(0, 0, 0, 0.5);
+  --glass: rgba(28, 28, 30, 0.8);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 body {
   background: var(--surface);
   color: var(--ink);
   font-family: var(--font-sans);
+  font-feature-settings: 'cv11', 'ss01';
+  letter-spacing: -0.006em;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Motion: one gentle entrance, and nothing at all for people who ask for less. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes shimmer {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.animate-rise { animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-fade { animation: fade 0.3s ease both; }
+.shimmer {
+  background-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 35%, transparent) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }

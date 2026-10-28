@@ -12,10 +12,9 @@ const FIELDS: [TextKey, string][] = [
   ['phoneInternational', 'Phone (international)'],
   ['city', 'City'],
   ['website', 'Website'],
-  ['github', 'GitHub'],
+  ['github', 'Portfolio or GitHub'],
   ['linkedin', 'LinkedIn'],
   ['workAuthorisation', 'Work authorisation'],
-  ['securityVetting', 'Security vetting'],
 ]
 
 export function ProfileForm({ profile }: { profile: Profile }) {
@@ -60,8 +59,8 @@ export function ProfileForm({ profile }: { profile: Profile }) {
         <Button onClick={() => save.mutate(draft)} disabled={save.isPending}>
           Save profile
         </Button>
-        {save.isSuccess && <span role="status" className="text-sm text-emerald-600">Saved</span>}
-        {save.isError && <span role="alert" className="text-sm text-red-600">{save.error.message}</span>}
+        {save.isSuccess && <span role="status" className="text-sm text-[var(--success)]">Saved</span>}
+        {save.isError && <span role="alert" className="text-sm text-[var(--danger)]">{save.error.message}</span>}
       </div>
     </Panel>
   )

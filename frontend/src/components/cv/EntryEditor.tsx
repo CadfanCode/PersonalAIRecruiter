@@ -68,7 +68,7 @@ export function EntryEditor({
           <select
             value={draft.kind}
             onChange={(e) => set('kind', e.target.value as EntryInput['kind'])}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm"
           >
             {KINDS.map((k) => (
               <option key={k}>{k}</option>
@@ -110,7 +110,7 @@ export function EntryEditor({
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-red-600">
+        <p role="alert" className="text-sm text-[var(--danger)]">
           {error.message}
         </p>
       )}
