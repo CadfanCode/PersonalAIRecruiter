@@ -27,6 +27,7 @@
         <jsoup.version>1.21.2</jsoup.version>
         <playwright.version>1.64.0</playwright.version>
         <embedded-postgres.version>2.2.2</embedded-postgres.version>
+        <java-keyring.version>1.0.4</java-keyring.version>
         <embedded-postgres-binaries.version>16.15.0</embedded-postgres-binaries.version>
     </properties>
 
@@ -81,6 +82,12 @@
             <artifactId>embedded-postgres-binaries-darwin-arm64v8</artifactId>
             <version>${embedded-postgres-binaries.version}</version>
             <scope>runtime</scope>
+        </dependency>
+        <!-- OS credential store: Keychain (macOS), Credential Manager (Windows), Secret Service (Linux). -->
+        <dependency>
+            <groupId>com.github.javakeyring</groupId>
+            <artifactId>java-keyring</artifactId>
+            <version>${java-keyring.version}</version>
         </dependency>
         <dependency>
             <groupId>com.networknt</groupId>

@@ -23,17 +23,20 @@ public class ClaudeHealthService {
 
     private final JobPilotProperties.Claude config;
     private final ClaudeRunner runner;
+    private final ProviderSettings providers;
 
-    public ClaudeHealthService(JobPilotProperties props, ClaudeRunner runner) {
+    public ClaudeHealthService(JobPilotProperties props, ClaudeRunner runner, ProviderSettings providers) {
         this.config = props.claude();
         this.runner = runner;
+        this.providers = providers;
     }
 
     public HealthStatus check() {
         long started = System.nanoTime();
         String version = null;
         try {
-            version = version();
+            // The version check only makes sense for the CLI; with an API key there is no local program.
+            version = ProviderSettings.CLI.equals(providers.selectedId()) ? version() : "Anthropic API";
             HealthAnswer answer = runner.run(ClaudeTask.of("health",
                     ClaudeResources.prompt("health", java.util.Map.of()),
                     ClaudeResources.schema("health"), HealthAnswer.class));

@@ -21,16 +21,24 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
          * directories, because a desktop launcher starts the app with a PATH that lacks ~/.local/bin.
          */
         public String executable() {
-            if (path == null || path.contains("/")) {
+            if (path == null || path.contains("/") || path.contains("\\")) {
                 return path;
             }
-            List<String> dirs = new java.util.ArrayList<>(List.of(System.getenv().getOrDefault("PATH", "").split(":")));
+            boolean windows = System.getProperty("os.name", "").toLowerCase().contains("win");
+            List<String> dirs = new java.util.ArrayList<>(List.of(System.getenv().getOrDefault("PATH", "").split(java.io.File.pathSeparator)));
             String home = System.getProperty("user.home");
             dirs.addAll(List.of(home + "/.local/bin", home + "/.claude/local", home + "/.npm-global/bin", home + "/.bun/bin",
                     "/usr/local/bin", "/opt/homebrew/bin"));
+            String appData = System.getenv("APPDATA");
+            if (appData != null) {
+                dirs.add(appData + "/npm");
+            }
+            List<String> names = windows ? List.of(path + ".exe", path + ".cmd", path) : List.of(path);
             for (String dir : dirs) {
-                if (!dir.isBlank() && java.nio.file.Files.isExecutable(Path.of(dir, path))) {
-                    return Path.of(dir, path).toString();
+                for (String name : names) {
+                    if (!dir.isBlank() && java.nio.file.Files.isExecutable(Path.of(dir, name))) {
+                        return Path.of(dir, name).toString();
+                    }
                 }
             }
             return path;

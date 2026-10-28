@@ -10,17 +10,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 
 import org.springframework.stereotype.Component;
 
+import se.caibirch.jobpilot.country.JobSource;
 import se.caibirch.jobpilot.jobs.NewJob;
 
 /** Runs the profile's JobTech queries and returns the distinct ads, best relevance kept per ad. */
 @Component
-public class CandidateCollector {
+public class CandidateCollector implements JobSource {
 
     static final int HITS_PER_QUERY = 300;
     static final int REMOTE_HITS_PER_QUERY = 100;
-
-    public record Collected(List<NewJob> jobs, List<String> notes) {
-    }
 
     private final JobTechClient jobTech;
     private final TaxonomyClient taxonomy;
@@ -30,7 +28,18 @@ public class CandidateCollector {
         this.taxonomy = taxonomy;
     }
 
+    @Override
+    public String countryCode() {
+        return "SE";
+    }
+
+    @Override
+    public String boardName() {
+        return "Platsbanken";
+    }
+
     /** @param onQuery called with (queries done, queries total) for progress reporting */
+    @Override
     public Collected collect(SearchProfile profile, BiConsumer<Integer, Integer> onQuery) {
         List<String> notes = new ArrayList<>();
         List<String> names = profile.locations().stream().map(SearchProfile.Location::municipality).distinct().toList();

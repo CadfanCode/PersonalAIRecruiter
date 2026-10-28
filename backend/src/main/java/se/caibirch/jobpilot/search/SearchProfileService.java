@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import se.caibirch.jobpilot.claude.ClaudeResources;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
+import se.caibirch.jobpilot.country.CountryRegistry;
 import se.caibirch.jobpilot.claude.ClaudeTask;
 import se.caibirch.jobpilot.claude.JsonSchemas;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
@@ -32,8 +33,11 @@ public class SearchProfileService {
     private final JobPilotProperties props;
     private final ObjectMapper mapper;
 
+    private final CountryRegistry countries;
+
     public SearchProfileService(ClaudeRunner claude, CvService cv, SearchProfileRepository repo,
-                                JobPilotProperties props, ObjectMapper mapper) {
+                                JobPilotProperties props, ObjectMapper mapper, CountryRegistry countries) {
+        this.countries = countries;
         this.claude = claude;
         this.cv = cv;
         this.repo = repo;
@@ -56,7 +60,7 @@ public class SearchProfileService {
 
         SearchProfile built = claude.run(ClaudeTask.of("buildSearchProfile",
                 ClaudeResources.prompt("buildSearchProfile", Map.of(
-                        "today", today.toString(), "prompt", prompt, "constraints", constraints,
+                        "today", today.toString(), "market", countries.selected().market(), "prompt", prompt, "constraints", constraints,
                         "candidate", candidate, "tags", tags.isEmpty() ? "(none)" : tags)),
                 ClaudeResources.schema("searchProfile"), SearchProfile.class));
 

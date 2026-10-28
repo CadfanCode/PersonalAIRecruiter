@@ -18,6 +18,7 @@ import org.springframework.stereotype.Service;
 
 import se.caibirch.jobpilot.claude.ClaudeResources;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
+import se.caibirch.jobpilot.country.CountryRegistry;
 import se.caibirch.jobpilot.claude.ClaudeTask;
 import se.caibirch.jobpilot.claude.JsonSchemas;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
@@ -74,8 +75,12 @@ public class RoleDiscoveryService {
     private final JobPilotProperties props;
     private final ObjectMapper mapper;
 
+    private final CountryRegistry countries;
+
     public RoleDiscoveryService(ClaudeRunner claude, CvService cv, CvDigestService digests, RoleRepository roles,
-                                SearchProfileRepository profiles, JobPilotProperties props, ObjectMapper mapper) {
+                                SearchProfileRepository profiles, JobPilotProperties props, ObjectMapper mapper,
+                                CountryRegistry countries) {
+        this.countries = countries;
         this.claude = claude;
         this.cv = cv;
         this.digests = digests;
@@ -92,7 +97,7 @@ public class RoleDiscoveryService {
                 ? "Be generous and think widely: include roles with a moderate match (40 or more) when there is a real argument for them, and also unusual roles the candidate may not have considered."
                 : "Only include roles with a matchScore of 55 or more.";
         Suggested answer = claude.run(ClaudeTask.longRunning("suggestRoles", ClaudeResources.prompt("suggestRoles", Map.of(
-                "today", today.toString(), "context", context == null || context.isBlank() ? "(nothing)" : context,
+                "today", today.toString(), "market", countries.selected().market(), "context", context == null || context.isBlank() ? "(nothing)" : context,
                 "cv", digests.build().json(), "tags", tagList(), "count", String.valueOf(count), "breadth", breadth)),
                 ClaudeResources.schema("suggestRoles"), Suggested.class));
         int preselect = aggressive ? 45 : 60;
@@ -173,7 +178,7 @@ public class RoleDiscoveryService {
         List<RoleRepository.Row> missing = chosen.stream().filter(r -> r.profileJson() == null).toList();
         if (!missing.isEmpty()) {
             RoleProfiles built = claude.run(ClaudeTask.of("profileRoles", ClaudeResources.prompt("profileRoles", Map.of(
-                    "today", today.toString(), "roles", json(missing.stream().map(RoleRepository.Row::title).toList()),
+                    "today", today.toString(), "market", countries.selected().market(), "roles", json(missing.stream().map(RoleRepository.Row::title).toList()),
                     "candidate", json(Map.of("headline", java.util.Objects.toString(cv.profile().headline(), ""),
                             "city", java.util.Objects.toString(cv.profile().city(), ""))),
                     "tags", tagList())),

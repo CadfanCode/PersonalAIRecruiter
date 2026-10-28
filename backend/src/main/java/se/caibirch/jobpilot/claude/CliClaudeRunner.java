@@ -31,13 +31,14 @@ import se.caibirch.jobpilot.settings.JobPilotProperties;
  * prompt goes on the command line unless it is large, then on stdin.
  */
 @Component
-public class CliClaudeRunner implements ClaudeRunner {
+public class CliClaudeRunner implements AiProvider {
 
     /** Above this many UTF-8 bytes the prompt is piped through stdin instead of passed as an argument. */
     static final int MAX_ARGUMENT_PROMPT_BYTES = 100_000;
 
     private static final Logger log = LoggerFactory.getLogger(CliClaudeRunner.class);
-    private static final File DEV_NULL = new File("/dev/null");
+    private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase().contains("win");
+    private static final File DEV_NULL = new File(WINDOWS ? "NUL" : "/dev/null");
 
     private final JobPilotProperties.Claude config;
     private final File workDir;
@@ -56,6 +57,21 @@ public class CliClaudeRunner implements ClaudeRunner {
         this.mapper = mapper;
         this.callLog = callLog;
         this.concurrency = concurrency;
+    }
+
+    /** Windows allows about 32 000 characters on a command line in total, so prompts go through stdin much earlier there. */
+    static int argumentLimit() {
+        return WINDOWS ? 8_000 : MAX_ARGUMENT_PROMPT_BYTES;
+    }
+
+    @Override
+    public String id() {
+        return "cli";
+    }
+
+    @Override
+    public String label() {
+        return "Claude Code subscription";
     }
 
     @Override
@@ -166,7 +182,7 @@ public class CliClaudeRunner implements ClaudeRunner {
     }
 
     private JsonNode execute(ClaudeTask<?> task) {
-        boolean viaStdin = task.prompt().getBytes(StandardCharsets.UTF_8).length > MAX_ARGUMENT_PROMPT_BYTES;
+        boolean viaStdin = task.prompt().getBytes(StandardCharsets.UTF_8).length > argumentLimit();
         List<String> command = buildCommand(task, viaStdin);
         int timeout = task.usesLongTimeout() ? config.webTimeoutSeconds() : config.timeoutSeconds();
 

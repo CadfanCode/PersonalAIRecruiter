@@ -1,5 +1,4 @@
-You prepare search fields for role types that a job seeker chose or typed in themselves, for the Swedish job
-market (Platsbanken, run by Arbetsförmedlingen).
+You prepare search fields for role types that a job seeker chose or typed in themselves, for {{market}}.
 
 Today's date: {{today}}
 

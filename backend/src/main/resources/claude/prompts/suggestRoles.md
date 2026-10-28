@@ -1,5 +1,4 @@
-You help a job seeker with a very broad background find roles they would be a strong match for on the Swedish
-job market (Platsbanken, run by Arbetsförmedlingen), including roles they have not thought of. Read ALL of the
+You help a job seeker with a very broad background find roles they would be a strong match for in {{market}}, including roles they have not thought of. Read ALL of the
 candidate's CV database: education, work, internships, projects, certifications, languages, skills and tags.
 Do not look only at the candidate's most recent or main line of work.
 

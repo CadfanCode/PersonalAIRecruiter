@@ -1,5 +1,4 @@
-You turn a job seeker's one-line starting prompt into a structured search profile for the Swedish
-job market (Platsbanken, run by Arbetsförmedlingen). Everything later in the pipeline reads this
+You turn a job seeker's one-line starting prompt into a structured search profile for {{market}}. Everything later in the pipeline reads this
 profile: the search terms, how ads are ranked, which CV facts are chosen and which occupation is
 reported to Arbetsförmedlingen.
 

@@ -29,7 +29,8 @@ import se.caibirch.jobpilot.pipeline.PipelineModel.Status;
 import se.caibirch.jobpilot.pipeline.PipelineModel.Step;
 import se.caibirch.jobpilot.ranking.CvDigestService;
 import se.caibirch.jobpilot.ranking.ScoreService;
-import se.caibirch.jobpilot.search.CandidateCollector;
+import se.caibirch.jobpilot.country.CountryRegistry;
+import se.caibirch.jobpilot.country.JobSource;
 import se.caibirch.jobpilot.search.SearchProfile;
 import se.caibirch.jobpilot.search.SearchProfileService;
 import se.caibirch.jobpilot.search.WebDiscoveryService;
@@ -46,7 +47,7 @@ public class PipelineService {
 
     private final RunRepository runs;
     private final SearchProfileService profiles;
-    private final CandidateCollector collector;
+    private final CountryRegistry countries;
     private final WebDiscoveryService web;
     private final JobRepository jobs;
     private final CvDigestService digests;
@@ -64,12 +65,12 @@ public class PipelineService {
     static final int AGGRESSIVE_MAX_AGE_DAYS = 14;
     static final String DISCOVER_DEFAULT_CONTEXT = "Any suitable job within commuting distance of the candidate's city, full time or part time";
 
-    public PipelineService(RunRepository runs, SearchProfileService profiles, CandidateCollector collector,
+    public PipelineService(RunRepository runs, SearchProfileService profiles, CountryRegistry countries,
                            WebDiscoveryService web, JobRepository jobs, CvDigestService digests, ScoreService scorer,
                            RoleDiscoveryService discovery, ExecutorService pipelineExecutor, Clock clock, JobPilotProperties props) {
         this.runs = runs;
         this.profiles = profiles;
-        this.collector = collector;
+        this.countries = countries;
         this.web = web;
         this.jobs = jobs;
         this.digests = digests;
@@ -231,10 +232,10 @@ public class PipelineService {
         for (int i = 0; i < roles.size(); i++) {
             checkCancelled(id);
             ResolvedRole role = roles.get(i);
-            runs.progress(id, 10 + 30 * i / roles.size(), "Searching Platsbanken for " + role.title() + " (" + (i + 1) + " of " + roles.size() + ")");
-            CandidateCollector.Collected collected;
+            runs.progress(id, 10 + 30 * i / roles.size(), "Searching " + countries.source().boardName() + " for " + role.title() + " (" + (i + 1) + " of " + roles.size() + ")");
+            JobSource.Collected collected;
             try {
-                collected = collector.collect(role.profile(), (done, total) -> { });
+                collected = countries.source().collect(role.profile(), (done, total) -> { });
             } catch (RuntimeException e) {
                 failedRoles++;
                 notes.add(role.title() + ": " + e.getMessage());
@@ -341,8 +342,8 @@ public class PipelineService {
         RunOptions options = run.options();
         int limit = options.limit() != null ? options.limit() : props.search().defaultLimit();
 
-        runs.update(id, Status.RUNNING, Step.SEARCH, 10, "Searching Platsbanken");
-        CandidateCollector.Collected collected = collector.collect(profile, (done, total) ->
+        runs.update(id, Status.RUNNING, Step.SEARCH, 10, "Searching " + countries.source().boardName());
+        JobSource.Collected collected = countries.source().collect(profile, (done, total) ->
                 runs.progress(id, 10 + 30 * done / total, "Searched " + done + " of " + total + " queries"));
         List<NewJob> candidates = new ArrayList<>(collected.jobs());
         List<String> notes = new ArrayList<>(collected.notes());
