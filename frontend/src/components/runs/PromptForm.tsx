@@ -12,12 +12,6 @@ const EXAMPLES = [
   'Junior Java developer in Stockholm, last 14 days',
 ]
 
-const TIPS = [
-  'Name the job (or two), the place, and how recent the ads should be: "last 7 days" is understood.',
-  'Say what matters: full time or part time, remote is fine, junior or senior.',
-  'You will see the search plan before anything is searched, and can change it.',
-]
-
 /** Prompt mode: describe the roles in plain words. Recency and place are read from the words, not from separate fields. */
 export function PromptForm() {
   const [prompt, setPrompt, clearPrompt] = useDraft('mode.prompt', '')
@@ -39,9 +33,6 @@ export function PromptForm() {
           </button>
         ))}
       </div>
-      <ul className="mt-5 flex flex-col gap-1.5 text-sm text-[var(--muted)]">
-        {TIPS.map((t) => <li key={t} className="flex gap-2"><span aria-hidden className="text-[var(--accent)]">•</span>{t}</li>)}
-      </ul>
       <div className="mt-6 flex flex-wrap items-end gap-4">
         <Field label={`Ads to score (up to ${DISCOVER_MAX_LIMIT})`}>
           <TextInput type="number" min={1} max={DISCOVER_MAX_LIMIT} className="w-28" placeholder={String(PROMPT_LIMIT)} value={limit} onChange={(e) => setLimit(e.target.value)} />

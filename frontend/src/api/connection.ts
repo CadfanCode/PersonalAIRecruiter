@@ -3,10 +3,17 @@ import { api } from './client'
 
 export type ProviderId = 'cli'
 
+/** The model one stage of the app uses; blank means it follows the default. */
+export interface StageModel {
+  stage: 'SEARCH' | 'RANKING' | 'CV_READING' | 'DOCUMENTS' | 'AUTOFILL'
+  label: string
+  model: string
+}
+
 export interface ConnectionStatus {
   selected: ProviderId
   chosen: boolean
-  cli: { found: boolean; path: string | null; version: string | null; help: string | null; model: string }
+  cli: { found: boolean; path: string | null; version: string | null; help: string | null; model: string; stageModels: StageModel[] }
   /** Where saved employer-portal logins are kept. */
   secureStore: { available: boolean; name: string }
 }
@@ -39,6 +46,10 @@ export const useSelectProvider = () =>
 /** Takes effect on the next request; an empty string means Claude Code's own default. */
 export const useSetCliModel = () =>
   useConnectionMutation((model: string) => api<ConnectionStatus>('/api/claude/connection/cli-model', { method: 'PUT', body: { model } }))
+
+export const useSetStageModel = () =>
+  useConnectionMutation(({ stage, model }: { stage: StageModel['stage']; model: string }) =>
+    api<ConnectionStatus>(`/api/claude/connection/stage-model/${stage}`, { method: 'PUT', body: { model } }))
 
 export interface ModelOption {
   id: string

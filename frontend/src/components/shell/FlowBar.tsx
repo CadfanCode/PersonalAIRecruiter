@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useImportJob } from '../../api/cv'
 import { useOnboarding } from '../../api/onboarding'
 import { SETUP_STEPS, useSetup } from '../../setup/SetupProvider'
 import { CheckIcon } from '../ui/Icons'
@@ -73,6 +74,18 @@ function Steps() {
   )
 }
 
+/** Shown while a CV is being read in the background: it carries on whatever the user does, and a click goes to where it will appear. */
+function ReadingChip() {
+  const job = useImportJob().data
+  if (job?.status !== 'RUNNING') return null
+  return (
+    <Link to="/cv?tab=import" className="glow-chip relative flex shrink-0 items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium">
+      <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+      Reading your CV
+    </Link>
+  )
+}
+
 /** The bar across the top, on every screen: the brand, where you are in the process (every part of it clickable), and the theme switch. */
 export function FlowBar() {
   return (
@@ -85,6 +98,7 @@ export function FlowBar() {
         <nav aria-label="Progress" className="min-w-0 flex-1 overflow-x-auto">
           <Steps />
         </nav>
+        <ReadingChip />
         <ThemeToggle />
       </div>
     </header>

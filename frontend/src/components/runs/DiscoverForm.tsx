@@ -17,10 +17,6 @@ export function DiscoverForm() {
 
   return (
     <div>
-      <p className="mb-4 max-w-2xl text-[15px] leading-relaxed text-[var(--muted)]">
-        JobPilot reads your whole CV, not just your latest job, and suggests roles you would be a strong match for: close to what you do,
-        mixing your different backgrounds, and outside your main field.
-      </p>
       <Field label="Where and how you want to work (optional)">
         <TextArea aria-label="Where and how you want to work" rows={2} value={context} onChange={(e) => setContext(e.target.value)}
           placeholder="For example: Stockholm region, full time, ads from the last 14 days" className="text-[15px]" />

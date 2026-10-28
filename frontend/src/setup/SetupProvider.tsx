@@ -1,5 +1,4 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { type ImportPreview, useImportPreview } from '../api/cv'
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { type OnboardingStep, useOnboarding } from '../api/onboarding'
 
 export const SETUP_STEPS = ['Your CV', 'Connect Claude', 'Country', 'Mode'] as const
@@ -21,11 +20,6 @@ interface SetupValue {
   /** Reading the held files is a screen of its own, between Claude and the country. */
   reading: boolean
   setReading: (reading: boolean) => void
-  preview: ImportPreview | null
-  readFiles: () => void
-  readError: Error | null
-  readPending: boolean
-  resetRead: () => void
 }
 
 const SetupContext = createContext<SetupValue | null>(null)
@@ -38,17 +32,14 @@ export function useSetup() {
 
 /**
  * Everything setup holds in the browser lives here, above the routes, so opening the bottom menu, Settings or the CV database in
- * the middle of setup (or while the CV is being read) never loses the files, the step or the reading in progress.
+ * the middle of setup never loses the files or the step. The reading itself runs on the server (see useImportJob).
  */
 export function SetupProvider({ children }: { children: ReactNode }) {
   const onboarding = useOnboarding()
-  const analyse = useImportPreview()
   const [step, setStepState] = useState<number | null>(null)
   const [furthest, setFurthest] = useState(0)
   const [files, setFiles] = useState<File[]>([])
   const [reading, setReading] = useState(false)
-  const [preview, setPreview] = useState<ImportPreview | null>(null)
-  const started = useRef(false)
 
   const serverFirst = onboarding.data?.nextStep ? FIRST[onboarding.data.nextStep] : 3
   const reachable = Math.max(furthest, serverFirst)
@@ -65,22 +56,9 @@ export function SetupProvider({ children }: { children: ReactNode }) {
 
   const goTo = useCallback((s: number) => setStepState(s), [])
 
-  const readFiles = useCallback(() => {
-    if (started.current) return
-    started.current = true
-    analyse.mutate(files, { onSuccess: setPreview })
-  }, [files, analyse])
-
-  const resetRead = useCallback(() => {
-    started.current = false
-    analyse.reset()
-    setPreview(null)
-  }, [analyse])
-
   const value = useMemo<SetupValue>(() => ({
-    step, setStep, goTo, reachable, files, setFiles, reading, setReading, preview, readFiles, resetRead,
-    readError: analyse.isError ? analyse.error : null, readPending: analyse.isPending,
-  }), [step, setStep, goTo, reachable, files, reading, preview, readFiles, resetRead, analyse.isError, analyse.error, analyse.isPending])
+    step, setStep, goTo, reachable, files, setFiles, reading, setReading,
+  }), [step, setStep, goTo, reachable, files, reading])
 
   return <SetupContext.Provider value={value}>{children}</SetupContext.Provider>
 }

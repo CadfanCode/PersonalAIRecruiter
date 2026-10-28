@@ -1,138 +1,121 @@
+import { useState } from 'react'
+import { type CommitEntry, type ImportPreview, useDiscardImport, useImportCommit, useImportJob, useStartImport } from '../../api/cv'
+import { useEasedProgress } from '../../lib/useEasedProgress'
 import { useDraft } from '../../lib/useDraft'
-import { type ImportPreview, useImportCommit, useImportPreview } from '../../api/cv'
 import { Button } from '../Form'
 import { Panel } from '../Panel'
+import { Processing } from '../ui/Processing'
+import { FileDrop } from './FileDrop'
 
+/** What the user decided for one found entry: add it to the stored entry it matches, or make it a new entry. */
+type Choice = { include: boolean; merge: boolean }
+
+const defaults = (p: ImportPreview): Choice[] =>
+  // A match with nothing new to add is left out by default; everything else is included, matches merged into what is stored.
+  p.entries.map((e) => ({ include: e.matchEntryId === null || e.newFacts > 0, merge: e.matchEntryId !== null }))
+
+/**
+ * Importing more CVs or letters. The reading runs on the server, so leaving the page does not stop it: it is picked up here again
+ * (and announced in the top bar when it finishes). Entries the database already has are not duplicated: new facts are added to them.
+ */
 export function ImportWizard() {
-  // Kept outside the screen, so a CV that is being read (or is waiting to be confirmed) survives a trip to another page.
   const [files, setFiles] = useDraft<File[]>('cv.import.files', [])
-  const [preview, setPreview] = useDraft<ImportPreview | null>('cv.import.preview', null)
-  const [included, setIncluded] = useDraft<Set<number>>('cv.import.included', new Set())
-  const [reading, setReading] = useDraft('cv.import.reading', false)
-  const analyse = useImportPreview()
+  const start = useStartImport()
+  const job = useImportJob()
+  const discard = useDiscardImport()
   const commit = useImportCommit()
+  const pct = useEasedProgress(start.isPending || job.data?.status === 'RUNNING')
+  const [choices, setChoices] = useState<Choice[] | null>(null)
+  const [result, setResult] = useState<{ created: number; enriched: number; facts: number } | null>(null)
 
-  const reset = () => {
-    setFiles([])
-    setPreview(null)
-    analyse.reset()
-  }
-
-  if (commit.isSuccess && !preview) {
+  if (result) {
     return (
       <Panel title="Import">
         <p role="status" className="text-sm text-[var(--success)]">
-          Imported {commit.data.entryIds.length} entries with {commit.data.facts} facts. Review them in the Entries tab.
+          {result.created} new {result.created === 1 ? 'entry' : 'entries'}, {result.enriched} {result.enriched === 1 ? 'entry' : 'entries'} enriched,
+          {' '}{result.facts} {result.facts === 1 ? 'fact' : 'facts'} added. Review them in the Entries tab.
         </p>
-        <div className="mt-3">
-          <Button variant="ghost" onClick={() => { commit.reset(); reset() }}>
-            Import more
-          </Button>
-        </div>
+        <div className="mt-3"><Button variant="ghost" onClick={() => setResult(null)}>Import more</Button></div>
       </Panel>
     )
   }
 
+  const current = job.data
+  if (start.isPending || current?.status === 'RUNNING') {
+    return (
+      <Panel>
+        <Processing title="Reading your CV" percent={pct} etaSeconds={null} fallback="This takes a minute or two. You can leave this page: it carries on, and you will be told when it is ready." message={current?.files.join(', ') ?? ''} />
+      </Panel>
+    )
+  }
+
+  if (current?.status === 'FAILED' || start.isError) {
+    return (
+      <Panel title="Import">
+        <p role="alert" className="text-sm text-[var(--danger)]">{start.isError ? start.error.message : current?.message}</p>
+        <div className="mt-3"><Button variant="ghost" onClick={() => { start.reset(); if (current) discard.mutate(current.runId) }}>Try again</Button></div>
+      </Panel>
+    )
+  }
+
+  const preview = current?.status === 'DONE' ? current.preview : null
   if (!preview) {
     return (
       <Panel title="Import from CV or letters">
-        <p className="mb-3 text-sm text-[var(--muted)]">
-          Upload PDF, DOCX, TXT or MD files. The AI splits them into entries and facts. Nothing is saved until you confirm.
-        </p>
-        <input
-          type="file"
-          multiple
-          aria-label="CV and letter files"
-          accept=".pdf,.docx,.txt,.md"
-          onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-        />
-        <div className="mt-3 flex items-center gap-3">
-          <Button
-            disabled={files.length === 0 || reading}
-            onClick={() => {
-              setReading(true)
-              analyse.mutateAsync(files).then(
-                (p) => {
-                  setIncluded(new Set(p.entries.map((e, i) => (e.duplicateOfEntryId === null ? i : -1)).filter((i) => i >= 0)))
-                  setPreview(p)
-                  setReading(false)
-                },
-                () => setReading(false),
-              )
-            }}
-          >
-            {reading ? 'Reading...' : 'Analyse'}
-          </Button>
-          {analyse.isPending && <span className="text-sm text-[var(--muted)]">The AI is reading the files, this can take a minute.</span>}
+        <p className="mb-4 text-sm text-[var(--muted)]">What is new is added; what you already have is enriched, never duplicated.</p>
+        <FileDrop files={files} onFiles={setFiles} label="CV and letter files" title="Drop a CV or letter here" />
+        <div className="mt-4">
+          <Button disabled={files.length === 0} onClick={() => start.mutate(files, { onSuccess: () => setFiles([]) })}>Read {files.length > 1 ? 'these files' : 'this file'}</Button>
         </div>
-        {analyse.isError && (
-          <p role="alert" className="mt-3 text-sm text-[var(--danger)]">
-            {analyse.error.message}
-          </p>
-        )}
       </Panel>
     )
   }
 
-  const toggle = (i: number) => {
-    const next = new Set(included)
-    if (next.has(i)) next.delete(i)
-    else next.add(i)
-    setIncluded(next)
-  }
+  const picks = choices ?? defaults(preview)
+  const set = (i: number, patch: Partial<Choice>) => setChoices(picks.map((c, j) => (j === i ? { ...c, ...patch } : c)))
+  const chosen = preview.entries.flatMap((e, i): CommitEntry[] =>
+    picks[i].include ? [{ entry: e.entry, mergeIntoEntryId: picks[i].merge ? e.matchEntryId : null }] : [])
 
   return (
     <Panel title="Review before importing">
-      <p className="mb-3 text-sm text-[var(--muted)]">
-        {preview.entries.length} entries found in {preview.files.join(', ')}. Entries that already exist are unchecked.
-        You can edit everything after importing.
+      <p className="mb-4 text-sm text-[var(--muted)]">
+        {preview.entries.length} {preview.entries.length === 1 ? 'entry' : 'entries'} found in {preview.files.join(', ')}. Matches are added to the entry you already have.
       </p>
       <ul className="flex flex-col gap-3">
-        {preview.entries.map(({ entry, duplicateOfEntryId }, i) => (
-          <li key={i} className="rounded-md border border-[var(--line)] p-3">
+        {preview.entries.map(({ entry, matchEntryId, matchTitle, newFacts }, i) => (
+          <li key={i} className="rounded-lg border border-[var(--line)] p-3">
             <label className="flex items-start gap-2">
-              <input type="checkbox" checked={included.has(i)} onChange={() => toggle(i)} aria-label={`Import ${entry.title}`} />
+              <input type="checkbox" checked={picks[i].include} onChange={(e) => set(i, { include: e.target.checked })} aria-label={`Import ${entry.title}`} />
               <span>
                 <span className="font-medium">{entry.title}</span>
                 <span className="text-sm text-[var(--muted)]">
-                  {' '}
-                  {[entry.organisation, entry.startYm && `${entry.startYm} – ${entry.ongoing ? 'present' : (entry.endYm ?? '?')}`]
-                    .filter(Boolean)
-                    .join(', ')}
+                  {' '}{[entry.organisation, entry.startYm && `${entry.startYm} to ${entry.ongoing ? 'now' : (entry.endYm ?? '?')}`].filter(Boolean).join(', ')}
                 </span>
-                {duplicateOfEntryId !== null && (
-                  <span className="ml-2 rounded bg-[var(--warn-soft)] px-1.5 py-0.5 text-xs text-[var(--warn)]">already in database</span>
-                )}
               </span>
             </label>
+            {matchEntryId !== null && (
+              <p className="ml-6 mt-1 flex flex-wrap items-center gap-x-3 text-xs">
+                <span className="rounded-md bg-[var(--accent-soft)] px-1.5 py-0.5 font-medium text-[var(--accent)]">
+                  {picks[i].merge ? (newFacts > 0 ? `Adds ${newFacts} ${newFacts === 1 ? 'fact' : 'facts'} to ${matchTitle}` : `Already in ${matchTitle}`) : 'Will be a new entry'}
+                </span>
+                <button type="button" className="text-[var(--muted)] underline underline-offset-2 hover:text-[var(--ink)]" onClick={() => set(i, { merge: !picks[i].merge })}>
+                  {picks[i].merge ? 'Add as a new entry instead' : 'Add to the existing entry'}
+                </button>
+              </p>
+            )}
             <ul className="ml-6 mt-2 list-disc text-sm text-[var(--muted)]">
-              {entry.facts.map((f, j) => (
-                <li key={j}>{f.textEn ?? f.textSv}</li>
-              ))}
+              {entry.facts.map((f, j) => <li key={j}>{f.textEn ?? f.textSv}</li>)}
             </ul>
           </li>
         ))}
       </ul>
-      {commit.isError && (
-        <p role="alert" className="mt-3 text-sm text-[var(--danger)]">
-          {commit.error.message}
-        </p>
-      )}
+      {commit.isError && <p role="alert" className="mt-3 text-sm text-[var(--danger)]">{commit.error.message}</p>}
       <div className="mt-4 flex gap-2">
-        <Button
-          disabled={included.size === 0 || commit.isPending}
-          onClick={() =>
-            commit.mutate(
-              { previewId: preview.previewId, entries: preview.entries.filter((_, i) => included.has(i)).map((e) => e.entry), skills: preview.skills, profile: preview.profile },
-              { onSuccess: () => setPreview(null) },
-            )
-          }
-        >
-          Import {included.size} {included.size === 1 ? 'entry' : 'entries'}
+        <Button disabled={chosen.length === 0 || commit.isPending} onClick={() =>
+          commit.mutate({ previewId: preview.previewId, entries: chosen, skills: preview.skills, profile: preview.profile }, { onSuccess: (r) => { setChoices(null); setResult(r) } })}>
+          Import {chosen.length} {chosen.length === 1 ? 'entry' : 'entries'}
         </Button>
-        <Button variant="ghost" onClick={reset}>
-          Cancel
-        </Button>
+        <Button variant="ghost" onClick={() => { setChoices(null); discard.mutate(current!.runId) }}>Discard</Button>
       </div>
     </Panel>
   )

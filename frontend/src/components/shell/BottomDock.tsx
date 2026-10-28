@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
-import { ArchiveIcon, ChevronUpIcon, GlobeIcon, GridIcon, SlidersIcon, SparkIcon, UserIcon } from '../ui/Icons'
+import { ArchiveIcon, ChevronUpIcon, GlobeIcon, GridIcon, HelpIcon, SlidersIcon, UserIcon } from '../ui/Icons'
 
 const ITEMS = [
   { to: '/cv', label: 'CV database', icon: UserIcon, active: (p: string) => p.startsWith('/cv') },
   { to: '/settings/country', label: 'Country', icon: GlobeIcon, active: (p: string) => p === '/settings/country' },
-  { to: '/settings/connection', label: 'Claude', icon: SparkIcon, active: (p: string) => p === '/settings/connection' },
   { to: '/submitted', label: 'Submitted applications', icon: ArchiveIcon, active: (p: string) => p.startsWith('/submitted') },
   { to: '/extras', label: 'Extra features', icon: GridIcon, active: (p: string) => p.startsWith('/extras') },
-  { to: '/settings', label: 'Settings', icon: SlidersIcon, active: (p: string) => p.startsWith('/settings') && p !== '/settings/country' && p !== '/settings/connection' },
+  { to: '/help', label: 'Help', icon: HelpIcon, active: (p: string) => p.startsWith('/help') },
+  { to: '/settings', label: 'Settings', icon: SlidersIcon, active: (p: string) => p.startsWith('/settings') && p !== '/settings/country' },
 ] as const
 
 /**
@@ -45,7 +45,7 @@ export function BottomDock() {
   return (
     <>
       <div aria-hidden className="fixed inset-x-0 bottom-0 z-40 h-3" onMouseEnter={show} />
-      <button type="button" aria-label="More: CV database, country, Claude, submitted applications, extra features, settings" aria-expanded={open} aria-controls="more-menu"
+      <button type="button" aria-label="More: CV database, country, submitted applications, extra features, help, settings" aria-expanded={open} aria-controls="more-menu"
         onClick={show} onMouseEnter={show} onFocus={show}
         className={`fixed bottom-0 left-1/2 z-40 flex h-6 -translate-x-1/2 cursor-pointer items-center gap-1 rounded-t-md border border-b-0 border-[var(--line)] bg-[var(--panel)] px-3 text-[11px] font-medium text-[var(--muted)] transition hover:text-[var(--ink)] ${open ? 'opacity-0' : ''}`}>
         <ChevronUpIcon width={12} height={12} /> Menu

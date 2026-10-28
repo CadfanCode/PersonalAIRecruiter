@@ -26,7 +26,7 @@ const limits = {
   error: null,
 }
 const connection = (over = {}) => ({
-  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '' },
+  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '', stageModels: [{ stage: 'SEARCH', label: 'Search', model: '' }, { stage: 'RANKING', label: 'Scoring', model: '' }, { stage: 'CV_READING', label: 'Reading your CV', model: '' }, { stage: 'DOCUMENTS', label: 'CV and cover letter', model: '' }, { stage: 'AUTOFILL', label: 'Auto-fill', model: '' }] },
   secureStore: { available: true, name: 'Secret Service' }, ...over,
 })
 
@@ -95,9 +95,9 @@ describe('settings: Claude connection', () => {
   })
 
   it('changes the Claude Code model and sends it to the server for the next request', async () => {
-    const calls = setup({ 'PUT /api/claude/connection/cli-model': connection({ cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: 'opus' } }) })
+    const calls = setup({ 'PUT /api/claude/connection/cli-model': connection({ cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: 'opus', stageModels: [{ stage: 'SEARCH', label: 'Search', model: '' }, { stage: 'RANKING', label: 'Scoring', model: '' }, { stage: 'CV_READING', label: 'Reading your CV', model: '' }, { stage: 'DOCUMENTS', label: 'CV and cover letter', model: '' }, { stage: 'AUTOFILL', label: 'Auto-fill', model: '' }] } }) })
 
-    await userEvent.selectOptions(await screen.findByLabelText('Claude model'), 'opus')
+    await userEvent.selectOptions(await screen.findByLabelText('Default model'), 'opus')
 
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/cli-model')).toBe(true))
     expect(calls.find((c) => c.url === '/api/claude/connection/cli-model')!.body).toEqual({ model: 'opus' })
@@ -166,6 +166,29 @@ describe('settings: search, speed, logins and country', () => {
     await screen.findByRole('button', { name: 'Country' })
     expect(screen.queryByRole('button', { name: 'Appearance' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Setup' })).not.toBeInTheDocument()
+  })
+})
+
+describe('settings: models per stage', () => {
+  it('lists the default and one row per stage, and sends a stage choice on its own', async () => {
+    const calls = setup({ 'PUT /api/claude/connection/stage-model/DOCUMENTS': connection() })
+
+    for (const label of ['Default', 'Search', 'Scoring', 'Reading your CV', 'CV and cover letter', 'Auto-fill']) {
+      expect(await screen.findByLabelText(`${label} model`)).toBeInTheDocument()
+    }
+    expect(screen.getByLabelText('Scoring model')).toHaveValue('')
+    await userEvent.selectOptions(screen.getByLabelText('CV and cover letter model'), 'opus')
+
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/stage-model/DOCUMENTS')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/claude/connection/stage-model/DOCUMENTS')!.body).toEqual({ model: 'opus' })
+  })
+
+  it('does not name the credential store next to the saved logins', async () => {
+    setup()
+    await open('Saved logins')
+
+    expect(await screen.findByText(/Passwords are kept in your computer's secure store\./)).toBeInTheDocument()
+    expect(screen.queryByText(/Secret Service/)).not.toBeInTheDocument()
   })
 })
 

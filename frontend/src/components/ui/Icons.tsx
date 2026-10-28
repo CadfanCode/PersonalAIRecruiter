@@ -64,3 +64,6 @@ export const MoonIcon = (p: P) => (
 export const ChevronUpIcon = (p: P) => (
   <svg {...base} {...p}><path d="M6 15l6-6 6 6" /></svg>
 )
+export const HelpIcon = (p: P) => (
+  <svg {...base} {...p}><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.1M12 16.8v.1" /></svg>
+)

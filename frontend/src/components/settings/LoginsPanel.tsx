@@ -1,5 +1,4 @@
 import { useDeleteLogin, useLogins } from '../../api/logins'
-import { useConnection } from '../../api/connection'
 import { Button } from '../Form'
 import { Panel } from '../Panel'
 import { LockIcon } from '../ui/Icons'
@@ -8,13 +7,12 @@ import { LockIcon } from '../ui/Icons'
 export function LoginsPanel() {
   const logins = useLogins()
   const remove = useDeleteLogin()
-  const conn = useConnection()
   return (
     <Panel title="Saved logins">
       <p className="mb-4 flex items-start gap-2 text-sm text-[var(--muted)]">
         <LockIcon className="mt-0.5 shrink-0 text-[var(--accent)]" />
         <span>
-          When a site needs you to sign in during Apply, you can let JobPilot remember that login. Passwords are kept in your computer's secure store{conn.data?.secureStore.available ? `: ${conn.data.secureStore.name}` : ''}. They are kept only for that one site, and only typed into that site's login form. You still press Log in yourself.
+          When a site needs you to sign in during Apply, you can let JobPilot remember that login. Passwords are kept in your computer's secure store. They are kept only for that one site, and only typed into that site's login form. You still press Log in yourself.
         </span>
       </p>
       {logins.data?.length === 0 && <p className="text-sm text-[var(--muted)]">No saved logins.</p>}

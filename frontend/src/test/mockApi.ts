@@ -12,7 +12,9 @@ type Handler = (call: Call) => unknown
  * Stubs fetch with a tiny router: keys are "METHOD /path". A handler returns the JSON body,
  * `null` for 204, or a ready-made Response for error cases. Unknown routes fail the test loudly.
  */
-export function mockApi(routes: Record<string, Handler | unknown>) {
+export function mockApi(given: Record<string, Handler | unknown>) {
+  // Asked on every screen (the top bar shows a CV being read): nothing is being read unless a test says so.
+  const routes: Record<string, Handler | unknown> = { 'GET /api/cv/import/current': null, ...given }
   const calls: Call[] = []
   vi.stubGlobal(
     'fetch',

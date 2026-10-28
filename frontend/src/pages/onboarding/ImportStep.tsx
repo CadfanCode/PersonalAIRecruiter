@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { type ImportedEntry, useImportCommit } from '../../api/cv'
+import { useEffect, useRef, useState } from 'react'
+import { type ImportedEntry, useDiscardImport, useImportCommit, useImportJob, useStartImport } from '../../api/cv'
 import { Button } from '../../components/Form'
 import { CheckIcon } from '../../components/ui/Icons'
 import { Processing } from '../../components/ui/Processing'
 import { formatRange } from '../../components/cv/dates'
+import { useEasedProgress } from '../../lib/useEasedProgress'
 import { useSetup } from '../../setup/SetupProvider'
 
 const KIND_LABEL: Record<string, string> = {
@@ -29,67 +30,82 @@ function EntryDetails({ entry }: { entry: ImportedEntry }) {
   )
 }
 
-/** The reading takes a minute and reports no progress, so the ring eases towards 90% instead of pretending to know. */
-function useEasedProgress(running: boolean) {
-  const [pct, setPct] = useState(4)
-  useEffect(() => {
-    if (!running) return
-    const t = window.setInterval(() => setPct((p) => p + (90 - p) * 0.045), 800)
-    return () => window.clearInterval(t)
-  }, [running])
-  return pct
-}
-
 /**
  * Between Claude and the country: the held files are read now that Claude is connected, a short summary is shown, and the user
  * confirms. Anything can be corrected later in the CV database.
  */
 export function ImportStep({ onDone, onBack }: { onDone: () => void; onBack: () => void }) {
-  const { files, preview, readFiles, readError, readPending, resetRead } = useSetup()
+  const { files, setFiles } = useSetup()
+  const start = useStartImport()
+  const job = useImportJob()
+  const discard = useDiscardImport()
   const commit = useImportCommit()
-  const pct = useEasedProgress(readPending)
+  const startedFor = useRef<File[] | null>(null)
+  const pct = useEasedProgress(job.data?.status === 'RUNNING' || start.isPending)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const toggle = (kind: string) => setOpen((o) => { const n = new Set(o); if (n.has(kind)) n.delete(kind); else n.add(kind); return n })
 
+  // Reading starts once, on the server; leaving this screen does not stop it and coming back finds it again.
   useEffect(() => {
-    if (files.length > 0) readFiles()
-  }, [files, readFiles])
+    if (files.length === 0 || startedFor.current === files || job.isPending || job.data) return
+    startedFor.current = files
+    start.mutate(files)
+  }, [files, job.isPending, job.data, start])
 
-  if (readError) {
+  const failure = start.isError ? start.error.message : job.data?.status === 'FAILED' ? job.data.message : null
+  const retry = () => {
+    startedFor.current = null
+    start.reset()
+    const id = job.data?.runId
+    if (id) discard.mutate(id)
+    else start.mutate(files)
+  }
+  if (failure) {
     return (
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">We could not read your CV</h1>
-        <p role="alert" className="mt-3 rounded-lg bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">{readError.message}</p>
+        <p role="alert" className="mt-3 rounded-lg bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">{failure}</p>
         <div className="mt-8 flex justify-between">
-          <Button variant="ghost" onClick={() => { resetRead(); onBack() }}>Choose other files</Button>
-          <Button size="lg" onClick={() => { resetRead(); readFiles() }}>Try again</Button>
+          <Button variant="ghost" onClick={() => { retry(); onBack() }}>Choose other files</Button>
+          <Button size="lg" onClick={retry}>Try again</Button>
         </div>
       </div>
     )
   }
 
+  const preview = job.data?.status === 'DONE' ? job.data.preview : null
   if (!preview) {
-    return <Processing title="Reading your CV" percent={pct} etaSeconds={null} fallback="This usually takes a minute or two." message="Splitting it into experience, education and skills." />
+    return <Processing title="Reading your CV" percent={pct} etaSeconds={null} fallback="This usually takes a minute or two. You can look around meanwhile: it carries on." message="Splitting it into experience, education and skills." />
   }
 
-  const fresh = preview.entries.filter((e) => e.duplicateOfEntryId === null)
+  // Entries the database already has are not duplicated: their new facts are added to them.
+  const fresh = preview.entries.filter((e) => e.matchEntryId === null)
+  const merged = preview.entries.filter((e) => e.matchEntryId !== null)
+  const addedFacts = merged.reduce((n, e) => n + e.newFacts, 0)
   const byKind = new Map<string, number>()
   fresh.forEach(({ entry }) => byKind.set(entry.kind, (byKind.get(entry.kind) ?? 0) + 1))
   const kinds = Object.keys(KIND_LABEL).filter((k) => k !== 'OTHER' || byKind.has(k)).map((k) => [k, byKind.get(k) ?? 0] as const)
-  const facts = fresh.reduce((n, e) => n + e.entry.facts.length, 0)
+  const facts = fresh.reduce((n, e) => n + e.entry.facts.length, 0) + addedFacts
   const who = preview.profile?.fullName
 
-  const confirm = () =>
+  const confirm = () => {
+    startedFor.current = files // once confirmed, the same files must not be read again
     commit.mutate(
-      { previewId: preview.previewId, entries: fresh.map((e) => e.entry), skills: preview.skills, profile: preview.profile },
-      { onSuccess: () => { resetRead(); onDone() } },
+      {
+        previewId: preview.previewId,
+        entries: preview.entries.map((e) => ({ entry: e.entry, mergeIntoEntryId: e.matchEntryId })),
+        skills: preview.skills,
+        profile: preview.profile,
+      },
+      { onSuccess: () => { setFiles([]); onDone() } },
     )
+  }
 
   return (
     <div>
       <h1 className="text-2xl font-semibold tracking-tight">{who ? `Here is what we found, ${who.split(' ')[0]}` : 'Here is what we found'}</h1>
       <p className="mt-2 max-w-xl text-[15px] leading-relaxed text-[var(--muted)]">
-        {fresh.length} {fresh.length === 1 ? 'entry' : 'entries'} with {facts} facts and {preview.skills.length} skills. You can correct anything
+        {fresh.length} new {fresh.length === 1 ? 'entry' : 'entries'}, {facts} facts and {preview.skills.length} skills. You can correct anything
         later in the CV database.
       </p>
 
@@ -134,8 +150,8 @@ export function ImportStep({ onDone, onBack }: { onDone: () => void; onBack: () 
         </ul>
       </div>
 
-      {preview.entries.length > fresh.length && (
-        <p className="mt-3 text-sm text-[var(--muted)]">{preview.entries.length - fresh.length} entries were already in your database and are left as they are.</p>
+      {merged.length > 0 && (
+        <p className="mt-3 text-sm text-[var(--muted)]">{merged.length} {merged.length === 1 ? 'entry was' : 'entries were'} already in your database: {addedFacts === 0 ? 'nothing new to add to them' : `${addedFacts} new ${addedFacts === 1 ? 'fact is' : 'facts are'} added to them`}.</p>
       )}
       {commit.isError && <p role="alert" className="mt-4 text-sm text-[var(--danger)]">{commit.error.message}</p>}
 

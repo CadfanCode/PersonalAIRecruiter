@@ -8,6 +8,7 @@ import { CvDatabase } from './pages/CvDatabase'
 import { Dashboard } from './pages/Dashboard'
 import { DocumentsIndexPage } from './pages/DocumentsIndexPage'
 import { ExtrasPage } from './pages/ExtrasPage'
+import { HelpPage } from './pages/HelpPage'
 import { JobDocumentsPage } from './pages/JobDocumentsPage'
 import { NotStartedPage } from './pages/NotStartedPage'
 import { OnboardingPage } from './pages/OnboardingPage'
@@ -53,6 +54,7 @@ export function App() {
           <Route path="extras" element={<ExtrasPage />} />
           <Route path="aktivitet" element={<AktivitetPage />} />
           <Route path="cv" element={<CvDatabase />} />
+          <Route path="help" element={<HelpPage />} />
           <Route path="settings/:section?" element={<SettingsPage />} />
           <Route path="*" element={<Placeholder title="Not found" milestone={1} description="No such page." />} />
         </Route>

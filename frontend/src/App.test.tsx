@@ -14,7 +14,7 @@ const routes = (onboarding: unknown = onboarded) => ({
   'GET /api/applications': [],
   'GET /api/apply/status': [],
   'GET /api/aktivitet/reminder': { active: false, day: 20, daysLeft: 0, forMonth: '2026-09', message: '' },
-  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: '' }, secureStore: { available: true, name: 'test store' } },
+  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: '', stageModels: [{ stage: 'SEARCH', label: 'Search', model: '' }, { stage: 'RANKING', label: 'Scoring', model: '' }, { stage: 'CV_READING', label: 'Reading your CV', model: '' }, { stage: 'DOCUMENTS', label: 'CV and cover letter', model: '' }, { stage: 'AUTOFILL', label: 'Auto-fill', model: '' }] }, secureStore: { available: true, name: 'test store' } },
   'GET /api/claude/limits': { limits: null, error: null },
 })
 
@@ -48,8 +48,8 @@ describe('app shell', () => {
 
     const more = screen.getByRole('navigation', { name: 'More' })
     expect(within(more).getAllByRole('link').map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
-      ['CV database', '/cv'], ['Country', '/settings/country'], ['Claude', '/settings/connection'],
-      ['Submitted applications', '/submitted'], ['Extra features', '/extras'], ['Settings', '/settings'],
+      ['CV database', '/cv'], ['Country', '/settings/country'], ['Submitted applications', '/submitted'],
+      ['Extra features', '/extras'], ['Help', '/help'], ['Settings', '/settings'],
     ])
   })
 

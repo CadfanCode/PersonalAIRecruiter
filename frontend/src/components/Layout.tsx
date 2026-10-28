@@ -1,5 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { useReadyNotifications } from './apply/notifications'
+import { useImportWatcher } from './cv/useImportWatcher'
+import { Tour } from './Tour'
 import { BottomDock } from './shell/BottomDock'
 import { FlowBar } from './shell/FlowBar'
 
@@ -10,6 +12,7 @@ import { FlowBar } from './shell/FlowBar'
 export function Layout() {
   const { pathname } = useLocation()
   useReadyNotifications()
+  useImportWatcher()
   // The results table has many columns and a document needs a large preview, so these pages use the full window width.
   const wide = /^\/(runs\/\d+|documents\/job\/)/.test(pathname)
   return (
@@ -21,6 +24,7 @@ export function Layout() {
         </div>
       </main>
       <BottomDock />
+      <Tour />
     </div>
   )
 }
