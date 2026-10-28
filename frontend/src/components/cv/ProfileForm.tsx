@@ -12,7 +12,7 @@ const FIELDS: [TextKey, string][] = [
   ['phoneInternational', 'Phone (international)'],
   ['city', 'City'],
   ['website', 'Website'],
-  ['github', 'GitHub'],
+  ['github', 'Portfolio or GitHub'],
   ['linkedin', 'LinkedIn'],
   ['workAuthorisation', 'Work authorisation'],
 ]

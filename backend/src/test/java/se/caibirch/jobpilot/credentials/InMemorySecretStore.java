@@ -9,6 +9,12 @@ public class InMemorySecretStore implements SecretStore {
 
     private final Map<String, String> secrets = new ConcurrentHashMap<>();
     private volatile boolean available = true;
+    private final java.util.concurrent.atomic.AtomicInteger reads = new java.util.concurrent.atomic.AtomicInteger();
+
+    /** How many times a secret was read: showing a status must not read one. */
+    public int reads() {
+        return reads.get();
+    }
 
     public void setAvailable(boolean available) {
         this.available = available;
@@ -38,6 +44,7 @@ public class InMemorySecretStore implements SecretStore {
 
     @Override
     public Optional<String> get(String account) {
+        reads.incrementAndGet();
         return Optional.ofNullable(secrets.get(account));
     }
 

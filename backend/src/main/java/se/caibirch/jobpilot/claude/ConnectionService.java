@@ -84,6 +84,7 @@ public class ConnectionService {
             throw new IllegalArgumentException("That does not look like an Anthropic API key (they start with sk-ant-)");
         }
         secrets.put(ApiClaudeRunner.KEY_ACCOUNT, trimmed);
+        settings.apiKeyRecorded("…" + trimmed.substring(trimmed.length() - 4));
         settings.forgetTest();
         if (model != null) {
             settings.apiModel(model);
@@ -92,6 +93,7 @@ public class ConnectionService {
 
     public void deleteApiKey() {
         secrets.delete(ApiClaudeRunner.KEY_ACCOUNT);
+        settings.apiKeyForgotten();
         settings.forgetTest();
         if (ProviderSettings.API.equals(settings.selectedId())) {
             settings.select(ProviderSettings.CLI);

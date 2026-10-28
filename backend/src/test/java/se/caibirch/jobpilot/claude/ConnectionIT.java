@@ -97,6 +97,22 @@ class ConnectionIT {
     }
 
     @Test
+    void showingTheConnectionNeverReadsTheSecretSoALockedKeyringIsNotAskedToUnlock() throws Exception {
+        call(put("/api/claude/connection/api-key"), "{\"key\":\"" + KEY + "\"}", 200);
+        int before = secrets.reads();
+
+        for (int i = 0; i < 3; i++) {
+            JsonNode s = call(get("/api/claude/connection"), null, 200);
+            assertThat(s.get("api").get("configured").asBoolean()).isTrue();
+            assertThat(s.get("api").get("keyHint").asText()).isEqualTo("…0123");
+        }
+
+        assertThat(secrets.reads()).as("the secret is read only when a call needs it").isEqualTo(before);
+        call(delete("/api/claude/connection/api-key"), null, 200);
+        assertThat(call(get("/api/claude/connection"), null, 200).get("api").get("configured").asBoolean()).isFalse();
+    }
+
+    @Test
     void anObviouslyWrongKeyIsRefusedBeforeItIsSaved() throws Exception {
         call(put("/api/claude/connection/api-key"), "{\"key\":\"hello\"}", 400);
         call(put("/api/claude/connection/api-key"), "{\"key\":\"  \"}", 400);

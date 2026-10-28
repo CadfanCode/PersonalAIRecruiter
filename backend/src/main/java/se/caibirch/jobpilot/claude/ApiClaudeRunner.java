@@ -74,12 +74,9 @@ public class ApiClaudeRunner implements AiProvider {
         return "Anthropic API key";
     }
 
+    /** From the settings, not the credential store: asking the store can raise an unlock prompt. */
     public boolean keyConfigured() {
-        try {
-            return secrets.available() && secrets.get(KEY_ACCOUNT).isPresent();
-        } catch (RuntimeException e) {
-            return false;
-        }
+        return settings.apiKeySaved();
     }
 
     @Override
@@ -270,10 +267,6 @@ public class ApiClaudeRunner implements AiProvider {
 
     /** Optional: the saved key's last four characters, so the user can recognise it without it ever being shown. */
     public Optional<String> keyHint() {
-        try {
-            return secrets.available() ? secrets.get(KEY_ACCOUNT).map(k -> k.length() <= 4 ? "****" : "…" + k.substring(k.length() - 4)) : Optional.empty();
-        } catch (RuntimeException e) {
-            return Optional.empty();
-        }
+        return settings.apiKeyHint();
     }
 }

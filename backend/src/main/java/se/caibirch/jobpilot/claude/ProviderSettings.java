@@ -13,6 +13,7 @@ public class ProviderSettings {
     static final String PROVIDER_KEY = "claude.provider";
     static final String MODEL_KEY = "api.model";
     static final String TESTED_KEY = "claude.tested";
+    static final String KEY_HINT = "api.keyHint";
 
     private final AppSettings settings;
     private final ApiProperties api;
@@ -49,6 +50,26 @@ public class ProviderSettings {
 
     public void forgetTest() {
         settings.delete(TESTED_KEY);
+    }
+
+    /**
+     * That a key was saved, and its last four characters, are remembered here so that showing the connection never has to read the
+     * secret itself: reading it can raise an unlock prompt on a locked keyring or Keychain. The key stays only in the credential store.
+     */
+    public boolean apiKeySaved() {
+        return settings.get(KEY_HINT).isPresent();
+    }
+
+    public java.util.Optional<String> apiKeyHint() {
+        return settings.get(KEY_HINT);
+    }
+
+    public void apiKeyRecorded(String hint) {
+        settings.put(KEY_HINT, hint);
+    }
+
+    public void apiKeyForgotten() {
+        settings.delete(KEY_HINT);
     }
 
     public String apiModel() {
