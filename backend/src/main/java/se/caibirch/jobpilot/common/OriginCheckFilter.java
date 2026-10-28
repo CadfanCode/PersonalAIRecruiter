@@ -8,6 +8,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -26,8 +27,11 @@ public class OriginCheckFilter extends OncePerRequestFilter {
 
     private final Set<String> allowed;
 
-    public OriginCheckFilter(JobPilotProperties props) {
-        this.allowed = Set.copyOf(props.allowedOrigins());
+    public OriginCheckFilter(JobPilotProperties props, @Value("${server.port:8080}") int port) {
+        // The app's own address is always allowed, whichever port the installed app found free.
+        Set<String> own = Set.of("http://127.0.0.1:" + port, "http://localhost:" + port);
+        this.allowed = new java.util.HashSet<>(props.allowedOrigins());
+        this.allowed.addAll(own);
     }
 
     @Override

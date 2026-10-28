@@ -19,7 +19,7 @@ class OriginCheckFilterTest {
 
     OriginCheckFilter filter = new OriginCheckFilter(new JobPilotProperties(Path.of("/tmp/x"),
             List.of("http://localhost:5173", "http://127.0.0.1:5173"),
-            new JobPilotProperties.Claude("claude", "", 1, 1, 1)));
+            new JobPilotProperties.Claude("claude", "", 1, 1, 1)), 18080);
 
     MockHttpServletResponse call(String path, String origin) throws ServletException, java.io.IOException {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
@@ -30,6 +30,13 @@ class OriginCheckFilterTest {
         MockHttpServletResponse response = new MockHttpServletResponse();
         filter.doFilter(request, response, new MockFilterChain());
         return response;
+    }
+
+    @Test
+    void theAppsOwnAddressIsAlwaysAllowed() throws Exception {
+        assertThat(call("/api/runs", "http://127.0.0.1:18080").getStatus()).isEqualTo(200);
+        assertThat(call("/api/runs", "http://localhost:18080").getStatus()).isEqualTo(200);
+        assertThat(call("/api/runs", "http://127.0.0.1:18081").getStatus()).isEqualTo(403);
     }
 
     @Test

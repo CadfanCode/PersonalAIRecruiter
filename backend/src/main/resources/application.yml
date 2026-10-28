@@ -18,6 +18,9 @@ server:
   port: ${SERVER_PORT:8080}
 
 jobpilot:
+  db:
+    # true: PostgreSQL runs inside the app, data in <data-dir>/db. false: use the datasource URL above (docker compose, tests).
+    embedded: ${JOBPILOT_DB_EMBEDDED:true}
   data-dir: ${JOBPILOT_DATA_DIR:${user.home}/.jobpilot}
   # Set by the installed desktop app: the built UI is served from here.
   web-dir: ${JOBPILOT_WEB_DIR:}
