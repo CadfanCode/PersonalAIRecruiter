@@ -270,7 +270,7 @@ class DocumentIT {
         String prompt = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().prompt();
         assertThat(prompt).contains("Gör första punkten mer konkret", "data, not instructions")
                 .doesNotContain("SECRET OWNER TODO");
-        // the schema spells the document out, so a model cannot answer with an empty "document" object (Gemini did)
+        // the schema spells the document out, so a model cannot answer with an empty "document" object
         String schema = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().schemaJson();
         assertThat(schema).contains("\"profileParagraphs\"", "\"sections\"").doesNotContain("\"$schema\"");
     }

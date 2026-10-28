@@ -1,59 +1,51 @@
 package app.jobpilot.claude;
 
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import org.springframework.stereotype.Service;
 
+import app.jobpilot.credentials.SecretStore;
 import app.jobpilot.settings.JobPilotProperties;
 
-/** Onboarding step 2 and Settings: which provider is used, which model, whether it works, and the Gemini key kept in the credential store. */
+/** Onboarding step 2 and Settings: the Claude Code program, which model it uses and whether it works. */
 @Service
 public class ConnectionService {
 
     public record CliStatus(boolean found, String path, String version, String help, String model) {
     }
 
-    public record GeminiStatus(boolean configured, String keyHint, String model) {
-    }
-
+    /** The OS credential store that holds saved employer-portal logins (Settings shows where they are kept). */
     public record SecureStoreStatus(boolean available, String name) {
     }
 
-    public record Status(String selected, boolean chosen, CliStatus cli, GeminiStatus gemini, SecureStoreStatus secureStore) {
+    public record Status(String selected, boolean chosen, CliStatus cli, SecureStoreStatus secureStore) {
     }
 
-    /** problem: null when ok, else NOT_INSTALLED, NOT_LOGGED_IN, INVALID_KEY, NO_KEY or OTHER. */
+    /** problem: null when ok, else NOT_INSTALLED, NOT_LOGGED_IN or OTHER. */
     public record TestResult(boolean ok, String provider, String problem, String message, String help, long durationMs) {
     }
 
     private static final Pattern AUTH = Pattern.compile("(?i)(log ?in|logged in|authenticat|credential|unauthori|invalid api key|api key|401|oauth|token)");
     private static final boolean WINDOWS = System.getProperty("os.name", "").toLowerCase().contains("win");
 
-    private final ProviderRouter router;
+    private final ClaudeRunner runner;
+    private final SecretStore secrets;
     private final ProviderSettings settings;
-    private final GeminiProvider gemini;
-    private final ApiKeyVault vault;
     private final ClaudeHealthService health;
     private final JobPilotProperties.Claude config;
-    private final GeminiModels models;
 
-    public ConnectionService(ProviderRouter router, ProviderSettings settings, GeminiProvider gemini, ApiKeyVault vault,
-                             ClaudeHealthService health, JobPilotProperties props, GeminiModels models) {
-        this.router = router;
+    public ConnectionService(ClaudeRunner runner, SecretStore secrets, ProviderSettings settings, ClaudeHealthService health, JobPilotProperties props) {
+        this.runner = runner;
+        this.secrets = secrets;
         this.settings = settings;
-        this.gemini = gemini;
-        this.vault = vault;
         this.health = health;
         this.config = props.claude();
-        this.models = models;
     }
 
     public Status status() {
-        return new Status(settings.selectedId(), settings.chosen(), cli(), new GeminiStatus(gemini.keyConfigured(),
-                gemini.keyHint().orElse(null), settings.geminiModel()), new SecureStoreStatus(true, vault.description()));
+        return new Status(settings.selectedId(), settings.chosen(), cli(), new SecureStoreStatus(secrets.available(), secrets.description()));
     }
 
     private CliStatus cli() {
@@ -76,55 +68,17 @@ public class ConnectionService {
         settings.forgetTest();
     }
 
-    public void saveApiKey(String key, String model) {
-        if (key == null || key.isBlank()) {
-            throw new IllegalArgumentException("Paste your Google AI Studio API key");
-        }
-        String trimmed = key.trim();
-        if (trimmed.length() < 20 || trimmed.chars().anyMatch(Character::isWhitespace)) {
-            throw new IllegalArgumentException("That does not look like a Google AI Studio API key");
-        }
-        vault.put(trimmed);
-        settings.keyRecorded("…" + trimmed.substring(trimmed.length() - 4));
-        settings.forgetTest();
-        if (model != null) {
-            settings.geminiModel(model);
-        }
-    }
-
-    public void deleteApiKey() {
-        vault.delete();
-        settings.keyForgotten();
-        settings.forgetTest();
-        if (ProviderSettings.GEMINI.equals(settings.selectedId())) {
-            settings.select(ProviderSettings.CLI);
-        }
-    }
-
-    public void geminiModel(String model) {
-        settings.geminiModel(model);
-        settings.forgetTest();
-    }
-
     /** Takes effect on the next request: the CLI runner asks for the model on every call. */
     public void cliModel(String model) {
         settings.cliModel(model);
     }
 
-    /** The models the saved key can use, for the selector; an empty list when the key is missing or Google cannot be reached. */
-    public java.util.List<GeminiModels.ModelOption> geminiModels() {
-        return models.list();
-    }
-
-    /** A real (tiny) model call through the given provider; never changes the chosen provider. */
-    public TestResult test(String providerId) {
+    /** A real (tiny) model call through Claude Code. */
+    public TestResult test() {
         long started = System.nanoTime();
-        AiProvider provider = router.provider(providerId);
-        if (ProviderSettings.GEMINI.equals(providerId) && !gemini.keyConfigured()) {
-            return new TestResult(false, providerId, "NO_KEY", "No API key is saved yet.", "Paste your key and save it first.", 0);
-        }
+        String providerId = ProviderSettings.CLI;
         try {
-            ClaudeHealthService.HealthAnswer answer = provider.run(ClaudeTask.of("health",
+            ClaudeHealthService.HealthAnswer answer = runner.run(ClaudeTask.of("health",
                     ClaudeResources.prompt("health", Map.of()), ClaudeResources.schema("health"), ClaudeHealthService.HealthAnswer.class));
             boolean ok = "ok".equals(answer.status());
             if (ok) {
@@ -137,10 +91,6 @@ public class ConnectionService {
     }
 
     static TestResult failure(String providerId, String message, long durationMs) {
-        if (ProviderSettings.GEMINI.equals(providerId)) {
-            boolean key = message != null && message.contains("rejected the saved key");
-            return new TestResult(false, providerId, key ? "INVALID_KEY" : "OTHER", message, null, durationMs);
-        }
         if (message != null && message.startsWith("Cannot start")) {
             return new TestResult(false, providerId, "NOT_INSTALLED", "Claude Code was not found on this computer.", installHelp(), durationMs);
         }
@@ -153,10 +103,5 @@ public class ConnectionService {
 
     private static long ms(long startedNanos) {
         return TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedNanos);
-    }
-
-    /** Whether the user can already get answers: used by onboarding to decide if step 2 is done. */
-    public Optional<String> selectedProviderLabel() {
-        return Optional.of(router.selected().label());
     }
 }

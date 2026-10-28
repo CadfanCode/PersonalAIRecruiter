@@ -14,7 +14,7 @@ const routes = (onboarding: unknown = onboarded) => ({
   'GET /api/applications': [],
   'GET /api/apply/status': [],
   'GET /api/aktivitet/reminder': { active: false, day: 20, daysLeft: 0, forMonth: '2026-09', message: '' },
-  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: '' }, gemini: { configured: false, keyHint: null, model: 'gemini-flash-latest' }, secureStore: { available: true, name: 'test store' } },
+  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: '' }, secureStore: { available: true, name: 'test store' } },
   'GET /api/claude/limits': { limits: null, error: null },
 })
 

@@ -27,7 +27,7 @@ const limits = {
 }
 const connection = (over = {}) => ({
   selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '' },
-  gemini: { configured: false, keyHint: null, model: 'gemini-flash-latest' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
+  secureStore: { available: true, name: 'Secret Service' }, ...over,
 })
 
 function setup(extra: Record<string, unknown> = {}) {
@@ -73,35 +73,10 @@ describe('settings: Claude connection', () => {
     setup()
 
     expect(await screen.findByText(/Found 2.1.312 \(Claude Code\)/)).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Claude Code subscription' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Google AI Studio API key' })).toBeDisabled() // no key saved yet
+    expect(screen.queryByText(/Google|Gemini|API key/)).not.toBeInTheDocument()
     expect(await screen.findByRole('progressbar', { name: 'Session (5 hours)' })).toHaveAttribute('aria-valuenow', '7')
     expect(screen.getByRole('progressbar', { name: 'Week (7 days)' })).toHaveAttribute('aria-valuenow', '96')
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
-  })
-
-  it('saves a Google AI Studio key without ever showing it back, then lets the user switch to it and test it', async () => {
-    const key = 'AIzaSyTestKeyabcdefghijklmnopqrstuvwxyz-0123'
-    let saved = false
-    const calls = setup({
-      'GET /api/claude/connection': () => connection(saved ? { gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } } : {}),
-      'PUT /api/claude/connection/gemini-key': () => {
-        saved = true
-        return connection({ gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } })
-      },
-      'PUT /api/claude/connection/provider': connection({ selected: 'gemini', gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } }),
-      'POST /api/claude/connection/test': { ok: true, provider: 'gemini', problem: null, message: 'Connected.', help: null, durationMs: 900 },
-    })
-
-    await userEvent.type(await screen.findByLabelText('Google AI Studio API key'), key)
-    await userEvent.click(screen.getByRole('button', { name: 'Save key' }))
-    expect(await screen.findByText('…0123')).toBeInTheDocument()
-    expect(screen.queryByDisplayValue(key)).not.toBeInTheDocument()
-    expect(calls.find((c) => c.url === '/api/claude/connection/gemini-key')!.body).toEqual({ key })
-
-    await userEvent.click(screen.getByRole('radio', { name: 'Google AI Studio API key' }))
-    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/provider')).toBe(true))
-    expect(calls.find((c) => c.url === '/api/claude/connection/provider')!.body).toEqual({ id: 'gemini' })
   })
 
   it('tests the connection and explains a failure with what to do about it', async () => {

@@ -1,5 +1,7 @@
 # 0017 Gemini replaces the Anthropic API provider; model selectors; encrypted fallback for the API key
 
+Status update: superseded by ADR 0019 (Gemini removed).
+
 Date: 2026-10-28. Status: accepted. Amends CLAUDE.md hard rule 6 and ADR 0014 (which named the Anthropic API).
 
 - **Providers.** `AiProvider` ids are now `cli` (Claude Code subscription) and `gemini` (Google AI Studio). `ApiClaudeRunner` and

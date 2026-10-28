@@ -1,16 +1,11 @@
 package app.jobpilot.claude;
 
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
-
-import app.jobpilot.credentials.SecretStore.SecretStoreException;
 
 @RestController
 @RequestMapping("/api/claude/connection")
@@ -19,13 +14,7 @@ public class ConnectionController {
     public record ProviderChoice(String id) {
     }
 
-    public record ApiKeyInput(String key, String model) {
-    }
-
     public record ModelInput(String model) {
-    }
-
-    public record TestRequest(String provider) {
     }
 
     private final ConnectionService service;
@@ -45,25 +34,6 @@ public class ConnectionController {
         return service.status();
     }
 
-    /** The key goes straight to the OS credential store and is never returned, logged or written to the database. */
-    @PutMapping("/gemini-key")
-    public ConnectionService.Status saveKey(@RequestBody ApiKeyInput input) {
-        service.saveApiKey(input.key(), input.model());
-        return service.status();
-    }
-
-    @DeleteMapping("/gemini-key")
-    public ConnectionService.Status deleteKey() {
-        service.deleteApiKey();
-        return service.status();
-    }
-
-    @PutMapping("/gemini-model")
-    public ConnectionService.Status geminiModel(@RequestBody ModelInput input) {
-        service.geminiModel(input.model());
-        return service.status();
-    }
-
     /** Claude Code model alias (sonnet, opus, fable) or blank for the CLI's own default. */
     @PutMapping("/cli-model")
     public ConnectionService.Status cliModel(@RequestBody ModelInput input) {
@@ -71,20 +41,9 @@ public class ConnectionController {
         return service.status();
     }
 
-    @GetMapping("/gemini-models")
-    public java.util.List<GeminiModels.ModelOption> geminiModels() {
-        return service.geminiModels();
-    }
-
     /** Always 200: {@code ok=false} carries what is wrong and how to fix it. */
     @PostMapping("/test")
-    public ConnectionService.TestResult test(@RequestBody TestRequest request) {
-        return service.test(request.provider());
-    }
-
-    @org.springframework.web.bind.annotation.ExceptionHandler(SecretStoreException.class)
-    @ResponseStatus(HttpStatus.CONFLICT)
-    java.util.Map<String, String> noSecureStore(SecretStoreException e) {
-        return java.util.Map.of("error", e.getMessage());
+    public ConnectionService.TestResult test() {
+        return service.test();
     }
 }

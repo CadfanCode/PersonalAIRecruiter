@@ -14,7 +14,7 @@ const fresh = {
 
 const connection = (over = {}) => ({
   selected: 'cli', chosen: false, cli: { found: true, path: '/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '' },
-  gemini: { configured: false, keyHint: null, model: 'gemini-flash-latest' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
+  secureStore: { available: true, name: 'Secret Service' }, ...over,
 })
 
 const ok = { ok: true, provider: 'cli', problem: null, message: 'Connected.', help: null, durationMs: 800 }
@@ -92,7 +92,7 @@ describe('onboarding: connect Claude', () => {
     renderPage()
     await userEvent.upload(await screen.findByLabelText('CV files'), file())
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
-    await screen.findByRole('heading', { name: 'Connect your AI' })
+    await screen.findByRole('heading', { name: 'Connect Claude' })
     return calls
   }
 
@@ -104,14 +104,13 @@ describe('onboarding: connect Claude', () => {
 
     expect(await screen.findByText('Found')).toBeInTheDocument()
     expect(screen.getByText(/2.1.312/)).toBeInTheDocument()
-    expect(screen.getByText(/kept in Secret Service, never in plain text/)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
 
     await userEvent.click(screen.getByRole('button', { name: 'Test the connection' }))
 
-    expect(await screen.findByText(/Connected. The AI answered./)).toBeInTheDocument()
+    expect(await screen.findByText(/Connected. Claude answered./)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Continue' })).toBeEnabled()
-    expect(calls.find((c) => c.url === '/api/claude/connection/test')!.body).toEqual({ provider: 'cli' })
+    expect(calls.find((c) => c.url === '/api/claude/connection/test')!.body).toBeUndefined()
   })
 
   it('explains how to install Claude Code when it is missing, and offers to check again', async () => {
@@ -138,38 +137,6 @@ describe('onboarding: connect Claude', () => {
     expect(alert).toHaveTextContent('sign in with your Claude account')
     expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
   })
-
-  it('saves a Google AI Studio key, selects it and tests it, and never shows the key again', async () => {
-    const key = 'AIzaSyTestKeyabcdefghijklmnopqrstuvwxyz-0123'
-    const calls = await toConnect({
-      'PUT /api/claude/connection/gemini-key': connection({ gemini: { configured: true, keyHint: '…0123', model: 'gemini-flash-latest' } }),
-      'PUT /api/claude/connection/provider': connection({ selected: 'gemini', chosen: true }),
-      'POST /api/claude/connection/test': { ...ok, provider: 'gemini' },
-    })
-
-    await userEvent.click(screen.getByRole('radio', { name: /Google AI Studio API key/ }))
-    const input = screen.getByLabelText('Google AI Studio API key')
-    expect(input).toHaveAttribute('type', 'password')
-    await userEvent.type(input, key)
-    await userEvent.click(screen.getByRole('button', { name: 'Save and test' }))
-
-    expect(await screen.findByText(/Connected. The AI answered./)).toBeInTheDocument()
-    expect(calls.map((c) => `${c.method} ${c.url}`).filter((u) => u.includes('connection/')))
-      .toEqual(['PUT /api/claude/connection/gemini-key', 'PUT /api/claude/connection/provider', 'POST /api/claude/connection/test'])
-    expect(calls.find((c) => c.url === '/api/claude/connection/gemini-key')!.body).toEqual({ key })
-    expect(screen.queryByDisplayValue(key)).not.toBeInTheDocument()
-    expect(document.body.textContent).not.toContain(key)
-  })
-
-  it('says where the key is kept when there is no OS credential store, and still offers the key field', async () => {
-    await toConnect({ 'GET /api/claude/connection': connection({ secureStore: { available: true, name: 'an encrypted file in the JobPilot data folder' } }) })
-
-    await userEvent.click(screen.getByRole('radio', { name: /Google AI Studio API key/ }))
-
-    expect(screen.getByText(/encrypted file in the JobPilot data folder/)).toBeInTheDocument()
-    expect(screen.getByLabelText('Google AI Studio API key')).toBeInTheDocument()
-
-})
 })
 
 describe('onboarding: the whole way through', () => {

@@ -18,9 +18,8 @@ up to date when a decision changes.
 - Frontend: React 19, TypeScript, Vite, Tailwind CSS, TanStack Query, TanStack Table
 - Browser automation: Playwright for Java, headed Chromium with a persistent profile
 - PDF: openhtmltopdf (HTML + CSS -> PDF)
-- AI: behind the `ClaudeRunner` interface. Providers: the user's own Claude Code CLI called headless
-  (`claude -p`, model chosen in Settings as an alias), or a Google AI Studio (Gemini) API key the user pastes in (stored in the
-  OS credential store, ADR 0017).
+- AI: behind the `ClaudeRunner` interface. The only provider is the user's own Claude Code CLI called headless
+  (`claude -p`, model chosen in Settings as an alias), under their Claude subscription (ADR 0019).
 - Tests: JUnit 5, Mockito, Testcontainers (PostgreSQL), Vitest, React Testing Library
 
 ## Layout
@@ -62,11 +61,10 @@ packaging/  jpackage installer script, icons (docker-compose.yml is optional, fo
    rephrases; it never invents employers, dates, tools, degrees or results.
 5. The aktivitetsrapport automation only saves activities ("Spara"). It never submits the
    monthly report.
-6. The AI is only reached through `ClaudeRunner`. Its providers are the user's own local Claude Code
-   CLI and a Google AI Studio (Gemini) API key the user supplies. Keys and credentials live in the OS
-   credential store; only where there is none may the Gemini key (never a portal password) be kept in an
-   AES-GCM encrypted file (ADR 0017). Never in plain text, the database or logs. No Claude.ai login flow, no key
-   shipped with the app.
+6. The AI is only reached through `ClaudeRunner`, and its only provider is the user's own local Claude Code
+   CLI under their Claude subscription (ADR 0019). No API keys of any kind are handled for it. Portal passwords
+   live in the OS credential store only, never in plain text, the database or logs. No Claude.ai login flow,
+   no key shipped with the app.
 
 ## Writing rules for generated CVs and letters
 

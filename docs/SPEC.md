@@ -63,8 +63,7 @@ JobPilot is installed like any app (one installer per OS, no Docker, no database
 **First run (onboarding)**, one step per screen with a progress indicator, shown once: (1) drop or browse the CV (PDF, DOCX, TXT,
 MD); the files are held in the browser and read after step 2, because reading needs Claude; (2) connect Claude: the Claude Code
 subscription (found in the usual folders on every OS, with an install command when missing, and "not installed" told apart
-from "not signed in") or a Google AI Studio (Gemini) API key (kept in the OS credential store; without one, in an encrypted
-file, ADR 0017); a real test call must pass before
+from "not signed in"); there is no other AI option (ADR 0019); a real test call must pass before
 continuing; then the CV is read, a short summary of what was found is shown and confirmed (the person's contact details fill
 only blank profile fields); (3) the country (Sweden live, others "coming soon"); (4) the search mode.
 `GET /api/onboarding` reports the state and the first open step; returning users never see it unless they run setup again.
@@ -89,7 +88,7 @@ and accepted for the user; they only pick roles (section 6.3), optionally "go wi
 ```
 React UI (served by the API in the installed app; 5173 in development) --REST/JSON--> Spring Boot API (18080 installed, 8080 dev)
                                    |                                                       --JDBC--> embedded PostgreSQL 16
-                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI  |  Gemini generateContent API (ADR 0017)
+                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI (ADR 0019)
                                    +-- CountryRegistry -- JobSource ------> one job board per country (Sweden: JobTech/Platsbanken)
                                    +-- SecretStore ------ java-keyring ----> OS credential store (API key, saved portal logins)
                                    +-- JobTechClient --- HTTPS ------------> jobsearch.api.jobtechdev.se
@@ -365,15 +364,11 @@ FormActions:
 
 ### 5.5 Providers (ADR 0014)
 
-`AiProvider` has two implementations: `cli` (above) and `gemini` (Google AI Studio `generateContent` over HTTPS, the user's key from
-the credential store or its encrypted-file fallback, structured output from `responseJsonSchema` with the task's JSON Schema, Google
-Search grounding for career-page discovery (in the same call, or in two when the model refuses both together), a larger answer
-budget for long tasks, 429/5xx retried with growing pauses, an explicit error when an answer is cut off). Both share one adjustable
-call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings). The choice, both models (`claude.model`: a Claude Code alias
-such as `sonnet`, `opus`, `fable`, passed as `--model` and read on every request; `gemini.model`, default `gemini-flash-latest`) and
-the last passed connection test are in `app_setting`. A database that still says provider `api` (the removed Anthropic option) is
-treated as "not chosen" and the person is asked to connect again. `GET/PUT /api/claude/connection...` serve onboarding and Settings;
-the key is never returned (only its last four characters), never logged and never written to the database.
+`AiProvider` has one implementation, `cli` (above). The `AiProvider` / `ProviderRouter` seam stays so the rest of the app only ever
+sees `ClaudeRunner`. The call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings), the model (`claude.model`: a Claude Code
+alias such as `sonnet`, `opus`, `fable`, passed as `--model` and read on every request) and the last passed connection test are in
+`app_setting`. A database that still says provider `api` or `gemini` (both removed) is read as `cli` and "not chosen", so the person
+confirms Claude Code once more. `GET/PUT /api/claude/connection...` serve onboarding and Settings.
 
 ## 6. Job search
 
@@ -788,7 +783,7 @@ POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would
 GET      /claude/health          GET /claude/usage
 -- overhaul (28 Oct 2026) --
 GET      /onboarding             state and first open step;  PUT /onboarding/mode {DISCOVER|PROMPT};  POST /onboarding/complete | /reopen
-GET/PUT  /claude/connection...   status; /provider {id}; /gemini-key {key, model?} (DELETE removes); /gemini-model; /cli-model; GET /gemini-models; POST /test {provider}
+GET/PUT  /claude/connection...   status; /provider {id: "cli"}; /cli-model; POST /test
 GET/PUT  /country                the countries (available or coming soon) and the chosen one
 GET/PUT  /settings/performance   {claudeConcurrency 1..8};  GET/PUT /settings/search {careerPages}
 POST     /applications/approve-all   per document: approved, already approved, or refused with the reason (never all-or-nothing)
@@ -874,7 +869,6 @@ results.topN=10
 
 - Local only; bind 127.0.0.1; CORS limited to the UI origin.
 - Personal data stays on the machine. The only outbound calls are JobTech, sites the user
-  applies to, and the chosen AI access (the Claude Code CLI, or generativelanguage.googleapis.com with the user's own key).
-- Secrets live in the OS credential store. Saved portal passwords live only there (without a store nothing is saved). Only the
-  Gemini key may fall back to an AES-GCM encrypted file in the data folder, with its random key beside it, owner-only (ADR 0017). The browser profile holds cookies; document this in the README.
+  applies to, and the Claude Code CLI.
+- Secrets live in the OS credential store. Saved portal passwords live only there (without a store nothing is saved). The browser profile holds cookies; document this in the README.
 - Back up the database with `pg_dump` from a script in `scripts/backup.sh`.

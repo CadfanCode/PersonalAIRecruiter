@@ -160,7 +160,7 @@ public class DocumentChatService {
 
     /**
      * The revision answer with the real document schema inside it. A bare {@code "document": {"type": "object"}} lets some models
-     * (Gemini) answer with an empty object; spelling the document out makes every provider return the whole document.
+     * answer with an empty object; spelling the document out makes every provider return the whole document.
      */
     private String reviseSchema(boolean cvDoc) {
         try {
