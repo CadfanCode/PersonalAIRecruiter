@@ -53,17 +53,21 @@ public class CvImportService {
 
     /**
      * An entry in the preview. {@code matchEntryId} is the stored entry it describes, if any: confirming it adds {@code newFacts} facts
-     * to that entry instead of creating a second one.
+     * to that entry instead of creating a second one. {@code knownFacts} are the positions (in {@code entry.facts}) of facts the stored
+     * entry already has; they are not added.
      */
-    public record PreviewEntry(ImportedEntry entry, Long matchEntryId, String matchTitle, int newFacts) {
+    public record PreviewEntry(ImportedEntry entry, Long matchEntryId, String matchTitle, int newFacts, List<Integer> knownFacts) {
     }
 
     public record Preview(String previewId, List<String> files, List<PreviewEntry> entries,
                           List<ImportedSkill> skills, ImportedProfile profile) {
     }
 
-    /** One entry the user confirmed; {@code mergeIntoEntryId} null means "create it as a new entry". */
-    public record CommitEntry(ImportedEntry entry, Long mergeIntoEntryId) {
+    /**
+     * One entry the user confirmed; {@code mergeIntoEntryId} null means "create it as a new entry". {@code skipFacts} are the positions of
+     * facts the preview found to be already stored; when it is absent they are worked out again with the cheap matcher only.
+     */
+    public record CommitEntry(ImportedEntry entry, Long mergeIntoEntryId, List<Integer> skipFacts) {
     }
 
     /** What the user confirmed in the wizard (possibly edited, possibly fewer entries). */
@@ -81,6 +85,7 @@ public class CvImportService {
     public record ImportJob(long runId, String status, String message, List<String> files, Preview preview) {
     }
 
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(CvImportService.class);
     private static final Duration TTL = Duration.ofHours(1);
 
     private final DocumentTextExtractor extractor;
@@ -185,12 +190,90 @@ public class CvImportService {
 
     private Preview buildPreview(List<String> files, ImportedCv result) {
         List<Entry> existing = service.entries();
-        List<PreviewEntry> entries = mergeWithinUpload(result.entries()).stream().map(e -> {
-            var match = EntryMatcher.findMatch(EntryMatcher.Key.of(e), existing);
-            int added = match.map(m -> newFacts(e, m).size()).orElse(0);
-            return new PreviewEntry(e, match.map(Entry::id).orElse(null), match.map(CvImportService::label).orElse(null), added);
-        }).toList();
+        List<ImportedEntry> found = mergeWithinUpload(result.entries());
+        List<Entry> matches = found.stream().map(e -> EntryMatcher.findMatch(EntryMatcher.Key.of(e), existing).orElse(null)).toList();
+        List<List<Integer>> known = new java.util.ArrayList<>();
+        for (int i = 0; i < found.size(); i++) {
+            known.add(matches.get(i) == null ? List.of() : cheapKnown(found.get(i), matches.get(i)));
+        }
+        askClaudeAboutTheRest(found, matches, known);
+        List<PreviewEntry> entries = new java.util.ArrayList<>();
+        for (int i = 0; i < found.size(); i++) {
+            Entry m = matches.get(i);
+            entries.add(new PreviewEntry(found.get(i), m == null ? null : m.id(), m == null ? null : label(m),
+                    m == null ? 0 : found.get(i).facts().size() - known.get(i).size(), known.get(i)));
+        }
         return new Preview(UUID.randomUUID().toString(), files, entries, result.skills(), result.profile());
+    }
+
+    /** Positions of the imported facts the stored entry already has, as the word matcher can tell. */
+    private static List<Integer> cheapKnown(ImportedEntry imported, Entry stored) {
+        List<Integer> known = new java.util.ArrayList<>();
+        for (int i = 0; i < imported.facts().size(); i++) {
+            ImportedFact f = imported.facts().get(i);
+            if (FactMatcher.alreadyThere(f.textEn(), f.textSv(), stored.facts())) {
+                known.add(i);
+            }
+        }
+        return known;
+    }
+
+    /**
+     * One batched call for every matched entry whose facts the word matcher could not settle: rewordings and facts written in the
+     * other language look new to it. If the call fails the cheap answer stands, so a reading never fails because of this step.
+     */
+    private void askClaudeAboutTheRest(List<ImportedEntry> found, List<Entry> matches, List<List<Integer>> known) {
+        var groups = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
+        for (int i = 0; i < found.size(); i++) {
+            Entry m = matches.get(i);
+            if (m == null || m.facts().isEmpty()) {
+                continue;
+            }
+            var undecided = com.fasterxml.jackson.databind.node.JsonNodeFactory.instance.arrayNode();
+            for (int j = 0; j < found.get(i).facts().size(); j++) {
+                if (!known.get(i).contains(j)) {
+                    ImportedFact f = found.get(i).facts().get(j);
+                    undecided.addObject().put("idx", j).put("text", f.textEn() != null ? f.textEn() : f.textSv());
+                }
+            }
+            if (undecided.isEmpty()) {
+                continue;
+            }
+            var group = groups.addObject().put("entryId", m.id());
+            var stored = group.putArray("stored");
+            m.facts().forEach(f -> stored.addObject().put("id", f.id()).put("text", f.textEn() != null ? f.textEn() : f.textSv()));
+            group.set("candidates", undecided);
+        }
+        if (groups.isEmpty()) {
+            return;
+        }
+        try {
+            MatchedFacts answer = claude.run(ClaudeTask.of("matchFacts", ClaudeResources.prompt("matchFacts", Map.of("groups", groups.toPrettyString())),
+                    ClaudeResources.schema("matchFacts"), MatchedFacts.class));
+            for (MatchedGroup g : answer.results()) {
+                for (int i = 0; i < found.size(); i++) {
+                    Entry m = matches.get(i);
+                    if (m != null && m.id() == g.entryId()) {
+                        for (int idx : g.alreadyStated()) {
+                            if (idx >= 0 && idx < found.get(i).facts().size() && !known.get(i).contains(idx)) {
+                                List<Integer> next = new java.util.ArrayList<>(known.get(i));
+                                next.add(idx);
+                                known.set(i, next);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (RuntimeException e) {
+            log.warn("Could not compare the new facts with the stored ones, using the word match only: {}", e.getMessage());
+        }
+    }
+
+    /** Claude's answer for {@code matchFacts}: per stored entry, which candidate facts are already stated. */
+    record MatchedFacts(List<MatchedGroup> results) {
+    }
+
+    record MatchedGroup(long entryId, List<Integer> alreadyStated) {
     }
 
     private static String label(Entry e) {
@@ -237,19 +320,6 @@ public class CvImportService {
         return first != null && !first.isBlank() ? first : second;
     }
 
-    /** The imported facts the stored entry does not have yet. */
-    private static List<ImportedFact> newFacts(ImportedEntry imported, Entry stored) {
-        List<Fact> have = new java.util.ArrayList<>(stored.facts());
-        List<ImportedFact> added = new java.util.ArrayList<>();
-        for (ImportedFact f : imported.facts()) {
-            if (!FactMatcher.alreadyThere(f.textEn(), f.textSv(), have)) {
-                added.add(f);
-                have.add(new Fact(null, stored.id(), f.textEn(), f.textSv(), null, null, 0, List.of()));
-            }
-        }
-        return added;
-    }
-
     @Transactional
     public CommitResult commit(String previewId, CommitRequest request) {
         Job job = jobs.values().stream().filter(j -> j.preview != null && j.preview.previewId().equals(previewId)).findFirst()
@@ -262,7 +332,7 @@ public class CvImportService {
         for (CommitEntry c : request.entries()) {
             ImportedEntry e = c.entry();
             if (c.mergeIntoEntryId() != null) {
-                facts += amend(service.entry(c.mergeIntoEntryId()), e);
+                facts += amend(service.entry(c.mergeIntoEntryId()), e, c.skipFacts());
                 ids.add(c.mergeIntoEntryId());
                 enriched++;
                 continue;
@@ -290,7 +360,7 @@ public class CvImportService {
      * Adds what the stored entry lacks and nothing else: new facts, blank fields and new tags. Existing facts and anything the
      * user wrote are left exactly as they are. Returns how many facts were added.
      */
-    private int amend(Entry stored, ImportedEntry imported) {
+    private int amend(Entry stored, ImportedEntry imported, List<Integer> skip) {
         java.util.LinkedHashSet<String> tags = new java.util.LinkedHashSet<>(stored.tags());
         if (imported.tags() != null) {
             tags.addAll(imported.tags());
@@ -300,12 +370,19 @@ public class CvImportService {
                 blankTo(stored.startYm(), imported.startYm()), blankTo(stored.endYm(), imported.endYm()), stored.ongoing(),
                 stored.summary(), stored.note(), stored.sortOrder(), stored.hidden(), List.copyOf(tags));
         service.updateEntry(stored.id(), filled);
+        // The decision made in the preview (which may include Claude's) stands; without one, the word matcher decides.
+        List<Integer> known = skip != null ? skip : cheapKnown(imported, stored);
         int order = stored.facts().size();
-        List<ImportedFact> added = newFacts(imported, stored);
-        for (ImportedFact f : added) {
+        int added = 0;
+        for (int i = 0; i < imported.facts().size(); i++) {
+            if (known.contains(i)) {
+                continue;
+            }
+            ImportedFact f = imported.facts().get(i);
             service.addFact(stored.id(), new FactInput(f.textEn(), f.textSv(), f.evidence(), null, order++, f.tags()));
+            added++;
         }
-        return added.size();
+        return added;
     }
 
     /**

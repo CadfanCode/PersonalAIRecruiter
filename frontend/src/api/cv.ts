@@ -122,12 +122,16 @@ export interface PreviewEntry {
   matchEntryId: number | null
   matchTitle: string | null
   newFacts: number
+  /** Positions in {@code entry.facts} of facts the stored entry already has: they are not added. */
+  knownFacts: number[]
 }
 
 /** One entry the user confirmed: {@code mergeIntoEntryId} null creates a new entry, a number adds to that stored entry. */
 export interface CommitEntry {
   entry: ImportedEntry
   mergeIntoEntryId: number | null
+  /** The preview's decision about which facts are already stored; omitted for a new entry. */
+  skipFacts?: number[]
 }
 
 /** A reading of the uploaded files, which goes on in the background. status: RUNNING, DONE (with the preview) or FAILED. */

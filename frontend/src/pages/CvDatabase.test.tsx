@@ -161,11 +161,11 @@ describe('CV database page', () => {
 describe('import wizard', () => {
   const entries = [
     { entry: { kind: 'INTERNSHIP', title: 'Systemutvecklare (praktik)', titleEn: null, organisation: 'Braive AB', location: null, startYm: '2026-01', endYm: '2026-05', ongoing: false, tags: [], facts: [{ textEn: 'Built microservices.', textSv: null, tags: [] }] },
-      matchEntryId: 1, matchTitle: 'Systemutvecklare (praktik), Braive AB', newFacts: 1 },
+      matchEntryId: 1, matchTitle: 'Systemutvecklare (praktik), Braive AB', newFacts: 1, knownFacts: [] },
     { entry: { kind: 'WORK', title: 'Idrottslärare', titleEn: null, organisation: 'Nacka skola', location: null, startYm: '2019', endYm: null, ongoing: true, tags: ['teaching'], facts: [{ textEn: 'Taught PE.', textSv: null, tags: [] }] },
-      matchEntryId: null, matchTitle: null, newFacts: 0 },
+      matchEntryId: null, matchTitle: null, newFacts: 0, knownFacts: [] },
     { entry: { kind: 'WORK', title: 'Gammalt jobb', titleEn: null, organisation: 'Old AB', location: null, startYm: '2010', endYm: '2012', ongoing: false, tags: [], facts: [] },
-      matchEntryId: 2, matchTitle: 'Gammalt jobb, Old AB', newFacts: 0 },
+      matchEntryId: 2, matchTitle: 'Gammalt jobb, Old AB', newFacts: 0, knownFacts: [] },
   ]
   const done = { runId: 5, status: 'DONE', message: 'Ready to review', files: ['cv.pdf'], preview: { previewId: 'p1', files: ['cv.pdf'], skills: [{ name: 'Java', category: 'language' }], entries } }
 
@@ -221,6 +221,29 @@ describe('import wizard', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('1 new entry, 1 entry enriched, 2 facts added')
     const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: { entry: { title: string }; mergeIntoEntryId: number | null }[] }
     expect(commit.entries.map((e) => [e.entry.title, e.mergeIntoEntryId])).toEqual([['Systemutvecklare (praktik)', 1], ['Idrottslärare', null]])
+  })
+
+  it('marks the facts an entry already has, and commits that decision', async () => {
+    const withKnown = { ...done, preview: { ...done.preview, entries: [{
+      ...entries[0], newFacts: 1, knownFacts: [0],
+      entry: { ...entries[0].entry, facts: [{ textEn: 'Built microservices.', textSv: null, tags: [] }, { textEn: 'Mentored four students.', textSv: null, tags: [] }] },
+    }] } }
+    const calls = mockApi({
+      ...baseRoutes(), ...reading(withKnown).routes,
+      'POST /api/cv/import/p1/commit': { entryIds: [1], created: 0, enriched: 1, facts: 1, skills: 0, profileFilled: false },
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
+
+    expect(await screen.findByText('Adds 1 fact to Systemutvecklare (praktik), Braive AB')).toBeInTheDocument()
+    expect(within(screen.getByText('Built microservices.').closest('li')!).getByText('already stored')).toBeInTheDocument()
+    expect(screen.getByText('Mentored four students.').closest('li')).not.toHaveTextContent('already stored')
+    await userEvent.click(screen.getByRole('button', { name: 'Import 1 entry' }))
+
+    await screen.findByRole('status')
+    const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: { skipFacts: number[] }[] }
+    expect(commit.entries[0].skipFacts).toEqual([0])
   })
 
   it('lets a matched entry be added as a new entry instead', async () => {

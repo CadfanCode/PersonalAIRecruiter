@@ -18,7 +18,7 @@ public enum ModelStage {
             Map.entry("buildSearchProfile", SEARCH), Map.entry("suggestRoles", SEARCH), Map.entry("profileRoles", SEARCH),
             Map.entry("discoverJobsWeb", SEARCH), Map.entry("extractJob", SEARCH),
             Map.entry("scoreJob", RANKING),
-            Map.entry("importCv", CV_READING),
+            Map.entry("importCv", CV_READING), Map.entry("matchFacts", CV_READING),
             Map.entry("selectFacts", DOCUMENTS), Map.entry("writeCv", DOCUMENTS), Map.entry("writeLetter", DOCUMENTS),
             Map.entry("rewriteForViolations", DOCUMENTS), Map.entry("reviseDocument", DOCUMENTS),
             Map.entry("mapFormFields", AUTOFILL));

@@ -19,33 +19,33 @@ const STEPS = [
 export function Tour() {
   const onboarding = useOnboarding()
   const open = useTourOpen()
-  const [step, setStep] = useState(0)
-  const back = useRef<HTMLElement | null>(null)
-  const primary = useRef<HTMLButtonElement>(null)
 
   useEffect(() => {
     if (onboarding.data?.complete && !tourSeen()) openTour()
   }, [onboarding.data?.complete])
 
+  return open ? <TourDialog /> : null
+}
+
+/** Mounted only while open, so it always starts on the first step and returns focus to where it was when it goes away. */
+function TourDialog() {
+  const [step, setStep] = useState(0)
+  const primary = useRef<HTMLButtonElement>(null)
+
   useEffect(() => {
-    if (!open) return
-    back.current = document.activeElement as HTMLElement | null
-    setStep(0)
+    const back = document.activeElement as HTMLElement | null
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeTour()
     }
     window.addEventListener('keydown', onKey)
     return () => {
       window.removeEventListener('keydown', onKey)
-      back.current?.focus?.()
+      back?.focus?.()
     }
-  }, [open])
+  }, [])
 
-  useEffect(() => {
-    if (open) primary.current?.focus()
-  }, [open, step])
+  useEffect(() => primary.current?.focus(), [step])
 
-  if (!open) return null
   const last = step === STEPS.length - 1
   const s = STEPS[step]
   return (

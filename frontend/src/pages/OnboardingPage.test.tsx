@@ -23,9 +23,9 @@ const ok = { ok: true, provider: 'cli', problem: null, message: 'Connected.', he
 const preview = {
   previewId: 'p1', files: ['cv.pdf'],
   entries: [
-    { entry: { kind: 'WORK', title: 'Sjuksköterska', titleEn: 'Nurse', organisation: 'Akademiska', location: null, startYm: '2020-01', endYm: null, ongoing: true, tags: [], facts: [{ textEn: 'Triage.', textSv: 'Triage.', tags: [] }] }, matchEntryId: null, matchTitle: null, newFacts: 0 },
-    { entry: { kind: 'EDUCATION', title: 'Sjuksköterskeexamen', titleEn: null, organisation: 'Uppsala universitet', location: null, startYm: '2016', endYm: '2019', ongoing: false, tags: [], facts: [] }, matchEntryId: null, matchTitle: null, newFacts: 0 },
-    { entry: { kind: 'WORK', title: 'Old job', titleEn: null, organisation: 'X', location: null, startYm: null, endYm: null, ongoing: false, tags: [], facts: [] }, matchEntryId: 7, matchTitle: 'Old job, X', newFacts: 0 },
+    { entry: { kind: 'WORK', title: 'Sjuksköterska', titleEn: 'Nurse', organisation: 'Akademiska', location: null, startYm: '2020-01', endYm: null, ongoing: true, tags: [], facts: [{ textEn: 'Triage.', textSv: 'Triage.', tags: [] }] }, matchEntryId: null, matchTitle: null, newFacts: 0, knownFacts: [] },
+    { entry: { kind: 'EDUCATION', title: 'Sjuksköterskeexamen', titleEn: null, organisation: 'Uppsala universitet', location: null, startYm: '2016', endYm: '2019', ongoing: false, tags: [], facts: [] }, matchEntryId: null, matchTitle: null, newFacts: 0, knownFacts: [] },
+    { entry: { kind: 'WORK', title: 'Old job', titleEn: null, organisation: 'X', location: null, startYm: null, endYm: null, ongoing: false, tags: [], facts: [] }, matchEntryId: 7, matchTitle: 'Old job, X', newFacts: 0, knownFacts: [] },
   ],
   skills: [{ name: 'Triage', category: 'clinical' }],
   profile: { fullName: 'Alex Lindgren', headline: 'Nurse', email: 'alex@example.com', phone: null, city: 'Uppsala', website: null, linkedin: null, github: null },

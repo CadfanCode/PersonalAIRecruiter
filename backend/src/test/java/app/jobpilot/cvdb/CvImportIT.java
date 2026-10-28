@@ -71,6 +71,7 @@ class CvImportIT {
         jdbc.sql("TRUNCATE cv_entry, profile, tag, skill, known_gap, answers_memory RESTART IDENTITY CASCADE").update();
         claude.calls().clear();
         claude.respond("importCv", CLAUDE_ANSWER);
+        claude.respond("matchFacts", "{\"results\":[]}");
         // readings left over from other tests would be found by /current
         for (var r = mvc.perform(get("/api/cv/import/current")).andReturn().getResponse(); r.getStatus() == 200;
                 r = mvc.perform(get("/api/cv/import/current")).andReturn().getResponse()) {
@@ -108,8 +109,15 @@ class CvImportIT {
 
     /** One confirmed entry: new when {@code mergeInto} is null, else added to that stored entry. */
     JsonNode confirm(JsonNode entry, Long mergeInto) {
+        return confirm(entry, mergeInto, null);
+    }
+
+    JsonNode confirm(JsonNode entry, Long mergeInto, JsonNode skipFacts) {
         var node = mapper.createObjectNode();
         node.set("entry", entry);
+        if (skipFacts != null) {
+            node.set("skipFacts", skipFacts);
+        }
         if (mergeInto == null) {
             node.putNull("mergeIntoEntryId");
         } else {
@@ -132,7 +140,7 @@ class CvImportIT {
     JsonNode commitAll(JsonNode preview) throws Exception {
         java.util.List<JsonNode> all = new java.util.ArrayList<>();
         for (JsonNode e : preview.get("entries")) {
-            all.add(confirm(e.get("entry"), e.get("matchEntryId").isNull() ? null : e.get("matchEntryId").asLong()));
+            all.add(confirm(e.get("entry"), e.get("matchEntryId").isNull() ? null : e.get("matchEntryId").asLong(), e.get("knownFacts")));
         }
         return commit(preview, all);
     }
@@ -384,5 +392,72 @@ class CvImportIT {
         }
         assertThat(job.get("status").asText()).isEqualTo("FAILED");
         assertThat(job.get("message").asText()).contains("took too long");
+    }
+
+    /** Claude's answer to "which of these candidate facts are already stated": every candidate that is listed. */
+    private static String everyCandidateIsKnown(app.jobpilot.claude.ClaudeTask<?> task) {
+        var entry = java.util.regex.Pattern.compile("\"entryId\"\\s*:\\s*(\\d+)").matcher(task.prompt());
+        var idx = java.util.regex.Pattern.compile("\"idx\"\\s*:\\s*(\\d+)").matcher(task.prompt());
+        entry.find();
+        java.util.List<String> all = new java.util.ArrayList<>();
+        while (idx.find()) {
+            all.add(idx.group(1));
+        }
+        return "{\"results\":[{\"entryId\":" + entry.group(1) + ",\"alreadyStated\":[" + String.join(",", all) + "]}]}";
+    }
+
+    @Test
+    void aRewordedBulletIsRecognisedByClaudeAsAlreadyThereAndNotAddedAgain() throws Exception {
+        commitAll(preview(txt("cv.txt", "x")));
+        claude.respond("importCv", CLAUDE_ANSWER.replace("Taught PE.", "Delivered gymnastics lessons for middle school pupils.").replace("Undervisade i idrott.", "Höll gympalektioner för mellanstadieelever."));
+        claude.respond("matchFacts", CvImportIT::everyCandidateIsKnown);
+
+        JsonNode second = preview(txt("cv2.txt", "x"));
+
+        JsonNode teacher = second.get("entries").get(1);
+        assertThat(teacher.get("newFacts").asInt()).as("the reworded bullet is not new").isZero();
+        assertThat(teacher.get("knownFacts")).hasSize(2);
+        assertThat(claude.calls().stream().filter(c -> c.name().equals("matchFacts")).toList()).as("one batched call").hasSize(1);
+        assertThat(commitAll(second).get("facts").asInt()).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM cv_fact").query(Long.class).single()).isEqualTo(3);
+    }
+
+    @Test
+    void aSwedishOnlyStoredFactAndItsEnglishOnlyTwinAreTheSameFact() throws Exception {
+        commitAll(preview(txt("cv.txt", "x")));
+        jdbc.sql("UPDATE cv_fact SET text_sv = 'Undervisade i idrott.', text_en = NULL WHERE text_en = 'Taught PE.'").update();
+        claude.respond("importCv", CLAUDE_ANSWER.replace("\"textSv\":\"Undervisade i idrott.\"", "\"textSv\":null"));
+        claude.respond("matchFacts", CvImportIT::everyCandidateIsKnown);
+
+        JsonNode result = commitAll(preview(txt("cv2.txt", "x")));
+
+        assertThat(result.get("facts").asInt()).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM cv_fact").query(Long.class).single()).isEqualTo(3);
+    }
+
+    @Test
+    void whatTheReviewDecidedIsWhatIsCommittedEvenIfTheWordMatcherWouldDisagree() throws Exception {
+        commitAll(preview(txt("cv.txt", "x")));
+        JsonNode second = preview(txt("cv2.txt", "x"));
+        var teacher = second.get("entries").get(1);
+        assertThat(teacher.get("knownFacts")).as("the word matcher knows both").hasSize(2);
+
+        // the review says the second fact is new after all
+        JsonNode result = commit(second, java.util.List.of(confirm(teacher.get("entry"), teacher.get("matchEntryId").asLong(), mapper.createArrayNode().add(0))));
+
+        assertThat(result.get("facts").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void ifTheComparisonCallFailsTheWordMatchStandsAndTheReadingStillSucceeds() throws Exception {
+        commitAll(preview(txt("cv.txt", "x")));
+        claude.respond("importCv", CLAUDE_ANSWER.replace("Taught PE.", "Delivered gymnastics lessons.").replace("Undervisade i idrott.", "Höll gympalektioner."));
+        claude.respond("matchFacts", t -> {
+            throw new app.jobpilot.claude.ClaudeCallException("Claude took too long");
+        });
+
+        JsonNode second = preview(txt("cv2.txt", "x"));
+
+        assertThat(second.get("entries").get(1).get("newFacts").asInt()).as("treated as new, which the user can untick").isEqualTo(1);
     }
 }

@@ -8,8 +8,9 @@ import app.jobpilot.cvdb.CvModel.Fact;
 
 /**
  * Whether a fact from an imported CV is already in the database. Two CVs word one achievement slightly differently, so "the same"
- * means the same words or nearly (at least 80 % of the words shared, in the same language). Existing facts are never changed: a fact
- * that is not matched is added next to them.
+ * means the same words or nearly (at least 80 % of the words shared, or a longer fact that contains every word of a shorter one of at
+ * least three words). This is only the cheap first pass: rewordings and facts in the other language are settled by Claude (the
+ * {@code matchFacts} task). Existing facts are never changed: a fact that is not matched is added next to them.
  */
 final class FactMatcher {
 
@@ -32,7 +33,8 @@ final class FactMatcher {
         common.retainAll(y);
         Set<String> all = new HashSet<>(x);
         all.addAll(y);
-        return (double) common.size() / all.size() >= SAME;
+        int shorter = Math.min(x.size(), y.size());
+        return (double) common.size() / all.size() >= SAME || (shorter >= 3 && common.size() == shorter);
     }
 
     private static Set<String> words(String text) {

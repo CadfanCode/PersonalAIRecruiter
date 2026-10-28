@@ -72,7 +72,7 @@ export function ImportWizard() {
   const picks = choices ?? defaults(preview)
   const set = (i: number, patch: Partial<Choice>) => setChoices(picks.map((c, j) => (j === i ? { ...c, ...patch } : c)))
   const chosen = preview.entries.flatMap((e, i): CommitEntry[] =>
-    picks[i].include ? [{ entry: e.entry, mergeIntoEntryId: picks[i].merge ? e.matchEntryId : null }] : [])
+    picks[i].include ? [{ entry: e.entry, mergeIntoEntryId: picks[i].merge ? e.matchEntryId : null, ...(picks[i].merge ? { skipFacts: e.knownFacts } : {}) }] : [])
 
   return (
     <Panel title="Review before importing">
@@ -80,7 +80,7 @@ export function ImportWizard() {
         {preview.entries.length} {preview.entries.length === 1 ? 'entry' : 'entries'} found in {preview.files.join(', ')}. Matches are added to the entry you already have.
       </p>
       <ul className="flex flex-col gap-3">
-        {preview.entries.map(({ entry, matchEntryId, matchTitle, newFacts }, i) => (
+        {preview.entries.map(({ entry, matchEntryId, matchTitle, newFacts, knownFacts }, i) => (
           <li key={i} className="rounded-lg border border-[var(--line)] p-3">
             <label className="flex items-start gap-2">
               <input type="checkbox" checked={picks[i].include} onChange={(e) => set(i, { include: e.target.checked })} aria-label={`Import ${entry.title}`} />
@@ -102,7 +102,10 @@ export function ImportWizard() {
               </p>
             )}
             <ul className="ml-6 mt-2 list-disc text-sm text-[var(--muted)]">
-              {entry.facts.map((f, j) => <li key={j}>{f.textEn ?? f.textSv}</li>)}
+              {entry.facts.map((f, j) => {
+                const known = picks[i].merge && knownFacts.includes(j)
+                return <li key={j} className={known ? 'opacity-60' : ''}>{f.textEn ?? f.textSv}{known && <span className="ml-2 text-xs text-[var(--success)]">already stored</span>}</li>
+              })}
             </ul>
           </li>
         ))}

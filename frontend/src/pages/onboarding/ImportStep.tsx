@@ -66,7 +66,7 @@ export function ImportStep({ onDone, onBack }: { onDone: () => void; onBack: () 
         <h1 className="text-2xl font-semibold tracking-tight">We could not read your CV</h1>
         <p role="alert" className="mt-3 rounded-lg bg-[var(--danger-soft)] px-4 py-3 text-sm text-[var(--danger)]">{failure}</p>
         <div className="mt-8 flex justify-between">
-          <Button variant="ghost" onClick={() => { retry(); onBack() }}>Choose other files</Button>
+          <Button variant="ghost" onClick={() => { startedFor.current = null; start.reset(); if (job.data) discard.mutate(job.data.runId); onBack() }}>Choose other files</Button>
           <Button size="lg" onClick={retry}>Try again</Button>
         </div>
       </div>
@@ -93,7 +93,7 @@ export function ImportStep({ onDone, onBack }: { onDone: () => void; onBack: () 
     commit.mutate(
       {
         previewId: preview.previewId,
-        entries: preview.entries.map((e) => ({ entry: e.entry, mergeIntoEntryId: e.matchEntryId })),
+        entries: preview.entries.map((e) => ({ entry: e.entry, mergeIntoEntryId: e.matchEntryId, ...(e.matchEntryId !== null ? { skipFacts: e.knownFacts } : {}) })),
         skills: preview.skills,
         profile: preview.profile,
       },

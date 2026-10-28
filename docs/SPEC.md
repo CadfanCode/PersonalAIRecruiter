@@ -895,7 +895,7 @@ results.topN=10
   again on return. Setup uses the same endpoints.
 - **Entries are merged, never duplicated.** A found entry that matches a stored one (same kind; same organisation and a similar title or
   the same start period; or, with no organisation, a similar title) is added to it: facts not already there (80 % word overlap in the same
-  language counts as there) are appended, blank fields are filled, tags are added. Existing facts, titles and anything the user wrote are
+  language, or a longer fact containing every word of a shorter one, counts as there; rewordings and facts in the other language are settled by one batched `matchFacts` Claude call during the reading, stage "Reading your CV", and if it fails the word match stands) are appended, blank fields are filled, tags are added. Existing facts, titles and anything the user wrote are
   never edited or removed, because documents cite fact ids. Two roles at one employer with different titles and dates stay two entries.
   Two files describing one job are folded together before comparing with the database. The preview says "Adds N facts to <entry>" and
   offers "Add as a new entry instead"; the commit carries `mergeIntoEntryId` per entry and does not re-match.
