@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import se.caibirch.jobpilot.claude.ClaudeConcurrency;
 import se.caibirch.jobpilot.claude.ClaudeResources;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
 import se.caibirch.jobpilot.claude.ClaudeTask;
@@ -28,7 +29,7 @@ import se.caibirch.jobpilot.search.SearchProfile;
 import se.caibirch.jobpilot.settings.JobPilotProperties;
 
 /**
- * Scores ads with the {@code scoreJob} task, two at a time (SPEC 7.3). Results are cached by
+ * Scores ads with the {@code scoreJob} task, as many at a time as the concurrency setting allows (SPEC 7.3). Results are cached by
  * (job, search profile, CV database version). No database transaction is open during a model call:
  * each result is saved in its own short statement.
  */
@@ -39,21 +40,22 @@ public class ScoreService {
     }
 
     private static final Logger log = LoggerFactory.getLogger(ScoreService.class);
-    private static final int CONCURRENCY = 2;
 
     private final ClaudeRunner claude;
     private final JobRepository jobs;
     private final ObjectMapper mapper;
     private final Clock clock;
     private final JobPilotProperties props;
+    private final ClaudeConcurrency concurrency;
 
     public ScoreService(ClaudeRunner claude, JobRepository jobs, ObjectMapper mapper, Clock clock,
-                        JobPilotProperties props) {
+                        JobPilotProperties props, ClaudeConcurrency concurrency) {
         this.claude = claude;
         this.jobs = jobs;
         this.mapper = mapper;
         this.clock = clock;
         this.props = props;
+        this.concurrency = concurrency;
     }
 
     /**
@@ -67,7 +69,7 @@ public class ScoreService {
         AtomicInteger finished = new AtomicInteger();
         List<String> errors = java.util.Collections.synchronizedList(new ArrayList<>());
 
-        try (ExecutorService pool = Executors.newFixedThreadPool(CONCURRENCY)) {
+        try (ExecutorService pool = Executors.newFixedThreadPool(concurrency.limit())) {
             for (long id : jobIds) {
                 pool.submit(() -> {
                     try {

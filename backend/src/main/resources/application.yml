@@ -34,7 +34,8 @@ jobpilot:
     model: ${JOBPILOT_CLAUDE_MODEL:}
     timeout-seconds: 180
     web-timeout-seconds: 600
-    concurrency: 2
+    # Model calls running at once (1-8); changeable in Settings. Raised from 2 to 4; tune after a real run.
+    concurrency: 4
   search:
     default-max-age-days: 7
     default-limit: 50

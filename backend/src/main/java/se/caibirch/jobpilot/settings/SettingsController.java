@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import se.caibirch.jobpilot.claude.ClaudeConcurrency;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
 import se.caibirch.jobpilot.documents.StyleRuleRepository;
 import se.caibirch.jobpilot.documents.StyleRuleRepository.Phrase;
@@ -32,10 +33,33 @@ public class SettingsController {
 
     private static final Set<String> LANGUAGES = Set.of("en", "sv");
 
-    private final StyleRuleRepository repo;
+    public record Performance(int claudeConcurrency, int min, int max) {
+    }
 
-    public SettingsController(StyleRuleRepository repo) {
+    public record PerformanceInput(Integer claudeConcurrency) {
+    }
+
+    private final StyleRuleRepository repo;
+    private final ClaudeConcurrency concurrency;
+
+    public SettingsController(StyleRuleRepository repo, ClaudeConcurrency concurrency) {
         this.repo = repo;
+        this.concurrency = concurrency;
+    }
+
+    /** How many model calls run at once: more is faster, but your Claude plan's rate limits are the real ceiling. */
+    @GetMapping("/performance")
+    public Performance performance() {
+        return new Performance(concurrency.limit(), ClaudeConcurrency.MIN, ClaudeConcurrency.MAX);
+    }
+
+    @PutMapping("/performance")
+    public Performance updatePerformance(@RequestBody PerformanceInput in) {
+        if (in.claudeConcurrency() == null || in.claudeConcurrency() < ClaudeConcurrency.MIN || in.claudeConcurrency() > ClaudeConcurrency.MAX) {
+            throw new IllegalArgumentException("claudeConcurrency must be between " + ClaudeConcurrency.MIN + " and " + ClaudeConcurrency.MAX);
+        }
+        concurrency.setLimit(in.claudeConcurrency());
+        return performance();
     }
 
     @GetMapping("/style-rules")

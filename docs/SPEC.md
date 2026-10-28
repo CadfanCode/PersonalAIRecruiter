@@ -183,7 +183,8 @@ Implementation requirements:
   stdin with `--input-format text` if it exceeds the argument length limit (use stdin when the
   prompt is over 100 kB).
 - Configurable binary path (`settings.claude.path`, default `claude` on PATH), timeout (default
-  180 s, web discovery and CV import 600 s), and max concurrency (default 2, a `Semaphore`).
+  180 s, web discovery and CV import 600 s), and max concurrency (default 4, range 1 to 8, one shared limiter
+  `ClaudeConcurrency` behind every model call; changeable in Settings while the app runs).
 - Parse with Jackson. If `is_error` is true, `subtype` is not success, the exit code is not
   zero, or `structured_output` is missing, throw `ClaudeCallException` with stderr attached.
 - Validate `structured_output` against the same schema again (networknt json-schema-validator).
@@ -389,7 +390,7 @@ overwritten, and an explicit employer apply link in the ad is used for filling.
    with the profile's municipality list; an ad without a municipality is kept.
 2. Build a compact CV digest (entries, facts and skills as JSON, at most around 8k tokens) once
    per run.
-3. Call `scoreJob` per remaining ad (concurrency 2). Cache by (job id, CV database version,
+3. Call `scoreJob` per remaining ad (as many at a time as the concurrency setting allows, default 4). Cache by (job id, CV database version,
    SearchProfile id). The run option `limit` (default 50) is the number of ads scored, best JobTech
    relevance first, unverified web dates last; other ads that passed the filters are stored and
    listed unscored. Measured 26 Oct 2026 on Sonnet: about $0.04 per scored ad.
@@ -414,7 +415,8 @@ overwritten, and an explicit employer apply link in the ad is used for filling.
 
 ### 8.2 Generation
 
-`writeCv` and `writeLetter` receive only the selected facts. Language = the ad's language. The
+`writeCv` and `writeLetter` receive only the selected facts and are called at the same time (each with its own validation
+and single rewrite); a batch of jobs also runs up to three jobs at once. The model-call limit is the only throttle. Language = the ad's language. The
 example letter (the user's Knowit letter, in `seed/`) is passed as a structure example, never as
 text to copy.
 
@@ -716,7 +718,7 @@ claude.path=claude
 claude.model=            (empty = Claude Code default)
 claude.timeoutSeconds=180
 claude.webTimeoutSeconds=600
-claude.concurrency=2
+claude.concurrency=4
 data.dir=~/.jobpilot
 search.defaultMaxAgeDays=7
 search.defaultLimit=50

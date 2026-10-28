@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -44,14 +43,19 @@ public class CliClaudeRunner implements ClaudeRunner {
     private final File workDir;
     private final ObjectMapper mapper;
     private final ClaudeCallLog callLog;
-    private final Semaphore concurrency;
+    private final ClaudeConcurrency concurrency;
 
     public CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog) {
+        this(props, mapper, callLog, ClaudeConcurrency.fixed(props.claude().concurrency()));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public CliClaudeRunner(JobPilotProperties props, ObjectMapper mapper, ClaudeCallLog callLog, ClaudeConcurrency concurrency) {
         this.config = props.claude();
         this.workDir = props.claudeWorkDir().toFile();
         this.mapper = mapper;
         this.callLog = callLog;
-        this.concurrency = new Semaphore(Math.max(1, config.concurrency()), true);
+        this.concurrency = concurrency;
     }
 
     @Override

@@ -41,6 +41,7 @@ public class BrowserService implements DisposableBean {
 
     private static final Logger log = LoggerFactory.getLogger(BrowserService.class);
     private static final int CALL_TIMEOUT_SECONDS = 180;
+    private static final int CLOSE_TIMEOUT_SECONDS = 20;
     private static final int NAVIGATION_TIMEOUT_MS = 30_000;
 
     private final JobPilotProperties.Browser config;
@@ -63,15 +64,19 @@ public class BrowserService implements DisposableBean {
 
     /** Runs the task on the browser thread and waits for it. */
     public <T> T call(Callable<T> task) {
+        return call(task, CALL_TIMEOUT_SECONDS);
+    }
+
+    private <T> T call(Callable<T> task, int timeoutSeconds) {
         try {
-            return thread.submit(task).get(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return thread.submit(task).get(timeoutSeconds, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (e.getCause() instanceof RuntimeException re) {
                 throw re;
             }
             throw new IllegalStateException(e.getCause());
         } catch (TimeoutException e) {
-            throw new IllegalStateException("The browser did not answer in " + CALL_TIMEOUT_SECONDS + " s");
+            throw new IllegalStateException("The browser did not answer in " + timeoutSeconds + " s");
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("Interrupted while waiting for the browser");
@@ -135,6 +140,7 @@ public class BrowserService implements DisposableBean {
         }));
     }
 
+    /** Closing must never wait minutes behind a busy or stuck browser thread, so it gives up after a short time. */
     public void closeTab(long jobId) {
         call(() -> {
             Page p = tabs.remove(jobId);
@@ -142,7 +148,7 @@ public class BrowserService implements DisposableBean {
                 p.close();
             }
             return null;
-        });
+        }, CLOSE_TIMEOUT_SECONDS);
     }
 
     /** The profile is created on the first call, with a Playwright download if needed. Recreated if the user closed the browser. */

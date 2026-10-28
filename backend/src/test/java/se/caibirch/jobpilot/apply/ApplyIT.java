@@ -86,6 +86,8 @@ class ApplyIT {
     @Autowired
     BrowserService browser;
     @Autowired
+    se.caibirch.jobpilot.settings.JobPilotProperties props;
+    @Autowired
     SnapshotRepository snapshots;
 
     static String url(String fixture) {
@@ -459,6 +461,36 @@ class ApplyIT {
         call(post("/api/apply/" + id + "/close"), null, 204);
         call(post("/api/apply/" + id + "/close"), null, 204); // closing twice is harmless
         call(post("/api/apply/999999/focus"), null, 404);
+    }
+
+    /**
+     * Hard-kills the Chromium of THIS test only, like a crash would. It is found by the exact temporary profile directory
+     * that the test created (under dataDir); no other browser can match it.
+     */
+    static void killBrowserOfThisTest(java.nio.file.Path profileDir) throws InterruptedException {
+        String marker = profileDir.toAbsolutePath().toString();
+        if (!marker.startsWith(dataDir.toAbsolutePath().toString())) {
+            throw new IllegalStateException("Refusing to kill a browser outside the test data directory: " + marker);
+        }
+        ProcessHandle.allProcesses()
+                .filter(h -> h.info().commandLine().map(c -> c.contains("--user-data-dir=" + marker)).orElse(false))
+                .forEach(ProcessHandle::destroyForcibly);
+        Thread.sleep(500);
+    }
+
+    @Test
+    void closeAndFocusAfterTheWholeBrowserDiedGiveMessagesAndAnApplicationCanBeOpenedAgain() throws Exception {
+        long id = job("Ponty ad", url("ponty.html"), null);
+        open(id);
+        awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
+        killBrowserOfThisTest(props.browserProfileDir());
+
+        call(post("/api/apply/" + id + "/close"), null, 204);
+        assertThat(call(get("/api/apply/status"), null, 200).toString()).contains("CLOSED");
+        call(post("/api/apply/" + id + "/close"), null, 204);
+
+        open(id);
+        assertThat(awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR").get("status").asText()).isEqualTo("READY_FOR_USER");
     }
 
     @Test

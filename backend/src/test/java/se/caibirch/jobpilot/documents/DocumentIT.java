@@ -422,6 +422,51 @@ class DocumentIT {
         assertThat(application(list, jobId).get("searchMode").asText()).isEqualTo("TARGETED");
     }
 
+    /** Makes writeCv and writeLetter slow and records how many of them were running at the same moment. */
+    java.util.concurrent.atomic.AtomicInteger slowWriters() {
+        java.util.concurrent.atomic.AtomicInteger inFlight = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.concurrent.atomic.AtomicInteger peak = new java.util.concurrent.atomic.AtomicInteger();
+        java.util.function.Function<String, String> slow = json -> {
+            int now = inFlight.incrementAndGet();
+            peak.accumulateAndGet(now, Math::max);
+            try {
+                Thread.sleep(300);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            } finally {
+                inFlight.decrementAndGet();
+            }
+            return json;
+        };
+        claude.respond("writeCv", t -> slow.apply(cvJson("sv", "Byggde mikrotjänster i Java och Kotlin.", "Åtgärdade race conditions i loggningsflödena.")));
+        claude.respond("writeLetter", t -> slow.apply(letterJson("sv", "Jag är systemutvecklare med erfarenhet av Java och Kotlin.")));
+        return peak;
+    }
+
+    @Test
+    void theCvAndTheLetterOfOneJobAreWrittenAtTheSameTime() throws Exception {
+        var peak = slowWriters();
+        JsonNode run = generate(jobId);
+        assertThat(run.get("run").get("status").asText()).as(run.get("run").get("message").asText()).isEqualTo("DONE");
+        assertThat(peak.get()).as("writeCv and writeLetter overlapped").isGreaterThanOrEqualTo(2);
+        assertThat(docs(jobId).get("cv").get("version").asInt()).isEqualTo(1);
+        assertThat(docs(jobId).get("letter").get("version").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void jobsOfOneBatchAreWrittenAtTheSameTime() throws Exception {
+        long second = addJob("Java-utvecklare Backend", "Acme AB", "sv", "Vi söker backendutvecklare.", runId);
+        long third = addJob("Systemutvecklare", "Foo AB", "sv", "Vi söker en systemutvecklare.", runId);
+        var peak = slowWriters();
+
+        call(post("/api/applications/documents"), "{\"jobIds\":[" + jobId + "," + second + "," + third + "],\"runId\":" + runId + "}", 202);
+        awaitApplications(l -> l.size() == 3 && java.util.stream.StreamSupport.stream(l.spliterator(), false)
+                .allMatch(a -> a.get("generation") != null && !a.get("generation").isNull()
+                        && Set.of("DONE", "FAILED").contains(a.get("generation").get("status").asText())));
+
+        assertThat(peak.get()).as("more than one job's writers ran together").isGreaterThanOrEqualTo(3);
+    }
+
     @Test
     void selectingAJobTwiceKeepsOneApplicationAndRemovingItLeavesTheDocuments() throws Exception {
         call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);

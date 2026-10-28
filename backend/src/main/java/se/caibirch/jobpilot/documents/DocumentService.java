@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import se.caibirch.jobpilot.claude.ClaudeConcurrency;
 import se.caibirch.jobpilot.claude.ClaudeResources;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
 import se.caibirch.jobpilot.claude.ClaudeTask;
@@ -56,6 +57,8 @@ import se.caibirch.jobpilot.settings.JobPilotProperties;
 public class DocumentService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+    /** Jobs written at the same time in one batch: each runs two model calls at once, so this stays small. */
+    static final int BATCH_PARALLEL_JOBS = 3;
 
     private final ClaudeRunner claude;
     private final CvService cv;
@@ -71,11 +74,13 @@ public class DocumentService {
     private final ObjectMapper mapper;
     private final Clock clock;
     private final JobPilotProperties props;
+    private final ClaudeConcurrency concurrency;
 
     public DocumentService(ClaudeRunner claude, CvService cv, JobRepository jobs, RunRepository runs,
                            SearchProfileRepository profiles, StyleRuleRepository styleRules, FactSelectionService selector,
                            DocumentValidator validator, DocumentRenderer renderer, DocumentRepository documents,
-                           ExecutorService pipelineExecutor, ObjectMapper mapper, Clock clock, JobPilotProperties props) {
+                           ExecutorService pipelineExecutor, ObjectMapper mapper, Clock clock, JobPilotProperties props,
+                           ClaudeConcurrency concurrency) {
         this.claude = claude;
         this.cv = cv;
         this.jobs = jobs;
@@ -90,6 +95,7 @@ public class DocumentService {
         this.mapper = mapper;
         this.clock = clock;
         this.props = props;
+        this.concurrency = concurrency;
     }
 
     // ---- generation ----
@@ -140,13 +146,34 @@ public class DocumentService {
         }
         if (!work.isEmpty()) {
             try {
-                executor.submit(() -> work.forEach(Runnable::run));
+                executor.submit(() -> runInParallel(work));
             } catch (RejectedExecutionException e) {
                 created.forEach(id -> runs.finish(id, Status.FAILED, "Too many runs in progress; try again shortly", clock.instant()));
                 throw new ConflictException("Too many runs in progress; try again shortly");
             }
         }
         return items;
+    }
+
+    /**
+     * Runs the per-job tasks of a batch a few at a time on virtual threads and returns when all are done. One slot of the
+     * pipeline executor is held for the whole batch, as before; a failing job is recorded by its own task and never stops
+     * the others. The model-call limit still caps the calls themselves.
+     */
+    private void runInParallel(List<Runnable> work) {
+        java.util.concurrent.Semaphore jobs = new java.util.concurrent.Semaphore(Math.max(1, Math.min(BATCH_PARALLEL_JOBS, concurrency.limit())));
+        try (var pool = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+            for (Runnable task : work) {
+                pool.submit(() -> {
+                    jobs.acquireUninterruptibly();
+                    try {
+                        task.run();
+                    } finally {
+                        jobs.release();
+                    }
+                });
+            }
+        }
     }
 
     /** The search profile that documents for this job are tailored to: the one of the given run, else the newest run that found it. */
@@ -186,29 +213,24 @@ public class DocumentService {
         Selection selection = selector.select(adText, searchProfile, language, entries, state.pinned(), state.excluded());
         jobs.saveSelection(jobId, write(selection));
 
-        runs.update(runId, Status.RUNNING, "CV", 30, "Writing the CV");
+        runs.update(runId, Status.RUNNING, "WRITE", 30, "Writing the CV and the cover letter");
         Set<String> foreign = foreignEmployers(language, ad.employer());
         ValidationContext cvCtx = context(language, asksNewGrad, entries, Selection.ids(selection.forCv()), foreign);
         ValidationContext letterCtx = context(language, asksNewGrad, entries, Selection.ids(selection.forLetter()), foreign);
         String gapNote = GapNote.compute(entries, Selection.ids(selection.forCv()), language, YearMonth.now(clock)).orElse(null);
 
-        CvContent cvDoc = writeCv(adText, language, profile, selection, entryById, entries, cvCtx, gapNote);
-        Report cvReport = validator.validateCv(cvDoc, cvCtx);
-        if (!cvReport.violations().isEmpty()) {
-            runs.progress(runId, 45, "Fixing problems found in the CV");
-            cvDoc = CvAssembler.assemble(rewrite(Kind.CV, cvDoc, cvReport, selection.forCv(), entryById, language, CvContent.class),
-                    selection, entryById, profile, language, gapNote);
-            cvReport = validator.validateCv(cvDoc, cvCtx);
-        }
-
-        runs.update(runId, Status.RUNNING, "LETTER", 60, "Writing the cover letter");
-        LetterContent letter = writeLetter(adText, ad, language, profile, selection, entryById, letterCtx);
-        Report letterReport = validator.validateLetter(letter, letterCtx);
-        if (!letterReport.violations().isEmpty()) {
-            runs.progress(runId, 80, "Fixing problems found in the letter");
-            letter = rewrite(Kind.LETTER, letter, letterReport, selection.forLetter(), entryById, language, LetterContent.class);
-            letterReport = validator.validateLetter(letter, letterCtx);
-        }
+        // The CV and the letter depend only on the selection above and share no mutable state, so they are written at the
+        // same time; the concurrency setting still caps how many model calls run at once.
+        java.util.concurrent.CompletableFuture<Written<CvContent>> cvJob = java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> buildCv(runId, adText, language, profile, selection, entryById, entries, cvCtx, gapNote), WRITERS);
+        java.util.concurrent.CompletableFuture<Written<LetterContent>> letterJob = java.util.concurrent.CompletableFuture.supplyAsync(
+                () -> buildLetter(runId, adText, ad, language, profile, selection, entryById, letterCtx), WRITERS);
+        Written<CvContent> cvResult = await(cvJob, letterJob);
+        Written<LetterContent> letterResult = await(letterJob, cvJob);
+        CvContent cvDoc = cvResult.document();
+        Report cvReport = cvResult.report();
+        LetterContent letter = letterResult.document();
+        Report letterReport = letterResult.report();
 
         runs.update(runId, Status.RUNNING, "RENDER", 90, "Rendering the PDFs");
         store(jobId, Kind.CV, language, cvDoc, renderer.renderCv(cvDoc, profile), cvReport, profile, ad.employer(), searchProfileId);
@@ -217,6 +239,51 @@ public class DocumentService {
         boolean problems = cvReport.hasFailures() || letterReport.hasFailures();
         runs.finish(runId, Status.DONE, problems ? "Documents ready, but they have problems to fix before approval"
                 : "Documents ready for review", clock.instant());
+    }
+
+    /** Runs the CV and the letter writers of one job at the same time; the model-call limit is the real throttle. */
+    private static final java.util.concurrent.ExecutorService WRITERS = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();
+
+    private record Written<T>(T document, Report report) {
+    }
+
+    /** The result of one writer; if it failed, the other writer is abandoned and the original error is thrown. */
+    private static <T> T await(java.util.concurrent.CompletableFuture<T> job, java.util.concurrent.CompletableFuture<?> other) {
+        try {
+            return job.join();
+        } catch (java.util.concurrent.CompletionException e) {
+            other.cancel(true);
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            if (cause instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new IllegalStateException(cause);
+        }
+    }
+
+    private Written<CvContent> buildCv(long runId, String adText, String language, Profile profile, Selection selection,
+                                       Map<Long, Entry> entryById, List<Entry> entries, ValidationContext ctx, String gapNote) {
+        CvContent cvDoc = writeCv(adText, language, profile, selection, entryById, entries, ctx, gapNote);
+        Report report = validator.validateCv(cvDoc, ctx);
+        if (!report.violations().isEmpty()) {
+            runs.progress(runId, 45, "Fixing problems found in the CV");
+            cvDoc = CvAssembler.assemble(rewrite(Kind.CV, cvDoc, report, selection.forCv(), entryById, language, CvContent.class),
+                    selection, entryById, profile, language, gapNote);
+            report = validator.validateCv(cvDoc, ctx);
+        }
+        return new Written<>(cvDoc, report);
+    }
+
+    private Written<LetterContent> buildLetter(long runId, String adText, AdText ad, String language, Profile profile,
+                                               Selection selection, Map<Long, Entry> entryById, ValidationContext ctx) {
+        LetterContent letter = writeLetter(adText, ad, language, profile, selection, entryById, ctx);
+        Report report = validator.validateLetter(letter, ctx);
+        if (!report.violations().isEmpty()) {
+            runs.progress(runId, 60, "Fixing problems found in the letter");
+            letter = rewrite(Kind.LETTER, letter, report, selection.forLetter(), entryById, language, LetterContent.class);
+            report = validator.validateLetter(letter, ctx);
+        }
+        return new Written<>(letter, report);
     }
 
     private CvContent writeCv(String adText, String language, Profile profile, Selection selection, Map<Long, Entry> entryById,
