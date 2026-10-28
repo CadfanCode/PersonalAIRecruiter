@@ -38,7 +38,9 @@ export interface RunOptions {
 /** Ads a Discover run scores when the user sets no limit, and the most it will ever score. */
 export const DISCOVER_LIMIT = 60
 export const DISCOVER_AGGRESSIVE_LIMIT = 150
+/** The most ads one run may score, in every mode; Prompt mode scores 20 unless the user raises it. */
 export const DISCOVER_MAX_LIMIT = 150
+export const PROMPT_LIMIT = 20
 
 export interface Run {
   id: number
@@ -60,6 +62,8 @@ export interface Run {
 export interface RunView {
   run: Run
   profile: SearchProfile | null
+  /** Seconds left while ads are being scored; null when there is no estimate yet. */
+  etaSeconds: number | null
 }
 
 export interface Score {

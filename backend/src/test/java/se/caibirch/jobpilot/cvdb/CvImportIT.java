@@ -43,7 +43,9 @@ class CvImportIT {
                "startYm":"2019","endYm":null,"ongoing":true,"tags":["teaching"],
                "facts":[{"textEn":"Taught PE.","textSv":"Undervisade i idrott.","evidence":"letter","tags":[]},
                         {"textEn":"Coached a team.","textSv":null,"tags":["coaching"]}]}],
-             "skills":[{"name":"Java","category":"language"},{"name":"Spring Boot"}]}""";
+             "skills":[{"name":"Java","category":"language"},{"name":"Spring Boot"}],
+             "profile":{"fullName":"Alex Lindgren","headline":"Nurse","email":"alex@example.com","phone":null,"city":"Uppsala",
+                        "website":null,"linkedin":"https://www.linkedin.com/in/alex","github":null}}""";
 
     @TestConfiguration
     static class Fakes {
@@ -122,6 +124,28 @@ class CvImportIT {
 
         assertThat(jdbc.sql("SELECT level FROM skill WHERE name = 'Java'").query(String.class).single()).isEqualTo("strong");
         assertThat(jdbc.sql("SELECT count(*) FROM skill").query(Long.class).single()).isEqualTo(2);
+    }
+
+    @Test
+    void commitFillsOnlyTheBlankProfileFieldsFromTheDocuments() throws Exception {
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put("/api/profile").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"fullName\":\"Alex L\",\"city\":\"Stockholm\",\"languages\":[]}")).andExpect(status().isOk());
+        JsonNode preview = preview(txt("cv.txt", "x"));
+        assertThat(preview.get("profile").get("email").asText()).isEqualTo("alex@example.com");
+        var request = mapper.createObjectNode();
+        request.putArray("entries");
+        request.set("skills", preview.get("skills"));
+        request.set("profile", preview.get("profile"));
+
+        mvc.perform(post("/api/cv/import/" + preview.get("previewId").asText() + "/commit")
+                .contentType(MediaType.APPLICATION_JSON).content(request.toString()))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.profileFilled").value(true));
+
+        assertThat(jdbc.sql("SELECT full_name FROM profile").query(String.class).single()).as("kept what the user entered").isEqualTo("Alex L");
+        assertThat(jdbc.sql("SELECT city FROM profile").query(String.class).single()).isEqualTo("Stockholm");
+        assertThat(jdbc.sql("SELECT email FROM profile").query(String.class).single()).as("filled a blank").isEqualTo("alex@example.com");
+        assertThat(jdbc.sql("SELECT linkedin FROM profile").query(String.class).single()).isEqualTo("https://www.linkedin.com/in/alex");
+        assertThat(jdbc.sql("SELECT headline FROM profile").query(String.class).single()).isEqualTo("Nurse");
     }
 
     @Test

@@ -35,6 +35,24 @@ export interface Application {
   letter: DocState | null
   generation: Generation | null
   submittedDocs: { cv?: { file: string | null; version: number }; letter?: { file: string | null; version: number } } | null
+  /** Both documents exist and are approved, and it is not submitted: it goes on to the Apply stage. */
+  readyToApply: boolean
+  /** Why it does not go on yet (empty when it does). */
+  blockers: string[]
+}
+
+export interface ApprovalResult {
+  jobId: number
+  title: string
+  kind: 'cv' | 'letter'
+  approved: boolean
+  alreadyApproved: boolean
+  reason: string | null
+}
+
+export interface ApplyResult {
+  started: { jobId: number }[]
+  skipped: { jobId: number; title: string; reason: string }[]
 }
 
 export const MODE_LABEL: Record<SearchMode, string> = { TARGETED: 'Targeted search', DISCOVER: 'Discover roles', MANUAL: 'Pasted link' }
@@ -66,6 +84,13 @@ export const useCreateDocuments = () =>
   useApplicationMutation(({ jobIds, runId }: { jobIds: number[]; runId?: number }) =>
     api<{ items: { jobId: number; runId: number }[] }>('/api/applications/documents', { method: 'POST', body: { jobIds, runId } }),
   )
+
+/** "Approve all": what was approved, and what was refused with its reason. */
+export const useApproveAll = () => useApplicationMutation(() => api<ApprovalResult[]>('/api/applications/approve-all', { method: 'POST', body: {} }))
+
+/** "Apply": tabs open for the applications whose two documents are approved; the rest come back with a reason. */
+export const useApplyApproved = () =>
+  useApplicationMutation(() => api<ApplyResult>('/api/applications/apply', { method: 'POST', body: {} }))
 
 export const useRemoveApplication = () =>
   useApplicationMutation((jobId: number) => api<void>(`/api/applications/${jobId}`, { method: 'DELETE' }))

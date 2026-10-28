@@ -27,6 +27,11 @@ export interface TabView {
   skipped: { fieldId: string; label: string; reason: string }[]
   questions: { fieldId: string; question: string }[]
   passes: number
+  /** The coarse state shown to the user: FILLING, NEEDS_LOGIN, NEEDS_ATTENTION, READY_FOR_SUBMISSION, FAILED, QUEUED, CLOSED. */
+  phase: 'QUEUED' | 'FILLING' | 'NEEDS_LOGIN' | 'NEEDS_ATTENTION' | 'READY_FOR_SUBMISSION' | 'FAILED' | 'CLOSED'
+  /** The portal a tab is waiting at for a sign-in, so a login can be saved for it. */
+  signInHost: string | null
+  loginFilled: boolean
 }
 
 const WORKING: TabStatus[] = ['QUEUED', 'OPENING', 'FILLING']

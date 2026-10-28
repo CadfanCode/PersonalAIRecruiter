@@ -20,6 +20,33 @@ export interface SelectionPreview {
   entries: { entryId: number; title: string; kind: string; use: 'cv' | 'letter' | 'both'; reason: string; facts: { id: number; text: string }[] }[]
 }
 
+export interface Performance {
+  claudeConcurrency: number
+  min: number
+  max: number
+}
+
+export const usePerformance = () => useQuery({ queryKey: ['settings', 'performance'], queryFn: () => api<Performance>('/api/settings/performance') })
+
+export function useUpdatePerformance() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (claudeConcurrency: number) => api<Performance>('/api/settings/performance', { method: 'PUT', body: { claudeConcurrency } }),
+    onSuccess: (p) => client.setQueryData(['settings', 'performance'], p),
+  })
+}
+
+export const useSearchSettings = () =>
+  useQuery({ queryKey: ['settings', 'search'], queryFn: () => api<{ careerPages: boolean }>('/api/settings/search') })
+
+export function useUpdateSearchSettings() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (careerPages: boolean) => api<{ careerPages: boolean }>('/api/settings/search', { method: 'PUT', body: { careerPages } }),
+    onSuccess: (s) => client.setQueryData(['settings', 'search'], s),
+  })
+}
+
 export const useStyleRules = () => useQuery({ queryKey: ['settings', 'rules'], queryFn: () => api<StyleRule[]>('/api/settings/style-rules') })
 export const useBannedPhrases = () =>
   useQuery({ queryKey: ['settings', 'phrases'], queryFn: () => api<BannedPhrase[]>('/api/settings/banned-phrases') })

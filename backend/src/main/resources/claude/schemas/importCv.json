@@ -38,6 +38,20 @@
         "additionalProperties": false
       }
     },
+    "profile": {
+      "type": ["object", "null"],
+      "properties": {
+        "fullName": { "type": ["string", "null"] },
+        "headline": { "type": ["string", "null"] },
+        "email": { "type": ["string", "null"] },
+        "phone": { "type": ["string", "null"] },
+        "city": { "type": ["string", "null"] },
+        "website": { "type": ["string", "null"] },
+        "linkedin": { "type": ["string", "null"] },
+        "github": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
     "skills": {
       "type": "array",
       "items": {

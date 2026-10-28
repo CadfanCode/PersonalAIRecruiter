@@ -35,8 +35,13 @@ public class CvImportService {
     public record ImportedSkill(String name, String category) {
     }
 
+    /** The person's own contact details as the documents state them; any field may be null. */
+    public record ImportedProfile(String fullName, String headline, String email, String phone, String city, String website,
+                                  String linkedin, String github) {
+    }
+
     /** Claude's answer for the {@code importCv} task. */
-    public record ImportedCv(List<ImportedEntry> entries, List<ImportedSkill> skills) {
+    public record ImportedCv(List<ImportedEntry> entries, List<ImportedSkill> skills, ImportedProfile profile) {
     }
 
     /** An entry in the preview; {@code duplicateOfEntryId} is set when the database already has it. */
@@ -44,14 +49,14 @@ public class CvImportService {
     }
 
     public record Preview(String previewId, List<String> files, List<PreviewEntry> entries,
-                          List<ImportedSkill> skills) {
+                          List<ImportedSkill> skills, ImportedProfile profile) {
     }
 
     /** What the user confirmed in the wizard (possibly edited, possibly fewer entries). */
-    public record CommitRequest(List<ImportedEntry> entries, List<ImportedSkill> skills) {
+    public record CommitRequest(List<ImportedEntry> entries, List<ImportedSkill> skills, ImportedProfile profile) {
     }
 
-    public record CommitResult(List<Long> entryIds, int facts, int skills) {
+    public record CommitResult(List<Long> entryIds, int facts, int skills, boolean profileFilled) {
     }
 
     public record UploadedFile(String name, byte[] bytes) {
@@ -96,7 +101,7 @@ public class CvImportService {
                 .map(e -> new PreviewEntry(e, EntryMatcher.findMatch(e.kind(), e.title(), e.organisation(), existing)
                         .map(Entry::id).orElse(null))).toList();
         Preview preview = new Preview(UUID.randomUUID().toString(), files.stream().map(UploadedFile::name).toList(),
-                entries, result.skills());
+                entries, result.skills(), result.profile());
         evictExpired();
         previews.put(preview.previewId(), new Stored(Instant.now(), preview));
         return preview;
@@ -124,8 +129,35 @@ public class CvImportService {
         for (ImportedSkill s : request.skills()) {
             service.addSkillIfAbsent(s.name(), s.category());
         }
+        boolean profileFilled = fillProfile(request.profile());
         previews.remove(previewId);
-        return new CommitResult(ids, facts, request.skills().size());
+        return new CommitResult(ids, facts, request.skills().size(), profileFilled);
+    }
+
+    /**
+     * Fills only the blanks of the profile with what the documents say; anything the user already entered stays. Returns true
+     * when something was written.
+     */
+    private boolean fillProfile(ImportedProfile found) {
+        if (found == null) {
+            return false;
+        }
+        Profile now = service.profile();
+        Profile merged = new Profile(now.id(), blankTo(now.fullName(), found.fullName()), blankTo(now.headline(), found.headline()),
+                blankTo(now.email(), found.email()), blankTo(now.phone(), found.phone()), now.phoneInternational(),
+                blankTo(now.city(), found.city()), blankTo(now.website(), found.website()), blankTo(now.github(), found.github()),
+                blankTo(now.linkedin(), found.linkedin()), now.workAuthorisation(), now.languages());
+        if (merged.equals(now)) {
+            return false;
+        }
+        service.saveProfile(merged);
+        return true;
+    }
+
+    private static String blankTo(String current, String imported) {
+        boolean has = current != null && !current.isBlank();
+        boolean offered = imported != null && !imported.isBlank();
+        return has || !offered ? current : imported.trim();
     }
 
     private void evictExpired() {
