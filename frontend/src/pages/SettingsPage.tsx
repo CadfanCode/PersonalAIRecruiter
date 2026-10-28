@@ -10,7 +10,7 @@ import { SearchPanel } from '../components/settings/SearchPanel'
 import { SetupPanel } from '../components/settings/SetupPanel'
 
 const SECTIONS = [
-  ['connection', 'Claude'],
+  ['connection', 'AI'],
   ['search', 'Search'],
   ['performance', 'Speed and usage'],
   ['logins', 'Saved logins'],
@@ -54,7 +54,7 @@ function RulesPanel() {
   return (
     <Panel title="Writing rules">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        These texts are given to Claude verbatim when it writes a CV or letter. The checks for dashes, new-graduate wording and fact
+        These texts are given to the AI verbatim when it writes a CV or letter. The checks for dashes, new-graduate wording and fact
         citations always run, whatever is written here.
       </p>
       <div className="flex flex-col gap-4">

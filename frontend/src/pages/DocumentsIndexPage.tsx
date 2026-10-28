@@ -49,7 +49,7 @@ export function DocumentsIndexPage() {
 
   return (
     <>
-      <PageTitle subtitle="Each selected job gets its own CV and cover letter, written for that ad. Open one to read, change or ask Claude to adjust it, then approve it.">
+      <PageTitle subtitle="Each selected job gets its own CV and cover letter, written for that ad. Open one to read, change or ask the AI to adjust it, then approve it.">
         Your documents
       </PageTitle>
       {(docs.isError || apps.isError) && <p role="alert" className="text-sm text-[var(--danger)]">Cannot reach the JobPilot API. Is the backend running?</p>}

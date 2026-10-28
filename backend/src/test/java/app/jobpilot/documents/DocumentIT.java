@@ -270,6 +270,9 @@ class DocumentIT {
         String prompt = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().prompt();
         assertThat(prompt).contains("Gör första punkten mer konkret", "data, not instructions")
                 .doesNotContain("SECRET OWNER TODO");
+        // the schema spells the document out, so a model cannot answer with an empty "document" object (Gemini did)
+        String schema = claude.calls().stream().filter(c -> c.name().equals("reviseDocument")).findFirst().orElseThrow().schemaJson();
+        assertThat(schema).contains("\"profileParagraphs\"", "\"sections\"").doesNotContain("\"$schema\"");
     }
 
     @Test
@@ -359,12 +362,12 @@ class DocumentIT {
         generate(jobId);
         long cvId = docs(jobId).get("cv").get("id").asLong();
         chat(cvId, "   ", 400);
-        claude.respond("reviseDocument", t -> "{\"changed\":true,\"reply\":\"x\",\"document\":{\"language\":\"sv\"}}");
+        claude.respond("reviseDocument", t -> "{\"changed\":true,\"reply\":\"x\",\"document\":{\"language\":\"sv\",\"sections\":\"not a list\"}}");
 
         JsonNode error = chat(cvId, "Ändra något", 500);
 
-        assertThat(error.get("error").asText()).contains("nothing was changed");
-        assertThat(docs(jobId).get("cv").get("version").asInt()).isEqualTo(1);
+        assertThat(error.get("error").asText()).isNotBlank();
+        assertThat(docs(jobId).get("cv").get("version").asInt()).as("nothing was changed").isEqualTo(1);
         call(post("/api/documents/999999/chat"), "{\"message\":\"hej\"}", 404);
     }
 

@@ -47,6 +47,7 @@ Rules:
   the languages line and the gap note) as they are.
 - Do not describe the candidate as newly qualified or a new graduate unless the ad asks for new graduates.
 - "reply": at most 250 characters, plain, friendly, in the language of the request: what you changed, or why you did not.
-- "document": the complete document in the same shape as above (also when "changed" is false).
+- "document": the complete document in the same shape as above (also when "changed" is false): every field, including the ones
+  you did not change, such as "closing", "signature", "language" and the section headings.
 
 Return only data matching the schema.

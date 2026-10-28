@@ -73,7 +73,7 @@ export function RoleSuggestions({
         </label>
         <span className="text-sm text-[var(--muted)]">{chosen.length} selected</span>
         <span className="ml-auto text-xs text-[var(--muted)]">
-          Up to {cap} ads are scored by Claude{options.aggressive ? ' (aggressive mode: wider search, lower bar)' : ''}. This uses your Claude access.
+          Up to {cap} ads are scored by the AI{options.aggressive ? ' (aggressive mode: wider search, lower bar)' : ''}. This uses your AI access.
         </span>
       </div>
 

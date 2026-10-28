@@ -305,18 +305,31 @@ public class BrowserService implements DisposableBean {
         }
     }
 
-    /** DevTools: the window state is "normal" or "minimized" (a minimised page keeps running, as the flags above prevent throttling). */
+    /**
+     * DevTools: the window state is "normal" or "minimized" (a minimised page keeps running, as the flags above prevent throttling).
+     * The window manager applies it asynchronously, so the state is read back and asked for again a few times until it holds.
+     */
     private void setWindowState(Page page, String state) {
         try {
             com.microsoft.playwright.CDPSession session = context.newCDPSession(page);
             try {
-                com.google.gson.JsonObject window = session.send("Browser.getWindowForTarget");
-                com.google.gson.JsonObject params = new com.google.gson.JsonObject();
-                params.addProperty("windowId", window.get("windowId").getAsInt());
-                com.google.gson.JsonObject bounds = new com.google.gson.JsonObject();
-                bounds.addProperty("windowState", state);
-                params.add("bounds", bounds);
-                session.send("Browser.setWindowBounds", params);
+                int id = session.send("Browser.getWindowForTarget").get("windowId").getAsInt();
+                for (int attempt = 0; attempt < 8; attempt++) {
+                    com.google.gson.JsonObject params = new com.google.gson.JsonObject();
+                    params.addProperty("windowId", id);
+                    com.google.gson.JsonObject bounds = new com.google.gson.JsonObject();
+                    bounds.addProperty("windowState", state);
+                    params.add("bounds", bounds);
+                    session.send("Browser.setWindowBounds", params);
+                    page.waitForTimeout(250);
+                    com.google.gson.JsonObject read = new com.google.gson.JsonObject();
+                    read.addProperty("windowId", id);
+                    String now = session.send("Browser.getWindowBounds", read).getAsJsonObject("bounds").get("windowState").getAsString();
+                    if (state.equals(now)) {
+                        return;
+                    }
+                }
+                log.info("The browser window did not reach the state {}; it stays as it is", state);
             } finally {
                 session.detach();
             }

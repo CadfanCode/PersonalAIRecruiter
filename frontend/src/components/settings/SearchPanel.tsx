@@ -32,7 +32,7 @@ export function SearchPanel() {
             onChange={(e) => update.mutate(e.target.checked)} />
           <span>
             <span className="block font-medium">Also search employers' own career pages</span>
-            <span className="block text-[var(--muted)]">Finds ads that are not on the job board. It is slower and uses noticeably more of your Claude access, so it is off unless you want it.</span>
+            <span className="block text-[var(--muted)]">Finds ads that are not on the job board. It is slower and uses noticeably more of your AI access, so it is off unless you want it.</span>
           </span>
         </label>
       </Panel>

@@ -35,7 +35,7 @@ export function ImportWizard() {
     return (
       <Panel title="Import from CV or letters">
         <p className="mb-3 text-sm text-[var(--muted)]">
-          Upload PDF, DOCX, TXT or MD files. Claude splits them into entries and facts. Nothing is saved until you confirm.
+          Upload PDF, DOCX, TXT or MD files. The AI splits them into entries and facts. Nothing is saved until you confirm.
         </p>
         <input
           type="file"
@@ -58,7 +58,7 @@ export function ImportWizard() {
           >
             {analyse.isPending ? 'Reading...' : 'Analyse'}
           </Button>
-          {analyse.isPending && <span className="text-sm text-[var(--muted)]">Claude is reading the files, this can take a minute.</span>}
+          {analyse.isPending && <span className="text-sm text-[var(--muted)]">The AI is reading the files, this can take a minute.</span>}
         </div>
         {analyse.isError && (
           <p role="alert" className="mt-3 text-sm text-[var(--danger)]">

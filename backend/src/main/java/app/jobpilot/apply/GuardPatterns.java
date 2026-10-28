@@ -35,6 +35,11 @@ public final class GuardPatterns {
     /** Login, BankID and account-creation words in labels and values: such fields are never touched. */
     public static final Pattern CREDENTIAL = Pattern.compile("password|lösenord|bankid|personnummer|pin ?code|engångskod|otp", FLAGS);
 
+    /** Personal identity numbers: never filled, never asked about in JobPilot, never shown to the model. Read from the nearby text too,
+     *  because a field can have no label of its own (ReachMee's "last four digits" box sits under a "Personnummer" caption). */
+    public static final Pattern PERSONAL_NUMBER = Pattern.compile(
+            "personnummer|samordningsnummer|personal ?number|social security|\\bssn\\b|födelsenummer|birth ?last ?four", FLAGS);
+
     private GuardPatterns() {
     }
 

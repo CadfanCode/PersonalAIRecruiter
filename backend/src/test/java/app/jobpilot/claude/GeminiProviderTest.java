@@ -206,4 +206,14 @@ class GeminiProviderTest {
         fallback.delete();
         assertThat(fallback.get()).isEmpty();
     }
+
+    @Test
+    void aTimeoutIsNotRepeatedSoAStageNeverHoldsForFiveTimeLimits() {
+        wm.stubFor(post(urlEqualTo(PATH)).willReturn(aResponse().withFixedDelay(7_000).withBody(reply("{\"status\":\"ok\"}"))));
+
+        long start = System.nanoTime();
+        assertThatThrownBy(() -> provider.run(task())).isInstanceOf(ClaudeCallException.class).hasMessageContaining("did not answer within");
+        assertThat((System.nanoTime() - start) / 1_000_000_000L).as("one attempt of the 5 s limit, not five").isLessThan(9);
+        wm.verify(1, postRequestedFor(urlEqualTo(PATH)));
+    }
 }

@@ -328,9 +328,9 @@ describe('documents page', () => {
       const headline = await screen.findByDisplayValue('Javautvecklare | Spring Boot')
       await userEvent.type(headline, ' och Kotlin')
       expect(screen.getByText(/Your unsaved edits are included/)).toBeInTheDocument()
-      await userEvent.type(screen.getByLabelText('Your request to Claude'), 'Add that I know Rust{Enter}')
+      await userEvent.type(screen.getByLabelText('Your request to the AI'), 'Add that I know Rust{Enter}')
       expect(await screen.findByText('There is no Rust in your CV database.')).toBeInTheDocument()
-      await userEvent.type(screen.getByLabelText('Your request to Claude'), 'Ok, then shorter{Enter}')
+      await userEvent.type(screen.getByLabelText('Your request to the AI'), 'Ok, then shorter{Enter}')
 
       await vi.waitFor(() => expect(calls.filter((c) => c.url === '/api/documents/100/chat')).toHaveLength(2))
       const first = calls.find((c) => c.url === '/api/documents/100/chat')!.body as { content: { headline: string } }
@@ -350,7 +350,7 @@ describe('documents page', () => {
       })
       renderPage()
 
-      await userEvent.type(await screen.findByLabelText('Your request to Claude'), 'Change something{Enter}')
+      await userEvent.type(await screen.findByLabelText('Your request to the AI'), 'Change something{Enter}')
 
       expect(await screen.findByRole('alert')).toHaveTextContent('nothing was changed')
     })
@@ -359,12 +359,12 @@ describe('documents page', () => {
       mockApi({ ...base(), 'POST /api/documents/100/chat': { reply: 'Done.', changed: false, approvalRevoked: false, document: cvDoc() } })
       renderPage()
 
-      await userEvent.type(await screen.findByLabelText('Your request to Claude'), 'hello{Enter}')
+      await userEvent.type(await screen.findByLabelText('Your request to the AI'), 'hello{Enter}')
       expect(await screen.findByText('Done.')).toBeInTheDocument()
       await userEvent.click(screen.getByRole('tab', { name: /Cover letter/ }))
 
       expect(screen.queryByText('Done.')).not.toBeInTheDocument()
-      expect(screen.getByRole('heading', { name: 'Ask Claude to adjust this letter' })).toBeInTheDocument()
+      expect(screen.getByRole('heading', { name: 'Ask the AI to adjust this letter' })).toBeInTheDocument()
     })
   })
 

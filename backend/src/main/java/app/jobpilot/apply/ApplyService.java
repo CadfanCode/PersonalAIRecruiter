@@ -581,6 +581,11 @@ public class ApplyService {
         try {
             return claude.run(task);
         } catch (ClaudeCallException first) {
+            String why = String.valueOf(first.getMessage()).toLowerCase(Locale.ROOT);
+            if (why.contains("did not answer") || why.contains("timed out") || why.contains("timeout")) {
+                // A call that already used its whole time limit is not repeated: the stage would hold twice as long.
+                throw new IllegalStateException("the AI took too long to work out the form: " + firstLine(first), first);
+            }
             log.info("The AI did not answer for the form ({}); trying once more", firstLine(first));
             try {
                 return claude.run(task);
@@ -594,7 +599,7 @@ public class ApplyService {
     private static List<Map<String, Object>> promptFields(List<FormField> fields) {
         List<Map<String, Object>> out = new ArrayList<>();
         for (FormField f : fields) {
-            if ("password".equals(f.type()) || GuardPatterns.CREDENTIAL.matcher(f.ownText()).find()) {
+            if ("password".equals(f.type()) || GuardPatterns.CREDENTIAL.matcher(f.ownText()).find() || ActionValidator.isPersonalNumber(f)) {
                 continue;
             }
             Map<String, Object> m = new LinkedHashMap<>();

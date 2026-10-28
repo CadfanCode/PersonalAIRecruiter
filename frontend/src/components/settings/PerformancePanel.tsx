@@ -16,7 +16,7 @@ export function PerformancePanel() {
     <div className="grid gap-5">
       <Panel title="Speed">
         <p className="text-sm text-[var(--muted)]">
-          Scoring ads and writing documents run several Claude calls at the same time. Raise this to go faster; lower it if Claude tells you that you are sending too many requests.
+          Scoring ads and writing documents run several AI calls at the same time. Raise this to go faster; lower it if the AI service tells you that you are sending too many requests.
         </p>
         <div className="mt-5 flex items-center gap-4">
           <input type="range" aria-label="Calls at the same time" min={perf.data?.min ?? 1} max={perf.data?.max ?? 8} step={1} value={current}

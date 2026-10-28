@@ -120,6 +120,10 @@ public class GeminiProvider implements AiProvider {
             }
             T result = bind(task, schema, answerOf(task, response));
             record(task, started, true, null, response);
+            long thinking = response.path("usageMetadata").path("thoughtsTokenCount").asLong(0);
+            if (thinking > 0) {
+                log.info("ai(gemini) task={} thoughtsTokens={} of maxOutputTokens={}", task.name(), thinking, tokens);
+            }
             return result;
         } catch (ClaudeCallException e) {
             record(task, started, false, e.getMessage(), null);
@@ -188,10 +192,13 @@ public class GeminiProvider implements AiProvider {
                     throw failure;
                 }
                 pause(response.headers().firstValue("retry-after").map(GeminiProvider::seconds).orElse(Math.min(20L, 2L * attempt * attempt)));
+            } catch (java.net.http.HttpTimeoutException e) {
+                // Never repeated: a call that already used its whole time limit would hold a stage for that long again, five times over.
+                throw new ClaudeCallException("Google AI Studio did not answer within " + timeoutSeconds + " seconds.", null, e);
             } catch (IOException e) {
                 failure = new ClaudeCallException("Cannot reach Google AI Studio: " + e.getMessage() + ". Check the internet connection.", null, e);
-                if (attempt == MAX_ATTEMPTS) {
-                    throw failure;
+                if (attempt >= 2) {
+                    throw failure; // a dropped connection is tried once more, not five times
                 }
                 pause(attempt * 2L);
             } catch (InterruptedException e) {

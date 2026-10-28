@@ -248,4 +248,31 @@ class ActionValidatorTest {
         assertThat(v.planned()).hasSize(1);
         assertThat(reasons(v)).containsExactly("proposed twice; only the first is used");
     }
+
+    @Test
+    void aPersonalNumberFieldWithoutALabelOfItsOwnIsNeverFilledNorAskedAbout() {
+        // ReachMee: the "last four digits" box has no label; only the caption above it says Personnummer
+        FormField last4 = new FormField("jp-7", 0, "input", "text", "prof_birthlastfour", "", "", "", "", "", "Personnummer (ÅÅÅÅMMDD-XXXX)*", "", "",
+                true, false, true, "", false, false, "", false, List.of());
+        FormActions mapped = new FormActions(List.of(new MappedAction("jp-7", "fill", "1234", "none", "r", false, "profile")),
+                List.of(new FormActions.Question("jp-7", "Personnummer")));
+
+        ActionValidator.Validated v = ActionValidator.validate(List.of(last4), mapped, ctx(Map.of(), Map.of()));
+
+        assertThat(v.planned()).isEmpty();
+        assertThat(v.questions()).as("an answer typed into JobPilot would be stored and never used").isEmpty();
+        assertThat(v.skipped()).singleElement().extracting(ActionValidator.Skipped::reason).asString().contains("personal identity numbers");
+    }
+
+    @Test
+    void aNoIsNotGivenBecauseTheCvIsSilentButAYesFromTheCvStillIs() {
+        FormField no = radio("jp-1", "Do you have experience working at a sales company?", "No");
+        FormField yes = radio("jp-2", "Do you have a driving licence?", "Yes");
+        FormActions mapped = new FormActions(List.of(act("jp-1", "check", "", "cv"), act("jp-2", "check", "", "cv")), List.of());
+
+        ActionValidator.Validated v = ActionValidator.validate(List.of(no, yes), mapped, ctx(Map.of(), Map.of()));
+
+        assertThat(v.planned()).extracting(p -> p.field().id()).containsExactly("jp-2");
+        assertThat(v.skipped()).extracting(ActionValidator.Skipped::reason).anyMatch(r -> r.contains("not because the CV does not mention it"));
+    }
 }
