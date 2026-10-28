@@ -43,9 +43,7 @@ export function ImportWizard() {
   const current = job.data
   if (start.isPending || current?.status === 'RUNNING') {
     return (
-      <Panel>
-        <Processing title="Reading your CV" percent={pct} etaSeconds={null} fallback="This takes a minute or two. You can leave this page: it carries on, and you will be told when it is ready." message={current?.files.join(', ') ?? ''} />
-      </Panel>
+      <Processing title="Reading your CV" percent={pct} etaSeconds={null} fallback="This takes a minute or two. You can leave this page: it carries on, and you will be told when it is ready." message={current?.files.join(', ') ?? ''} />
     )
   }
 

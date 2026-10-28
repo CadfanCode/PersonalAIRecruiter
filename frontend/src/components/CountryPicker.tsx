@@ -15,7 +15,7 @@ export function CountryPicker() {
             <button type="button" role="radio" aria-checked={selected === c.code} disabled={!c.available || choose.isPending}
               onClick={() => choose.mutate(c.code)}
               className={`flex w-full items-center gap-3 rounded-lg border px-4 py-3.5 text-left transition-colors ${
-                selected === c.code ? 'border-[var(--accent)] bg-[var(--accent-soft)]' : 'border-[var(--line)] bg-[var(--panel)]'} ${
+                selected === c.code ? 'border-[var(--accent)] bg-[var(--accent-wash)]' : 'border-[var(--line)] bg-[var(--panel)]'} ${
                 c.available ? 'cursor-pointer hover:border-[var(--line-strong)]' : 'cursor-not-allowed opacity-60'}`}>
               <span className="flex h-9 w-9 items-center justify-center rounded-md bg-[var(--hover)] text-[var(--accent)]"><GlobeIcon /></span>
               <span className="min-w-0 flex-1">

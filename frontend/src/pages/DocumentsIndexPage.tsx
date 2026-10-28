@@ -91,7 +91,7 @@ export function DocumentsIndexPage() {
           )}
 
           <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--panel)] shadow-[var(--shadow)]">
-            <div className="hidden grid-cols-[1fr_7rem_9rem_14rem] gap-4 border-b border-[var(--line)] bg-[var(--panel-2)] px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] sm:grid">
+            <div className="hidden grid-cols-[1fr_7rem_9rem_14rem] gap-4 border-b border-[var(--line)] bg-[var(--panel-2)] px-5 py-2.5 text-[13px] font-medium text-[var(--muted)] sm:grid">
               <span>Job</span><span className="text-center">CV approved</span><span className="text-center">Cover letter approved</span><span>Next step</span>
             </div>
             <ul>
@@ -132,7 +132,7 @@ export function DocumentsIndexPage() {
 
       {others.length > 0 && (
         <details className="mt-8">
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Other documents ({others.length})</summary>
+          <summary className="cursor-pointer text-[13px] font-medium text-[var(--muted)]">Other documents ({others.length})</summary>
           <ul className="mt-3 flex max-w-4xl flex-col gap-2">
             {others.map((d) => (
               <li key={d.jobId}>

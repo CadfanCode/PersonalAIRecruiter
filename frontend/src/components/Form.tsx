@@ -28,7 +28,7 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'ghost' | 'danger' | 'quiet'; size?: 'md' | 'lg' }) {
   const styles = {
-    primary: 'bg-[var(--accent)] text-[var(--on-accent)] hover:bg-[var(--accent-strong)]',
+    primary: 'btn-primary text-[var(--on-accent)]',
     ghost: 'border border-[var(--line-strong)] bg-[var(--panel)] text-[var(--ink)] hover:bg-[var(--hover)]',
     quiet: 'text-[var(--accent)] hover:bg-[var(--accent-soft)]',
     danger: 'border border-[var(--danger)]/40 text-[var(--danger)] hover:bg-[var(--danger-soft)]',

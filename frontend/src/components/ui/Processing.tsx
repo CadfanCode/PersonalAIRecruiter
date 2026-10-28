@@ -33,7 +33,7 @@ export function Processing({ title, percent, message, etaSeconds, fallback = 'Es
   const own = etaSeconds === undefined && pct >= 10 && pct < 100 && elapsed >= 5 ? Math.round((elapsed * (100 - pct)) / pct) : null
   const eta = etaText(etaSeconds ?? own)
   return (
-    <section aria-label={title} className="animate-rise flex items-center gap-7 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-[var(--shadow)]">
+    <section aria-label={title} className="glow-border flex items-center gap-7 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-[var(--shadow)]">
       <div role="progressbar" aria-label={`${title} progress`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} className="relative h-32 w-32 shrink-0">
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--line)" strokeWidth="8" />

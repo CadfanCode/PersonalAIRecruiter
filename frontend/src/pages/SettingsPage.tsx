@@ -103,7 +103,7 @@ function PhrasesPanel() {
       </p>
       {(['sv', 'en'] as const).map((lang) => (
         <div key={lang} className="mb-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase text-[var(--muted)]">{lang === 'sv' ? 'Swedish' : 'English'}</h3>
+          <h3 className="mb-1 text-xs font-semibold text-[var(--muted)]">{lang === 'sv' ? 'Swedish' : 'English'}</h3>
           <ul className="flex flex-wrap gap-1.5">
             {group(lang).map((p: BannedPhrase) => (
               <li key={p.id} className={`flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-0.5 text-sm ${p.enabled ? '' : 'text-[var(--muted)] line-through'}`}>

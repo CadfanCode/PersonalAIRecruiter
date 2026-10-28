@@ -420,12 +420,12 @@ export function ResultsTable({
           </colgroup>
           <thead>
             {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id} className="border-b border-[var(--line)] text-xs uppercase tracking-wide text-[var(--muted)]">
+              <tr key={hg.id} className="border-b border-[var(--line)] text-xs tracking-wide text-[var(--muted)]">
                 {hg.headers.map((h) => (
                   <th key={h.id} className="px-2 py-2 align-bottom font-semibold leading-tight" aria-sort={
                     h.column.getIsSorted() === 'asc' ? 'ascending' : h.column.getIsSorted() === 'desc' ? 'descending' : undefined}>
                     {h.column.getCanSort() ? (
-                      <button type="button" onClick={h.column.getToggleSortingHandler()} className="flex items-center gap-1 uppercase">
+                      <button type="button" onClick={h.column.getToggleSortingHandler()} className="flex items-center gap-1">
                         {flexRender(h.column.columnDef.header, h.getContext())}
                         <span aria-hidden>{{ asc: '▲', desc: '▼' }[h.column.getIsSorted() as string] ?? ''}</span>
                       </button>

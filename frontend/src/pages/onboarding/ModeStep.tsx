@@ -35,7 +35,7 @@ export function ModeStep({ selected, finishing, onBack, onFinish }: {
         {MODE_CARDS.map(({ id, title, text, points, icon: Icon }) => (
           <button key={id} type="button" role="radio" aria-checked={selected === id} onClick={() => choose.mutate(id)}
             className={`flex flex-col items-start gap-3 rounded-3xl border p-6 text-left transition ${
-              selected === id ? 'border-[var(--accent)] bg-[var(--accent-soft)] shadow-[var(--shadow)]' : 'border-[var(--line)] bg-[var(--panel)] hover:border-[var(--muted)]/50'}`}>
+              selected === id ? 'border-[var(--accent)] bg-[var(--accent-wash)] shadow-[var(--shadow)]' : 'border-[var(--line)] bg-[var(--panel)] hover:border-[var(--muted)]/50'}`}>
             <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[var(--panel)] text-[var(--accent)] shadow-sm"><Icon /></span>
             <span className="text-lg font-semibold tracking-tight">{title}</span>
             <span className="text-sm leading-relaxed text-[var(--muted)]">{text}</span>

@@ -70,7 +70,7 @@ export function ApplyCard({ app, tab }: { app: Application | undefined; tab: Tab
     answers.mutate({ jobId, answers: answered.map((q) => ({ fieldId: q.fieldId, answer: text[q.fieldId].trim() })) }, { onSuccess: () => fill.mutate({ jobId }) })
 
   return (
-    <section aria-label={`Application: ${title}`} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]">
+    <section aria-label={`Application: ${title}`} className={`panel-edge rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 ${working ? 'glow-border' : ''}`}>
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-[16px] font-semibold tracking-tight">{title}</h2>
         <span className="text-sm text-[var(--muted)]">{employer}</span>

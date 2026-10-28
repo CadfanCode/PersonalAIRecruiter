@@ -29,8 +29,8 @@ export function Dashboard() {
       <div role="radiogroup" aria-label="Mode" className="mb-6 grid gap-4 sm:grid-cols-2">
         {MODE_CARDS.map(({ id, title, icon: Icon }) => (
           <button key={id} type="button" role="radio" aria-checked={mode === id} onClick={() => pick(id)}
-            className={`flex items-center gap-4 rounded-3xl border p-5 text-left transition ${
-              mode === id ? 'border-[var(--accent)] bg-[var(--accent-soft)] shadow-[var(--shadow)]' : 'border-[var(--line)] bg-[var(--panel)] hover:border-[var(--muted)]/50'}`}>
+            className={`lift flex items-center gap-4 rounded-2xl border p-5 text-left ${
+              mode === id ? 'border-[var(--accent)] bg-[var(--accent-wash)] shadow-[var(--shadow)]' : 'border-[var(--line)] bg-[var(--panel)] hover:border-[var(--muted)]/50'}`}>
             <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[var(--panel)] text-[var(--accent)] shadow-sm"><Icon /></span>
             <span className="self-center text-[17px] font-semibold tracking-tight">{title}</span>
           </button>

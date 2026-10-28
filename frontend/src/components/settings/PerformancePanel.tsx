@@ -34,7 +34,7 @@ export function PerformancePanel() {
           <>
             <p className="mb-3 text-sm">JobPilot has made {usage.data.totals.calls} calls, {usage.data.totals.failures} failed.</p>
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-[var(--muted)]"><tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Tokens</th></tr></thead>
+              <thead className="text-xs text-[var(--muted)]"><tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Tokens</th></tr></thead>
               <tbody>
                 {usage.data.byTask.map((t) => (
                   <tr key={t.task} className="border-t border-[var(--line)]"><td className="py-1">{t.task}</td><td>{t.calls}</td><td>{Number(t.tokens).toLocaleString('en-GB')}</td></tr>

@@ -210,7 +210,7 @@ const STYLE: Record<string, string> = {
 function ResultTable({ rows }: { rows: { id: number; employerLabel: string; appliedDate: string | null; result: string; message: string | null }[] }) {
   return (
     <table className="mt-3 w-full text-left text-sm">
-      <thead className="text-xs uppercase text-[var(--muted)]">
+      <thead className="text-xs text-[var(--muted)]">
         <tr><th className="py-1 font-semibold">Employer</th><th className="font-semibold">Date</th><th className="font-semibold">Result</th><th className="font-semibold">Note</th></tr>
       </thead>
       <tbody>

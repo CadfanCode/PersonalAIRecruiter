@@ -79,7 +79,7 @@ export function ApplyPage() {
 
       {left.length > 0 && (
         <details className="mt-6">
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Not ready yet ({left.length})</summary>
+          <summary className="cursor-pointer text-[13px] font-medium text-[var(--muted)]">Not ready yet ({left.length})</summary>
           <div className="mt-3 grid gap-3">{left.map((a) => <ApplyCard key={a.jobId} app={a} tab={undefined} />)}</div>
         </details>
       )}

@@ -139,7 +139,7 @@ export function ImportStep({ onDone, onBack }: { onDone: () => void; onBack: () 
       </ul>
 
       <div className="mt-5 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Most recent</h2>
+        <h2 className="mb-2 text-[13px] font-medium text-[var(--muted)]">Most recent</h2>
         <ul className="flex flex-col gap-1.5 text-sm">
           {fresh.slice(0, 4).map(({ entry }, i) => (
             <li key={i} className="flex flex-wrap gap-x-2">

@@ -7,7 +7,7 @@ export function ThemeToggle() {
   const dark = theme === 'dark'
   return (
     <button type="button" role="switch" aria-checked={dark} aria-label="Dark mode" onClick={toggle} title={dark ? 'Switch to light mode' : 'Switch to dark mode'}
-      className="flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-[var(--line)] text-[var(--muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--ink)]">
+      className="flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[var(--line)] text-[var(--muted)] transition-colors hover:bg-[var(--hover)] hover:text-[var(--ink)]">
       {dark ? <SunIcon /> : <MoonIcon />}
     </button>
   )

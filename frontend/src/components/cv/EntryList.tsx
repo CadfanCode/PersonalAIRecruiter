@@ -48,7 +48,7 @@ export function EntryList({ entries, tagSuggestions }: { entries: Entry[]; tagSu
         if (group.length === 0) return null
         return (
           <section key={kind} aria-label={KIND_LABEL[kind]}>
-            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">{KIND_LABEL[kind]}</h2>
+            <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">{KIND_LABEL[kind]}</h2>
             <ul className="flex flex-col gap-2">
               {group.map((e) => (
                 <li key={e.id} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">

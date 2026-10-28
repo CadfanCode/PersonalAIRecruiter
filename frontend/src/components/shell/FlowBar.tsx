@@ -8,12 +8,12 @@ import { ThemeToggle } from './ThemeToggle'
 
 type Look = 'current' | 'done' | 'available' | 'waiting'
 
-const TAB = 'relative flex h-14 cursor-pointer items-center gap-2 px-3 text-sm transition-colors after:absolute after:inset-x-3 after:bottom-0 after:h-0.5 after:rounded-full'
+const TAB = 'relative flex h-9 cursor-pointer items-center gap-2 rounded-full px-3 text-sm transition-colors'
 const LOOK: Record<Look, string> = {
-  current: 'font-semibold text-[var(--ink)] after:bg-[var(--accent)]',
-  done: 'text-[var(--ink)] after:bg-transparent hover:after:bg-[var(--line-strong)]',
-  available: 'text-[var(--muted)] after:bg-transparent hover:text-[var(--ink)] hover:after:bg-[var(--line-strong)]',
-  waiting: 'text-[var(--muted)] after:bg-transparent hover:text-[var(--ink)]',
+  current: 'bg-[var(--accent-soft)] font-semibold text-[var(--ink)]',
+  done: 'text-[var(--ink)] hover:bg-[var(--hover)]',
+  available: 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--ink)]',
+  waiting: 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--ink)]',
 }
 
 function Tab({ n, label, look }: { n: number; label: string; look: Look }) {
@@ -89,12 +89,13 @@ function ReadingChip() {
 /** The bar across the top, on every screen: the brand, where you are in the process (every part of it clickable), and the theme switch. */
 export function FlowBar() {
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--line)] bg-[var(--panel)]">
-      <div className="mx-auto flex h-14 max-w-[1800px] items-center gap-6 px-5">
-        <Link to="/" className="flex shrink-0 items-center gap-2 text-[15px] font-semibold tracking-tight">
-          <img src="/jobpilot.svg" alt="" width={22} height={22} className="rounded" />
+    <header className="sticky top-3 z-30 px-4">
+      <div className="mx-auto flex h-14 max-w-[1240px] items-center gap-4 rounded-full border border-[var(--line)] bg-[var(--glass)] py-2 pl-5 pr-2.5 shadow-[var(--shadow-lift)] backdrop-blur-xl">
+        <Link to="/" className="flex shrink-0 items-center gap-2.5 text-[15px] font-semibold tracking-tight">
+          <img src="/jobpilot.svg" alt="" width={26} height={26} className="rounded-[7px]" />
           JobPilot
         </Link>
+        <span aria-hidden className="h-5 w-px shrink-0 bg-[var(--line)]" />
         <nav aria-label="Progress" className="min-w-0 flex-1 overflow-x-auto">
           <Steps />
         </nav>

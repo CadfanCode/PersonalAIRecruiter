@@ -373,7 +373,7 @@ FormActions:
 ### 5.5 Providers (ADR 0014)
 
 `AiProvider` has one implementation, `cli` (above). The `AiProvider` / `ProviderRouter` seam stays so the rest of the app only ever
-sees `ClaudeRunner`. The call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings), the model (`claude.model`: a Claude Code
+sees `ClaudeRunner`. The call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings), the models (`claude.model` is the default, `claude.model.<STAGE>` one per stage, see ADR 0021; each is a Claude Code
 alias such as `sonnet`, `opus`, `fable`, passed as `--model` and read on every request) and the last passed connection test are in
 `app_setting`. A database that still says provider `api` or `gemini` (both removed) is read as `cli` and "not chosen", so the person
 confirms Claude Code once more. `GET/PUT /api/claude/connection...` serve onboarding and Settings.
@@ -749,8 +749,9 @@ GET/POST /cv/tags  GET/POST /cv/skills   DELETE /cv/skills/{id}
 GET/PUT  /cv/gaps               known gaps (PUT replaces the list)
 GET/PUT  /cv/answers            answers memory (PUT upserts one answer by normalised question)
 POST     /cv/seed               body = seed/cv_database_seed.json; 409 unless the CV database is empty
-POST     /cv/import              (multipart: PDF/DOCX/TXT files) -> import preview
-POST     /cv/import/{previewId}/commit
+POST     /cv/import              (multipart: PDF/DOCX/TXT/MD files) -> starts a background reading (a pipeline run of kind IMPORT): {runId, status}
+GET      /cv/import/{runId}      RUNNING | DONE (with the preview) | FAILED;  GET /cv/import/current: the newest reading not yet confirmed or discarded (204 if none);  DELETE /cv/import/{runId} discards it
+POST     /cv/import/{previewId}/commit   {entries: [{entry, mergeIntoEntryId|null}], skills, profile} -> {entryIds, created, enriched, facts, skills, profileFilled}
 POST     /runs                   {prompt, maxAgeDays?, limit?, includeWeb?} -> run id
 GET      /runs/{id}              status, step, progress, message
 PUT      /runs/{id}/profile      edit the SearchProfile before search continues
@@ -791,7 +792,7 @@ POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would
 GET      /claude/health          GET /claude/usage
 -- overhaul (28 Oct 2026) --
 GET      /onboarding             state and first open step;  PUT /onboarding/mode {DISCOVER|PROMPT};  POST /onboarding/complete | /reopen
-GET/PUT  /claude/connection...   status; /provider {id: "cli"}; /cli-model; POST /test
+GET/PUT  /claude/connection...   status; /provider {id: "cli"}; /cli-model (the default model); PUT /stage-model/{SEARCH|RANKING|CV_READING|DOCUMENTS|AUTOFILL} {model}; POST /test
 GET/PUT  /country                the countries (available or coming soon) and the chosen one
 GET/PUT  /settings/performance   {claudeConcurrency 1..8};  GET/PUT /settings/search {careerPages}
 POST     /applications/approve-all   per document: approved, already approved, or refused with the reason (never all-or-nothing)
@@ -885,3 +886,21 @@ results.topN=10
   applies to, and the Claude Code CLI.
 - Secrets live in the OS credential store. Saved portal passwords live only there (without a store nothing is saved). The browser profile holds cookies; document this in the README.
 - Back up the database with `pg_dump` from a script in `scripts/backup.sh`.
+
+## 13. CV import, merging and per-stage models (ADR 0021, 0022)
+
+- **Import is a background run.** Uploading extracts the text at once (a bad file is refused immediately) and reads it as a `pipeline_run`
+  of kind `IMPORT` on the pipeline executor. The result waits in memory for an hour as a preview. The UI polls `/cv/import/current`, so a
+  reading carries on when the user leaves the page, shows in the top bar ("Reading your CV"), is announced when finished, and is found
+  again on return. Setup uses the same endpoints.
+- **Entries are merged, never duplicated.** A found entry that matches a stored one (same kind; same organisation and a similar title or
+  the same start period; or, with no organisation, a similar title) is added to it: facts not already there (80 % word overlap in the same
+  language counts as there) are appended, blank fields are filled, tags are added. Existing facts, titles and anything the user wrote are
+  never edited or removed, because documents cite fact ids. Two roles at one employer with different titles and dates stay two entries.
+  Two files describing one job are folded together before comparing with the database. The preview says "Adds N facts to <entry>" and
+  offers "Add as a new entry instead"; the commit carries `mergeIntoEntryId` per entry and does not re-match.
+- **Models per stage.** Search (plans, role ideas, pasted ads, web discovery), Scoring, Reading your CV, CV and cover letter (selection,
+  writing, revising, rewriting), Auto-fill. A stage without a choice uses the default model. Every prompt template must belong to a stage
+  (a test enforces it).
+- **Help.** `/help` (offline) with the five stages, what JobPilot never does, and common questions; a six-step tour shown once after
+  setup and reopenable from Help (a dialog: Escape closes, focus returns, reduced motion respected).
