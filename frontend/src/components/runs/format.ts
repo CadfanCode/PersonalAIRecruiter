@@ -14,4 +14,3 @@ export function deadlineIsClose(iso: string | null, now: Date): boolean {
   return new Date(iso).getTime() - now.getTime() <= 3 * DAY
 }
 
-export const FLAG: Record<string, string> = { sv: '🇸🇪', en: '🇬🇧' }

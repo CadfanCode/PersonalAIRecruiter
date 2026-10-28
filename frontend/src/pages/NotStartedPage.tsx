@@ -11,7 +11,10 @@ export function NotStartedPage() {
   // It may have become available since the link was followed (or the page was reloaded): then go straight there.
   const now = stages.find((st) => st.key === meta.key)
   if (now && !now.to.startsWith('/not-started/')) return <Navigate to={now.to} replace />
-  const before = stageBefore(meta.key)
+  let before = stageBefore(meta.key)
   if (!before) return <Navigate to={meta.to} replace />
-  return <NotStarted stage={meta.label} first={before.label} to={before.to === '/runs' ? '/' : before.to} />
+  // Name the earliest stage that still has to be done, not one that is itself waiting for another.
+  const locked = (key: StageKey) => stages.find((st) => st.key === key)?.to.startsWith('/not-started/')
+  for (let prev = before; locked(prev.key) && stageBefore(prev.key); prev = stageBefore(prev.key)!) before = stageBefore(prev.key)!
+  return <NotStarted stage={meta.label} first={before.label} to={stages.find((st) => st.key === before.key)?.to ?? before.to} />
 }

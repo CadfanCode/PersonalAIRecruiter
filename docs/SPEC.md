@@ -66,17 +66,25 @@ subscription (found in the usual folders on every OS, with an install command wh
 from "not signed in"); there is no other AI option (ADR 0019); a real test call must pass before
 continuing; then the CV is read, a short summary of what was found is shown and confirmed (the person's contact details fill
 only blank profile fields); (3) the country (Sweden live, others "coming soon"); (4) the search mode.
-`GET /api/onboarding` reports the state and the first open step; returning users never see it unless they run setup again.
+`GET /api/onboarding` reports the state and the first open step. While setup is open, the four steps *are* the bar across the top and
+each is a button: steps up to the first one still to do open freely (back and forth), a later one shows "<step> has not been started
+yet. Please complete <first step> first." Once setup is finished `/welcome` redirects to Mode and the steps are never shown again: the
+same things are changed from the bottom menu (CV database for new CV files, Country, Claude). Everything setup holds in the browser
+(chosen files, step, the CV reading in progress) lives in `SetupProvider` above the routes, so opening the menu in the middle of
+setup loses nothing (ADR 0020).
 
-**The pipeline**, five stages across the top (current bold, others faded, completed ones open): *Search mode* (Discovery or
+**The pipeline**, five stages across the top, every one a link (current underlined, completed ones ticked; a stage with nothing in it
+yet opens `/not-started/{stage}`, which says "<stage> has not been started yet. Please complete <earlier stage> first." with a button to it): *Search mode* (Discovery or
 Prompt; paste-a-link is a secondary action) -> *Run search* (progress with percent and time left, results appear as they are
 scored, the selection basket) -> *Documents* (a tailored CV and cover letter per selected job; the overview shows "CV approved" and
 "Cover letter approved" per job, "Approve all", and an **Apply** button) -> *Apply* (a browser tab per approved application,
 filled in; per-application status: filling, needs login, needs attention, ready for submission, failed) -> *Submit* (the user
 presses the employer's own submit button and confirms; the application is stored with a snapshot). Only applications whose CV
-and cover letter are **both** approved go on to Apply; the UI says which do not and why. A hidden menu at the bottom edge holds
-CV database, Submitted applications, Extra features (the activity report) and Settings; it opens on hover at the bottom edge,
-on the handle (click or focus) and when Tab reaches it.
+and cover letter are **both** approved go on to Apply; the UI says which do not and why. A menu at the bottom edge, on every screen including setup, holds
+CV database, Country, Claude, Submitted applications, Extra features (the activity report) and Settings; it opens on hover at the
+bottom edge, on the "Menu" handle (click or focus) and when Tab reaches it. Using it only changes the page: searches, documents and
+applications run on the server, and text typed into forms, the open document's draft and chat, a CV being imported and the activity-report
+run are kept in the browser while the window is open (`useDraft`).
 
 **Prompt mode**: a text box with tips and examples from several professions; ads to score default to 20 (cap 150); recency and
 place come from the words; the search plan (the `SearchProfile`) is always shown for review and approving it starts the search.
@@ -796,9 +804,12 @@ GET      /runs/{id}              also etaSeconds while ads are scored
 ## 12. Frontend
 
 React 19, Tailwind 4 with design tokens (CSS variables, light and dark; `<html data-theme>` always holds the resolved theme and is
-set before the first paint), Inter, rounded cards, one gentle entrance animation that respects "reduce motion". The shell is a
-flow bar (Search mode, Run search, Documents, Apply, Submit) and the bottom menu (CV database, Submitted applications, Extra
-features, Settings). Pages:
+set before the first paint), Public Sans and JetBrains Mono bundled with the app (no CDN: it works offline), warm paper background,
+white panels with hairline borders, one deep teal accent, small radii, almost no shadow, one short entrance animation that respects
+"reduce motion". Light is the default (the operating system setting is not consulted); a light/dark switch sits in the top right corner
+of every screen and the choice is remembered on this computer. The shell (`Layout`) wraps every route including `/welcome`: the bar
+across the top (brand, progress, theme switch), the page, and the bottom menu (CV database, Country, Claude, Submitted applications,
+Extra features, Settings). Pages:
 
 1. **Welcome** (`/welcome`): the four onboarding steps (section 2.2).
 2. **Search mode** (`/`): Discovery or Prompt, the form of the chosen mode, "add a job from a link", recent searches, the
@@ -812,8 +823,10 @@ features, Settings). Pages:
    and the tab controls. **Submit** (`/submit`): the applications waiting for the user's own click, "Open the application" and
    "I submitted it" with a confirmation.
 6. **Submitted applications** (`/submitted`, `/submitted/{id}`), **Extra features** (`/extras`), **Activity report** (`/aktivitet`).
-7. **CV database** (`/cv`) as before, and **Settings** (`/settings`): Claude connection, search, speed and usage, saved logins,
-   writing rules, appearance (system, light, dark), run the setup again.
+7. **CV database** (`/cv`) as before, and **Settings** (`/settings/{section}`: connection, country, search, performance, logins,
+   writing): Claude connection and model, country, search, speed and usage, saved logins, writing rules. No Appearance section (the
+   switch is in the top bar) and no "run setup again" (the steps are in the menu).
+8. **Not started** (`/not-started/{stage}`): shown for a pipeline stage whose work has not been done.
 
 Notifications: when an application becomes ready for submission the app shows a message and, if the user allowed it, a system
 notification (Web Notifications; asked for at the first Apply). The app-wide watcher runs in the shell.

@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useDraft } from '../../lib/useDraft'
 import { type ImportPreview, useImportCommit, useImportPreview } from '../../api/cv'
 import { Button } from '../Form'
 import { Panel } from '../Panel'
 
 export function ImportWizard() {
-  const [files, setFiles] = useState<File[]>([])
-  const [preview, setPreview] = useState<ImportPreview | null>(null)
-  const [included, setIncluded] = useState<Set<number>>(new Set())
+  // Kept outside the screen, so a CV that is being read (or is waiting to be confirmed) survives a trip to another page.
+  const [files, setFiles] = useDraft<File[]>('cv.import.files', [])
+  const [preview, setPreview] = useDraft<ImportPreview | null>('cv.import.preview', null)
+  const [included, setIncluded] = useDraft<Set<number>>('cv.import.included', new Set())
+  const [reading, setReading] = useDraft('cv.import.reading', false)
   const analyse = useImportPreview()
   const commit = useImportCommit()
 
@@ -46,17 +48,20 @@ export function ImportWizard() {
         />
         <div className="mt-3 flex items-center gap-3">
           <Button
-            disabled={files.length === 0 || analyse.isPending}
-            onClick={() =>
-              analyse.mutate(files, {
-                onSuccess: (p) => {
-                  setPreview(p)
+            disabled={files.length === 0 || reading}
+            onClick={() => {
+              setReading(true)
+              analyse.mutateAsync(files).then(
+                (p) => {
                   setIncluded(new Set(p.entries.map((e, i) => (e.duplicateOfEntryId === null ? i : -1)).filter((i) => i >= 0)))
+                  setPreview(p)
+                  setReading(false)
                 },
-              })
-            }
+                () => setReading(false),
+              )
+            }}
           >
-            {analyse.isPending ? 'Reading...' : 'Analyse'}
+            {reading ? 'Reading...' : 'Analyse'}
           </Button>
           {analyse.isPending && <span className="text-sm text-[var(--muted)]">The AI is reading the files, this can take a minute.</span>}
         </div>

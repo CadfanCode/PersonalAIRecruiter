@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { useDraft } from '../lib/useDraft'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import {
@@ -30,7 +31,8 @@ type Tab = 'CV' | 'LETTER'
 export function JobDocumentsPage() {
   const jobId = Number(useParams().jobId)
   const [search, setSearch] = useSearchParams()
-  const [turns, setTurns] = useState<Record<Tab, ChatTurn[]>>({ CV: [], LETTER: [] }) // kept here: the editor restarts on every new version
+  // kept here and outside the screen: the editor restarts on every new version, and a trip to another page must not lose the chat
+  const [turns, setTurns] = useDraft<Record<Tab, ChatTurn[]>>(`docs.turns.${jobId}`, { CV: [], LETTER: [] })
   const [tab, setTab] = useState<Tab>(search.get('tab') === 'letter' ? 'LETTER' : 'CV')
   const runId = search.get('run') ? Number(search.get('run')) : null
   const fromRun = search.get('from') ? Number(search.get('from')) : undefined // the search run the ad came from
@@ -132,7 +134,7 @@ export function JobDocumentsPage() {
 }
 
 function DocEditor({ doc, jobId, turns, onTurns }: { doc: DocView; jobId: number; turns: ChatTurn[]; onTurns: (t: ChatTurn[]) => void }) {
-  const [draft, setDraft] = useState<CvContent | LetterContent>(doc.content)
+  const [draft, setDraft] = useDraft<CvContent | LetterContent>(`docs.draft.${doc.id}`, doc.content)
   const [refused, setRefused] = useState<Report | null>(null)
   const save = useSaveDocument(jobId)
   const approve = useApproveDocument(jobId)

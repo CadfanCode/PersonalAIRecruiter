@@ -19,7 +19,7 @@ function Tab({ n, label, look }: { n: number; label: string; look: Look }) {
   return (
     <>
       <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ${
-        look === 'done' ? 'bg-[var(--success)] text-white' : look === 'current' ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--hover)] text-[var(--muted)]'}`}>
+        look === 'done' ? 'bg-[var(--success)] text-[var(--surface)]' : look === 'current' ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--hover)] text-[var(--muted)]'}`}>
         {look === 'done' ? <CheckIcon width={11} height={11} strokeWidth={3} /> : n}
       </span>
       <span className="whitespace-nowrap">{label}</span>

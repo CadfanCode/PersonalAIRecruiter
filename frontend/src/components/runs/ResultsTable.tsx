@@ -17,7 +17,7 @@ import { JOB_STATUSES, type JobRow, type JobStatus, usePatchJob } from '../../ap
 import { Button } from '../Form'
 import { useToast } from '../Toasts'
 import { JobDrawer } from './JobDrawer'
-import { deadlineIsClose, FLAG, shortDate } from './format'
+import { deadlineIsClose, shortDate } from './format'
 import { ScoreBar } from './ScoreBar'
 import { StatusChip } from './StatusChip'
 
@@ -190,7 +190,7 @@ export function ResultsTable({
         id: 'language', header: 'Lang', accessorFn: (r) => r.language ?? '', filterFn: 'equalsString',
         cell: ({ row }) => (
           <span title={row.original.language ?? ''} aria-label={row.original.language ?? 'unknown'}>
-            {row.original.language ? FLAG[row.original.language] : ''}
+            {row.original.language ? <span className="rounded bg-[var(--hover)] px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)]">{row.original.language}</span> : ''}
           </span>
         ),
       },

@@ -4,7 +4,7 @@ import { CheckIcon } from './Icons'
 export function ApprovalTick({ approved, exists, label }: { approved: boolean; exists: boolean; label: string }) {
   if (!exists) return <span aria-label={`${label}: none yet`} className="text-[var(--muted)]/60">–</span>
   return approved ? (
-    <span role="img" aria-label={`${label}: approved`} className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--success)] text-white">
+    <span role="img" aria-label={`${label}: approved`} className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--success)] text-[var(--surface)]">
       <CheckIcon width={14} height={14} strokeWidth={3} />
     </span>
   ) : (

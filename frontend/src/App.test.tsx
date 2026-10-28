@@ -78,8 +78,20 @@ describe('app shell', () => {
     await userEvent.click(await screen.findByRole('link', { name: /Documents/ }))
 
     expect(await screen.findByRole('heading', { name: 'Documents has not been started yet' })).toBeInTheDocument()
-    expect(screen.getByText(/Please complete/)).toHaveTextContent('Please complete Search and ranking first.')
+    expect(screen.getByText(/Please complete/)).toHaveTextContent('Please complete Mode first.')
     expect(screen.getByRole('link', { name: /Documents/ })).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('keeps what was typed into the search form when the menu is used and the person comes back', async () => {
+    mockApi(routes())
+    renderApp()
+
+    await userEvent.type(await screen.findByLabelText('Starting prompt'), 'Nurse in Uppsala')
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'More' })).getByRole('link', { name: 'Settings' }))
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('list', { name: 'Pipeline' })).getByRole('link', { name: /Mode/ }))
+
+    expect(await screen.findByLabelText('Starting prompt')).toHaveValue('Nurse in Uppsala')
   })
 
   it('goes straight to a stage that has become available since its "not started" page was opened', async () => {

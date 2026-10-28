@@ -57,7 +57,7 @@ export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
       {turns.length > 0 && (
         <ol role="log" aria-live="polite" aria-label="Conversation" className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto text-sm">
           {turns.map((t, i) => (
-            <li key={i} className={t.role === 'user' ? 'self-end rounded-lg bg-navy px-3 py-1.5 text-white' : `self-start rounded-lg px-3 py-1.5 ${t.error ? 'bg-red-50 text-[var(--danger)]' : 'bg-[var(--surface)]'}`}>
+            <li key={i} className={t.role === 'user' ? 'self-end rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[var(--on-accent)]' : `self-start rounded-lg px-3 py-1.5 ${t.error ? 'bg-[var(--danger-soft)] text-[var(--danger)]' : 'bg-[var(--surface)]'}`}>
               <span className="block">{t.error ? <span role="alert">{t.text}</span> : t.text}</span>
               {t.approvalRevoked && <span className="mt-1 block text-xs text-[var(--warn)]">Approval was removed: review and approve again so it can be uploaded.</span>}
               {t.previous && i === lastIndex && (
