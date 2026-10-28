@@ -24,7 +24,7 @@ export function PasteAdPanel({ url, message, sending, error, onSubmit }: {
         <Button onClick={() => onSubmit(text)} disabled={text.trim().length < 200 || sending}>{sending ? 'Sending...' : 'Use this text'}</Button>
         {text.trim().length > 0 && text.trim().length < 200 && <span className="text-sm text-[var(--muted)]">A job ad is longer than this.</span>}
       </div>
-      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
     </Panel>
   )
 }

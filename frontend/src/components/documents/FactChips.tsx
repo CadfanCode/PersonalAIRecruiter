@@ -13,7 +13,7 @@ export function FactChips({ ids, facts, language }: { ids: number[]; facts: Reco
             tabIndex={0}
             title={f ? `${f.entryTitle}: ${text}` : `Fact ${id} was not found`}
             aria-label={f ? `Source fact ${id}: ${text}` : `Unknown fact ${id}`}
-            className={`cursor-help rounded border px-1.5 py-0.5 text-xs ${f ? 'border-[var(--line)] text-[var(--muted)]' : 'border-red-400 text-red-600'}`}
+            className={`cursor-help rounded border px-1.5 py-0.5 text-xs ${f ? 'border-[var(--line)] text-[var(--muted)]' : 'border-red-400 text-[var(--danger)]'}`}
           >
             #{id}
           </span>

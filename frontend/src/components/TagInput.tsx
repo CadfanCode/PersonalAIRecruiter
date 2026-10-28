@@ -24,7 +24,7 @@ export function TagInput({
   return (
     <div className="col-span-full flex flex-col gap-1 text-xs font-medium text-[var(--muted)]">
       <span>{label}</span>
-      <div className="flex flex-wrap items-center gap-1.5 rounded-md border border-[var(--line)] bg-[var(--surface)] p-1.5">
+      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-[var(--line)] bg-[var(--panel-2)] p-1.5">
         {value.map((tag) => (
           <span key={tag} className="flex items-center gap-1 rounded-full bg-navy/10 px-2 py-0.5 text-xs text-[var(--accent)]">
             {tag}

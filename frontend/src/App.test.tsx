@@ -2,32 +2,21 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { App } from './App'
+import { countryView, onboarded } from './test/fixtures2'
+import { mockApi } from './test/mockApi'
 
-const usage = {
-  totals: { calls: 3, failures: 1, inputTokens: 1, outputTokens: 1, cacheReadTokens: 0, cacheCreationTokens: 0, durationMs: 1 },
-  byTask: [],
-}
-
-const limits = {
-  limits: {
-    session: { utilization: 0.07, resetsAt: '2026-10-27T14:30:00Z', status: 'allowed' },
-    week: { utilization: 0.96, resetsAt: '2026-10-30T18:00:00Z', status: 'allowed_warning' },
-    checkedAt: '2026-10-27T12:00:00Z',
-  },
-  error: null,
-}
-
-function mockApi(health: unknown) {
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (url: string) => {
-      const body = url.includes('/health') ? health : url.includes('/usage') ? usage : url.includes('/limits') ? limits : []
-      return new Response(JSON.stringify(body), { status: 200 })
-    }),
-  )
-}
+const routes = (onboarding: unknown = onboarded) => ({
+  'GET /api/onboarding': onboarding,
+  'GET /api/country': countryView,
+  'GET /api/runs': [],
+  'GET /api/applications': [],
+  'GET /api/apply/status': [],
+  'GET /api/aktivitet/reminder': { active: false, day: 20, daysLeft: 0, forMonth: '2026-09', message: '' },
+  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null }, api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'test store' } },
+  'GET /api/claude/limits': { limits: null, error: null },
+})
 
 function renderApp(path = '/') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -40,55 +29,58 @@ function renderApp(path = '/') {
   )
 }
 
-beforeEach(() => mockApi({ ok: true, version: '2.1.310 (Claude Code)', durationMs: 4200, error: null }))
 afterEach(() => vi.unstubAllGlobals())
 
 describe('app shell', () => {
-  it('shows the main navigation and navigates between pages', async () => {
+  it('shows the five stages across the top with the current one marked, and the menu with the places you maintain', async () => {
+    mockApi(routes())
     renderApp()
-    const nav = screen.getByRole('navigation', { name: 'Main' })
-    expect(nav).toHaveTextContent('CV database')
-    expect(within(nav).getByRole('link', { name: /Finalize Applications/ })).toHaveAttribute('href', '/finalize')
-    expect(within(nav).getByRole('link', { name: 'Activity Report' })).toHaveAttribute('href', '/aktivitet')
-    expect(within(nav).queryByText(/Apply monitor/)).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('link', { name: 'Settings' }))
-    expect(screen.getByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+
+    const flow = await screen.findByRole('navigation', { name: 'Pipeline' })
+    const names = within(flow).getAllByRole('listitem').map((li) => li.textContent)
+    expect(names).toEqual(['Search mode', 'Run search', 'Documents', 'Apply', 'Submit'])
+    expect(within(flow).getByText('Search mode').closest('[aria-current]')).toHaveAttribute('aria-current', 'step')
+    // nothing exists beyond the first stage yet, so the later stages are faded and not links
+    expect(within(flow).getByText('Documents').closest('[aria-disabled]')).toHaveAttribute('aria-disabled', 'true')
+    expect(within(flow).queryByRole('link', { name: 'Documents' })).not.toBeInTheDocument()
+
+    const more = screen.getByRole('navigation', { name: 'More' })
+    expect(within(more).getByRole('link', { name: 'CV database' })).toHaveAttribute('href', '/cv')
+    expect(within(more).getByRole('link', { name: 'Submitted applications' })).toHaveAttribute('href', '/submitted')
+    expect(within(more).getByRole('link', { name: 'Extra features' })).toHaveAttribute('href', '/extras')
+    expect(within(more).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
   })
 
-  it('renders the dashboard with example chips', () => {
+  it('opens a stage once there is something in it, and navigates with the menu', async () => {
+    mockApi({ ...routes(), 'GET /api/applications': [{ jobId: 1, title: 'x', submittedAt: null, cv: { id: 1, version: 1, approved: true }, letter: { id: 2, version: 1, approved: true }, readyToApply: true, blockers: [], generation: null, searchMode: 'TARGETED' }] })
     renderApp()
-    expect(screen.getByRole('heading', { level: 1, name: 'New run' })).toBeInTheDocument()
-    expect(screen.getByText('Accountant, Malmö, part time')).toBeInTheDocument()
-  })
-})
 
-describe('Claude health card', () => {
-  it('shows usage totals without calling the model', async () => {
-    renderApp()
-    expect(await screen.findByText('96% used')).toBeInTheDocument()
-    expect(screen.getByText('7% used')).toBeInTheDocument()
-    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
-    const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[0])
-    expect(calls).not.toContain('/api/claude/health')
+    const flow = await screen.findByRole('navigation', { name: 'Pipeline' })
+    expect(await within(flow).findByRole('link', { name: 'Documents' })).toHaveAttribute('href', '/documents')
+    expect(within(flow).getByRole('link', { name: 'Apply' })).toHaveAttribute('href', '/apply')
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'More' })).getByRole('link', { name: 'Settings' }))
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
   })
 
-  it('reports ok after the user runs the check', async () => {
-    renderApp()
-    await userEvent.click(screen.getByRole('button', { name: 'Check Claude' }))
-    expect(await screen.findByRole('status')).toHaveTextContent('ok: 2.1.310 (Claude Code)')
+  it('sends a first launch to the welcome steps and never shows the app before they are done', async () => {
+    mockApi(routes({ ...onboarded, complete: false, nextStep: 'CV', cv: { present: false, entries: 0, facts: 0, skills: 0 }, claude: { chosen: false, provider: 'cli', works: false } }))
+    renderApp('/documents')
+
+    expect(await screen.findByRole('heading', { name: 'Start with your CV' })).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Pipeline' })).not.toBeInTheDocument()
   })
 
-  it('shows the error text when Claude is not working', async () => {
-    mockApi({ ok: false, version: null, durationMs: 10, error: "Cannot start 'claude'" })
+  it('renders Search mode with both modes and examples from several professions', async () => {
+    mockApi(routes())
     renderApp()
-    await userEvent.click(screen.getByRole('button', { name: 'Check Claude' }))
-    expect(await screen.findByRole('status')).toHaveTextContent("Not working: Cannot start 'claude'")
-  })
 
-  it('tells the user when the API is unreachable', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
-    renderApp()
-    await userEvent.click(screen.getByRole('button', { name: 'Check Claude' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent('Cannot reach the JobPilot API')
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find your next role' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Discovery mode/ })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: /Prompt mode/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByText('Nurse positions in Stockholm, last 7 days')).toBeInTheDocument()
+    expect(screen.getByText('Accountant in Malmö, part time')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/Max age/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Review the search profile first/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Also search career pages/)).not.toBeInTheDocument()
   })
 })

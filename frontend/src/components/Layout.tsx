@@ -1,10 +1,12 @@
 import { Outlet, useLocation } from 'react-router-dom'
+import { useReadyNotifications } from './apply/notifications'
 import { BottomDock } from './shell/BottomDock'
 import { FlowBar } from './shell/FlowBar'
 
 /** The app shell: the flow across the top, the page, and the menu that slides up from the bottom edge. */
 export function Layout() {
   const { pathname } = useLocation()
+  useReadyNotifications()
   return (
     <div className="min-h-screen">
       <FlowBar />

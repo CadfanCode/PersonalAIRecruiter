@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RoleView } from '../api/runs'
 import { job, profile, run } from '../test/fixtures'
+import { countryView, onboarded } from '../test/fixtures2'
 import { mockApi } from '../test/mockApi'
 import { Dashboard } from './Dashboard'
 import { RunPage } from './RunPage'
@@ -23,11 +24,18 @@ function renderRun(path = '/runs/7') {
   )
 }
 
+const searchMode = {
+  'GET /api/runs': [],
+  'GET /api/onboarding': onboarded,
+  'GET /api/country': countryView,
+  'GET /api/aktivitet/reminder': { active: false, day: 20, daysLeft: 0, forMonth: '2026-09', message: '' },
+}
+
 afterEach(() => vi.unstubAllGlobals())
 
 describe('run page', () => {
   it('waits for review: profile is editable and Continue starts the search', async () => {
-    const waiting = run({ status: 'WAITING_FOR_USER', step: 'PROFILE', progress: 10, message: 'Review the search profile, then continue' })
+    const waiting = run({ status: 'WAITING_FOR_USER', step: 'PROFILE', progress: 10, message: 'Review the search plan, then continue' })
     const calls = mockApi({
       'GET /api/runs/7': { run: waiting, profile },
       'GET /api/runs/7/jobs': [],
@@ -45,21 +53,34 @@ describe('run page', () => {
     expect(saved.locations.map((l) => l.municipality)).toEqual(['Stockholm', 'Solna'])
     expect(saved.exclusions).toEqual(['senior', 'lead'])
 
-    await userEvent.click(screen.getByRole('button', { name: 'Continue to search' }))
+    expect(screen.getByText(/Approving starts the search/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Approve and search' }))
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/runs/7/continue')).toBe(true))
   })
 
-  it('shows progress while working and hides the editing controls', async () => {
+  it('shows progress with the time left while working, results as they are scored, and hides the editing controls', async () => {
     mockApi({
-      'GET /api/runs/7': { run: run({ status: 'RUNNING', step: 'RANK', progress: 62, message: 'Scored 5 of 8' }), profile },
+      'GET /api/runs/7': { run: run({ status: 'RUNNING', step: 'RANK', progress: 62, message: 'Scored 5 of 8' }), profile, etaSeconds: 95 },
+      'GET /api/runs/7/jobs': [job({ title: 'Junior Java-utvecklare', rank: 1, total: 87, employer: 'Comstream AB' })],
+    })
+    renderRun()
+
+    expect(await screen.findByRole('progressbar', { name: 'Scoring the ads against your CV progress' })).toHaveAttribute('aria-valuenow', '62')
+    expect(screen.getByText('Scored 5 of 8')).toBeInTheDocument()
+    expect(screen.getByText('About 2 minutes left')).toBeInTheDocument()
+    expect(await screen.findByText(/1 ad found so far/)).toBeInTheDocument()
+    expect(await screen.findByText('Junior Java-utvecklare')).toBeInTheDocument() // the ad is in the table before the run ends
+    expect(screen.queryByRole('button', { name: 'Save profile' })).not.toBeInTheDocument()
+  })
+
+  it('says it is estimating until there is something to base the time on', async () => {
+    mockApi({
+      'GET /api/runs/7': { run: run({ status: 'RUNNING', step: 'SEARCH', progress: 20, message: 'Searching Platsbanken' }), profile, etaSeconds: null },
       'GET /api/runs/7/jobs': [],
     })
     renderRun()
 
-    expect(await screen.findByRole('progressbar', { name: 'Run progress' })).toHaveAttribute('aria-valuenow', '62')
-    expect(screen.getByText('Scored 5 of 8')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Save profile' })).not.toBeInTheDocument()
-    expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Rank')
+    expect(await screen.findByText('Estimating the time left…')).toBeInTheDocument()
   })
 
   it('shows the ranked table once the run is done', async () => {
@@ -88,7 +109,7 @@ describe('run page', () => {
     })
     renderRun()
 
-    expect(await screen.findByText('Searching Platsbanken')).toBeInTheDocument()
+    expect((await screen.findAllByText('Searching Platsbanken')).length).toBeGreaterThan(0)
     expect(screen.queryByText(/No ads matched/)).not.toBeInTheDocument()
     expect(await screen.findByText('Junior Java-utvecklare', undefined, { timeout: 8000 })).toBeInTheDocument()
     expect(screen.queryByText(/No ads matched/)).not.toBeInTheDocument()
@@ -101,35 +122,50 @@ describe('run page', () => {
     })
     renderRun()
 
-    expect(await screen.findByText('Every JobTech query failed')).toHaveClass('text-red-600')
+    expect(await screen.findByText('Every JobTech query failed')).toHaveClass('text-[var(--danger)]')
   })
 
-  it('starts a run from the dashboard prompt box and opens it', async () => {
+  it('starts a Prompt search from Search mode: no max-age field, no review or career-page checkbox, and opens the run', async () => {
     const calls = mockApi({
-      'GET /api/runs': [],
-      'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
+      ...searchMode,
       'POST /api/runs': { id: 7 },
       'GET /api/runs/7': { run: run({ status: 'QUEUED', step: 'PROFILE', progress: 0, message: 'Queued' }), profile: null },
     })
     renderRun('/')
 
-    await userEvent.click(screen.getByRole('button', { name: 'Accountant, Malmö, part time' }))
-    expect(screen.getByLabelText('Starting prompt')).toHaveValue('Accountant, Malmö, part time')
-    await userEvent.type(screen.getByLabelText('Max age (days)'), '14')
-    await userEvent.click(screen.getByRole('button', { name: 'Start run' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Accountant in Malmö, part time' }))
+    expect(screen.getByLabelText('Starting prompt')).toHaveValue('Accountant in Malmö, part time')
+    expect(screen.queryByLabelText(/Max age/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Review the search profile first/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Also search career pages/)).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('20')).toBeInTheDocument() // ads to score default to 20
+    await userEvent.click(screen.getByRole('button', { name: 'Make a search plan' }))
 
-    expect(await screen.findByText('Queued')).toBeInTheDocument() // the run page has loaded
-    expect(screen.getByRole('heading', { name: 'Run 7' })).toBeInTheDocument()
-    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({
-      prompt: 'Accountant, Malmö, part time', mode: 'TARGETED', maxAgeDays: 14, includeWeb: false, autoContinue: false,
-    })
+    expect(await screen.findByRole('heading', { name: 'Your search' })).toBeInTheDocument() // the run page has loaded
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ prompt: 'Accountant in Malmö, part time', mode: 'TARGETED' })
   })
 
-  it('cannot start a run with an empty prompt', () => {
-    mockApi({ 'GET /api/runs': [], 'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] } })
+  it('sends the number of ads to score when the user changes it', async () => {
+    const calls = mockApi({
+      ...searchMode,
+      'POST /api/runs': { id: 7 },
+      'GET /api/runs/7': { run: run({ status: 'QUEUED', step: 'PROFILE', progress: 0, message: 'Queued' }), profile: null },
+    })
     renderRun('/')
 
-    expect(screen.getByRole('button', { name: 'Start run' })).toBeDisabled()
+    await userEvent.type(await screen.findByLabelText('Starting prompt'), 'Nurse in Uppsala')
+    await userEvent.type(screen.getByLabelText(/Ads to score/), '120')
+    await userEvent.click(screen.getByRole('button', { name: 'Make a search plan' }))
+
+    await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true))
+    expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ prompt: 'Nurse in Uppsala', mode: 'TARGETED', limit: 120 })
+  })
+
+  it('cannot start a search with an empty prompt', async () => {
+    mockApi(searchMode)
+    renderRun('/')
+
+    expect(await screen.findByRole('button', { name: 'Make a search plan' })).toBeDisabled()
   })
 
   describe('discover roles', () => {
@@ -147,18 +183,18 @@ describe('run page', () => {
       options: { maxAgeDays: null, limit: null, includeWeb: null, autoContinue: false, mode: 'DISCOVER', aggressive: false }, ...over,
     })
 
-    it('starts a Discover run from the dashboard with the aggressive option and no prompt needed', async () => {
+    it('starts a Discovery search from Search mode with the aggressive option and no prompt needed', async () => {
       const calls = mockApi({
-        'GET /api/runs': [], 'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
+        ...searchMode,
         'POST /api/runs': { id: 7 },
         'GET /api/runs/7': { run: discoverRun({ status: 'RUNNING', step: 'PROFILE' }), profile: null },
       })
       renderRun('/')
 
-      await userEvent.click(screen.getByRole('radio', { name: /Discover roles/ }))
+      await userEvent.click(await screen.findByRole('radio', { name: /Discovery mode/ }))
       expect(screen.getByRole('button', { name: 'Find roles' })).toBeEnabled()
       expect(screen.queryByLabelText('Also search career pages (slower)')).not.toBeInTheDocument()
-      await userEvent.click(screen.getByLabelText(/Aggressive/))
+      await userEvent.click(screen.getByLabelText(/Go wider/))
       await userEvent.click(screen.getByRole('button', { name: 'Find roles' }))
 
       await vi.waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true))
@@ -176,7 +212,6 @@ describe('run page', () => {
       const outside = screen.getByRole('region', { name: 'Outside your main field' })
       expect(within(outside).getByText('Gaps: No teaching licence.')).toBeInTheDocument()
       expect(screen.getByRole('region', { name: 'Hybrid roles' })).toBeInTheDocument()
-      expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Roles')
       expect(screen.getByRole('button', { name: 'Search 1 selected role' })).toBeEnabled()
     })
 
@@ -239,21 +274,21 @@ describe('run page', () => {
       options: { maxAgeDays: null, limit: null, includeWeb: null, autoContinue: true, mode: 'MANUAL', aggressive: null }, ...over,
     })
 
-    it('adds a job from the dashboard by its address and follows the run', async () => {
+    it('adds a job from Search mode by its address and follows the run', async () => {
       const calls = mockApi({
-        'GET /api/runs': [], 'GET /api/claude/usage': { totals: { calls: 0, failures: 0 }, byTask: [] },
+        ...searchMode,
         'POST /api/import': { id: 7 },
         'GET /api/runs/7': { run: manualRun({ status: 'RUNNING', message: 'Reading the ad' }), profile: null },
       })
       renderRun('/')
 
-      await userEvent.click(screen.getByRole('radio', { name: /Paste a job link/ }))
+      await userEvent.click(await screen.findByText('I found a job myself, add it from a link'))
       expect(screen.getByRole('button', { name: 'Add this job' })).toBeDisabled()
       expect(screen.getByText(/never opened or read by JobPilot/)).toBeInTheDocument()
       await userEvent.type(screen.getByLabelText('Job ad address'), 'https://www.linkedin.com/jobs/view/1')
       await userEvent.click(screen.getByRole('button', { name: 'Add this job' }))
 
-      expect(await screen.findByText('Reading the ad')).toBeInTheDocument()
+      expect((await screen.findAllByText('Reading the ad')).length).toBeGreaterThan(0)
       expect(calls.find((c) => c.url === '/api/import')!.body).toEqual({ url: 'https://www.linkedin.com/jobs/view/1' })
     })
 
@@ -265,7 +300,6 @@ describe('run page', () => {
       renderRun()
 
       expect(await screen.findAllByText(/discourages automatic reading/)).not.toHaveLength(0)
-      expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Read ad')
       expect(screen.getByRole('link', { name: 'the ad' })).toHaveAttribute('href', 'https://www.linkedin.com/jobs/view/1')
       const send = screen.getByRole('button', { name: 'Use this text' })
       expect(send).toBeDisabled()

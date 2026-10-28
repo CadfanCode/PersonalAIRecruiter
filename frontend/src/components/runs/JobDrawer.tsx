@@ -40,7 +40,7 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
         <Button variant="ghost" onClick={onClose} aria-label="Close details">Close</Button>
       </div>
 
-      {detail.isError && <p role="alert" className="text-sm text-red-600">Could not load the ad.</p>}
+      {detail.isError && <p role="alert" className="text-sm text-[var(--danger)]">Could not load the ad.</p>}
 
       {row && (
         <div className="flex flex-col gap-5">
@@ -48,8 +48,8 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
             <StatusChip status={row.status} />
             <span>Published {shortDate(row.publishedAt) || 'unknown'}</span>
             <span>Deadline {shortDate(row.deadline) || 'none'}</span>
-            {row.dateUnverified && <span className="text-amber-600">date unverified</span>}
-            {row.asksForNewGraduates && <span className="rounded bg-sky-100 px-1.5 text-sky-800">asks for new graduates</span>}
+            {row.dateUnverified && <span className="text-[var(--warn)]">date unverified</span>}
+            {row.asksForNewGraduates && <span className="rounded bg-[var(--accent-soft)] px-1.5 text-[var(--accent)]">asks for new graduates</span>}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -81,7 +81,7 @@ export function JobDrawer({ runId, jobId, onClose }: { runId: number; jobId: num
               {row.score.fit && <p className="mt-3 text-sm"><strong>Fit:</strong> {row.score.fit}</p>}
               {row.score.gaps && <p className="mt-1 text-sm"><strong>Gaps:</strong> {row.score.gaps}</p>}
               {row.score.dealBreakers.length > 0 && (
-                <p className="mt-1 text-sm text-red-600"><strong>Deal breakers:</strong> {row.score.dealBreakers.join('; ')}</p>
+                <p className="mt-1 text-sm text-[var(--danger)]"><strong>Deal breakers:</strong> {row.score.dealBreakers.join('; ')}</p>
               )}
               {row.experienceRequiredText && (
                 <p className="mt-1 text-sm text-[var(--muted)]">Experience asked: {row.experienceRequiredText}</p>

@@ -1,58 +1,51 @@
 import { useState } from 'react'
-import { useClaudeUsage } from '../api/claude'
 import { type BannedPhrase, type StyleRule, useBannedPhrases, usePhraseActions, useSaveRule, useStyleRules } from '../api/settings'
 import { Button, Field, TextArea, TextInput } from '../components/Form'
-import { LimitMeters } from '../components/LimitMeters'
 import { PageTitle, Panel } from '../components/Panel'
+import { AppearancePanel } from '../components/settings/AppearancePanel'
+import { ConnectionPanel } from '../components/settings/ConnectionPanel'
+import { LoginsPanel } from '../components/settings/LoginsPanel'
+import { PerformancePanel } from '../components/settings/PerformancePanel'
+import { SearchPanel } from '../components/settings/SearchPanel'
+import { SetupPanel } from '../components/settings/SetupPanel'
+
+const SECTIONS = [
+  ['connection', 'Claude'],
+  ['search', 'Search'],
+  ['performance', 'Speed and usage'],
+  ['logins', 'Saved logins'],
+  ['writing', 'Writing rules'],
+  ['appearance', 'Appearance'],
+  ['setup', 'Setup'],
+] as const
+
+type Section = (typeof SECTIONS)[number][0]
 
 export function SettingsPage() {
+  const [section, setSection] = useState<Section>('connection')
   return (
     <>
       <PageTitle>Settings</PageTitle>
-      <div className="grid max-w-4xl gap-5">
-        <UsagePanel />
-        <RulesPanel />
-        <PhrasesPanel />
-        <Panel title="Claude CLI">
-          <p className="text-sm text-[var(--muted)]">
-            The CLI path and model are set with environment variables when the API starts:{' '}
-            <code>JOBPILOT_CLAUDE_PATH</code> and <code>JOBPILOT_CLAUDE_MODEL</code> (for example <code>sonnet</code>). Without a model,
-            your CLI default is used, which can cost several times more per call. Editing them here is planned.
-          </p>
-        </Panel>
+      <div className="grid gap-8 md:grid-cols-[13rem_1fr]">
+        <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
+          {SECTIONS.map(([id, label]) => (
+            <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
+              className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-left text-sm font-medium transition ${section === id ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--muted)] hover:bg-[var(--line)]/50 hover:text-[var(--ink)]'}`}>
+              {label}
+            </button>
+          ))}
+        </nav>
+        <div className="min-w-0 max-w-3xl">
+          {section === 'connection' && <ConnectionPanel />}
+          {section === 'search' && <SearchPanel />}
+          {section === 'performance' && <PerformancePanel />}
+          {section === 'logins' && <LoginsPanel />}
+          {section === 'writing' && <div className="grid gap-5"><RulesPanel /><PhrasesPanel /></div>}
+          {section === 'appearance' && <AppearancePanel />}
+          {section === 'setup' && <SetupPanel />}
+        </div>
       </div>
     </>
-  )
-}
-
-function UsagePanel() {
-  const usage = useClaudeUsage()
-  return (
-    <Panel title="Claude usage">
-      {usage.isError && <p role="alert" className="text-sm text-red-600">Cannot reach the JobPilot API.</p>}
-      <div className="mb-4">
-        <LimitMeters />
-      </div>
-      {usage.data && (
-        <>
-          <p className="mb-3 text-sm">
-            JobPilot has made {usage.data.totals.calls} calls, {usage.data.totals.failures} failed.
-          </p>
-          <table className="w-full text-left text-sm">
-            <thead className="text-xs uppercase text-[var(--muted)]">
-              <tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Tokens</th></tr>
-            </thead>
-            <tbody>
-              {usage.data.byTask.map((t) => (
-                <tr key={t.task} className="border-t border-[var(--line)]">
-                  <td className="py-1">{t.task}</td><td>{t.calls}</td><td>{Number(t.tokens).toLocaleString('en-GB')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
-      )}
-    </Panel>
   )
 }
 
@@ -86,7 +79,7 @@ function RuleEditor({ rule }: { rule: StyleRule }) {
       <div className="mt-1 flex items-center gap-3">
         <Button variant="ghost" disabled={!dirty || save.isPending || text.trim() === ''}
           onClick={() => save.mutate({ id: rule.id, ruleText: text, enabled })}>Save rule</Button>
-        {save.isError && <span role="alert" className="text-sm text-red-600">{save.error.message}</span>}
+        {save.isError && <span role="alert" className="text-sm text-[var(--danger)]">{save.error.message}</span>}
       </div>
     </div>
   )
@@ -123,7 +116,7 @@ function PhrasesPanel() {
       <div className="mt-3 flex items-end gap-2">
         <Field label="Language">
           <select value={language} onChange={(e) => setLanguage(e.target.value as 'en' | 'sv')}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm" aria-label="Phrase language">
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm" aria-label="Phrase language">
             <option value="sv">Swedish</option>
             <option value="en">English</option>
           </select>
@@ -134,7 +127,7 @@ function PhrasesPanel() {
         <Button disabled={!phrase.trim() || add.isPending}
           onClick={() => add.mutate({ language, phrase: phrase.trim() }, { onSuccess: () => setPhrase('') })}>Add phrase</Button>
       </div>
-      {add.isError && <p role="alert" className="mt-2 text-sm text-red-600">{add.error.message}</p>}
+      {add.isError && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{add.error.message}</p>}
     </Panel>
   )
 }

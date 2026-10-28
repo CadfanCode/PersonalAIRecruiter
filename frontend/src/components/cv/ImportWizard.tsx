@@ -19,7 +19,7 @@ export function ImportWizard() {
   if (commit.isSuccess && !preview) {
     return (
       <Panel title="Import">
-        <p role="status" className="text-sm text-emerald-600">
+        <p role="status" className="text-sm text-[var(--success)]">
           Imported {commit.data.entryIds.length} entries with {commit.data.facts} facts. Review them in the Entries tab.
         </p>
         <div className="mt-3">
@@ -61,7 +61,7 @@ export function ImportWizard() {
           {analyse.isPending && <span className="text-sm text-[var(--muted)]">Claude is reading the files, this can take a minute.</span>}
         </div>
         {analyse.isError && (
-          <p role="alert" className="mt-3 text-sm text-red-600">
+          <p role="alert" className="mt-3 text-sm text-[var(--danger)]">
             {analyse.error.message}
           </p>
         )}
@@ -96,7 +96,7 @@ export function ImportWizard() {
                     .join(', ')}
                 </span>
                 {duplicateOfEntryId !== null && (
-                  <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">already in database</span>
+                  <span className="ml-2 rounded bg-[var(--warn-soft)] px-1.5 py-0.5 text-xs text-[var(--warn)]">already in database</span>
                 )}
               </span>
             </label>
@@ -109,7 +109,7 @@ export function ImportWizard() {
         ))}
       </ul>
       {commit.isError && (
-        <p role="alert" className="mt-3 text-sm text-red-600">
+        <p role="alert" className="mt-3 text-sm text-[var(--danger)]">
           {commit.error.message}
         </p>
       )}
@@ -118,7 +118,7 @@ export function ImportWizard() {
           disabled={included.size === 0 || commit.isPending}
           onClick={() =>
             commit.mutate(
-              { previewId: preview.previewId, entries: preview.entries.filter((_, i) => included.has(i)).map((e) => e.entry), skills: preview.skills },
+              { previewId: preview.previewId, entries: preview.entries.filter((_, i) => included.has(i)).map((e) => e.entry), skills: preview.skills, profile: preview.profile },
               { onSuccess: () => setPreview(null) },
             )
           }

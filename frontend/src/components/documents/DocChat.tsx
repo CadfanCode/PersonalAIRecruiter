@@ -49,7 +49,7 @@ export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
   }
 
   return (
-    <section aria-label="Ask Claude" className="mb-5 rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4">
+    <section aria-label="Ask Claude" className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
       <h3 className="mb-1 text-sm font-semibold">Ask Claude to adjust this {doc.kind === 'CV' ? 'CV' : 'letter'}</h3>
       <p className="mb-3 text-xs text-[var(--muted)]">
         Claude only uses facts from your CV database. {dirty ? 'Your unsaved edits are included. ' : ''}A change saves a new version and removes approval.
@@ -57,9 +57,9 @@ export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
       {turns.length > 0 && (
         <ol role="log" aria-live="polite" aria-label="Conversation" className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto text-sm">
           {turns.map((t, i) => (
-            <li key={i} className={t.role === 'user' ? 'self-end rounded-lg bg-navy px-3 py-1.5 text-white' : `self-start rounded-lg px-3 py-1.5 ${t.error ? 'bg-red-50 text-red-700 dark:bg-red-950' : 'bg-[var(--surface)]'}`}>
+            <li key={i} className={t.role === 'user' ? 'self-end rounded-lg bg-navy px-3 py-1.5 text-white' : `self-start rounded-lg px-3 py-1.5 ${t.error ? 'bg-red-50 text-[var(--danger)]' : 'bg-[var(--surface)]'}`}>
               <span className="block">{t.error ? <span role="alert">{t.text}</span> : t.text}</span>
-              {t.approvalRevoked && <span className="mt-1 block text-xs text-amber-700 dark:text-amber-400">Approval was removed: review and approve again so it can be uploaded.</span>}
+              {t.approvalRevoked && <span className="mt-1 block text-xs text-[var(--warn)]">Approval was removed: review and approve again so it can be uploaded.</span>}
               {t.previous && i === lastIndex && (
                 <button type="button" onClick={() => undo(t, i)} disabled={save.isPending} className="mt-1 text-xs underline">Undo this change</button>
               )}
@@ -81,7 +81,7 @@ export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
           ))}
         </div>
       )}
-      {save.isError && <p role="alert" className="mt-2 text-sm text-red-600">{save.error.message}</p>}
+      {save.isError && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{save.error.message}</p>}
     </section>
   )
 }

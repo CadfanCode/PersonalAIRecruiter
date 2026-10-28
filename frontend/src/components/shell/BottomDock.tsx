@@ -43,7 +43,7 @@ export function BottomDock() {
     <>
       <div aria-hidden className="fixed inset-x-0 bottom-0 z-40 h-4" onMouseEnter={show} />
       <button type="button" aria-label="More: CV database, submitted applications, extra features, settings" aria-expanded={open} aria-controls="more-menu"
-        onClick={() => setOpen((o) => !o)} onMouseEnter={show} onFocus={show}
+        onClick={show} onMouseEnter={show} onFocus={show}
         className={`fixed bottom-1.5 left-1/2 z-40 h-1.5 w-28 -translate-x-1/2 rounded-full bg-[var(--muted)]/35 transition hover:bg-[var(--muted)]/60 ${open ? 'opacity-0' : ''}`} />
       <nav id="more-menu" aria-label="More" onMouseEnter={show} onMouseLeave={hideSoon}
         onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) hideSoon() }}

@@ -63,8 +63,8 @@ describe('documents page', () => {
     renderPage()
 
     const bullet = await screen.findByLabelText('Bullet 1 of Systemutvecklare (praktik)')
-    expect(bullet).toHaveClass('ring-red-500')
-    expect(screen.getByLabelText('Profile paragraph 1')).toHaveClass('ring-amber-400')
+    expect(bullet).toHaveClass('ring-[var(--danger)]')
+    expect(screen.getByLabelText('Profile paragraph 1')).toHaveClass('ring-[var(--warn)]')
     expect(screen.getAllByText(/Must fix: Dashes are not allowed/)).toHaveLength(1)
     expect(screen.getByText('1 must be fixed before approval')).toBeInTheDocument()
     expect(screen.getByText('2 of 2 pages used')).toBeInTheDocument()
@@ -117,7 +117,7 @@ describe('documents page', () => {
     const calls = mockApi({ ...base(), 'POST /api/documents/100/approve': { violations: [], pages: 2, maxPages: 2 } })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve CV' }))
 
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/documents/100/approve')).toBe(true))
   })
@@ -128,7 +128,7 @@ describe('documents page', () => {
 
     await userEvent.type(await screen.findByLabelText('Profile paragraph 1'), ' Mer text.')
 
-    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Approve CV' })).toBeDisabled()
   })
 
   it('shows the report when approval is refused', async () => {
@@ -140,10 +140,10 @@ describe('documents page', () => {
     })
     renderPage()
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve CV' }))
 
     expect(await screen.findByText('Not approved: fix the problems marked in red first.')).toBeInTheDocument()
-    expect(screen.getByLabelText('Bullet 2 of Systemutvecklare (praktik)')).toHaveClass('ring-red-500')
+    expect(screen.getByLabelText('Bullet 2 of Systemutvecklare (praktik)')).toHaveClass('ring-[var(--danger)]')
     // once inline under the bullet, once in the report
     expect(screen.getAllByText(/Fact 999 does not exist/)).toHaveLength(2)
   })
@@ -269,16 +269,18 @@ describe('documents page', () => {
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({ runId: 7 })
   })
 
-  it('lists documents on the overview page', async () => {
+  it('lists documents on the overview page with their approvals', async () => {
     mockApi({
       'GET /api/documents': [{ jobId: 1, title: 'Junior Java-utvecklare', employer: 'Comstream AB', language: 'sv', cv: true, letter: true,
         cvApproved: true, letterApproved: false, updatedAt: '2026-10-27T08:00:00Z' }],
+      'GET /api/applications': [],
     })
     renderPage('/documents')
 
     const link = await screen.findByRole('link', { name: /Junior Java-utvecklare/ })
     expect(link).toHaveAttribute('href', '/documents/job/1')
-    expect(within(link).getByText(/CV approved · letter to review/)).toBeInTheDocument()
+    expect(within(link).getByRole('img', { name: 'CV: approved' })).toBeInTheDocument()
+    expect(within(link).getByRole('img', { name: 'Cover letter: not approved' })).toBeInTheDocument()
   })
 
   describe('ask Claude', () => {

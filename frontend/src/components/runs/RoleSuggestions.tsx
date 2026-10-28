@@ -73,7 +73,7 @@ export function RoleSuggestions({
         </label>
         <span className="text-sm text-[var(--muted)]">{chosen.length} selected</span>
         <span className="ml-auto text-xs text-[var(--muted)]">
-          Up to {cap} ads are scored by Claude{options.aggressive ? ' (aggressive mode: wider search, lower bar)' : ''}. This uses your Claude subscription.
+          Up to {cap} ads are scored by Claude{options.aggressive ? ' (aggressive mode: wider search, lower bar)' : ''}. This uses your Claude access.
         </span>
       </div>
 
@@ -102,7 +102,7 @@ export function RoleSuggestions({
                     </span>
                   </div>
                   {d.role?.reasoning && <p className="mt-2 text-sm text-[var(--muted)]">{d.role.reasoning}</p>}
-                  {d.role?.gaps && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Gaps: {d.role.gaps}</p>}
+                  {d.role?.gaps && <p className="mt-1 text-xs text-[var(--warn)]">Gaps: {d.role.gaps}</p>}
                   {d.role && d.title !== d.role.title && <p className="mt-1 text-xs text-[var(--muted)]">Renamed: its search terms are rebuilt for the new name.</p>}
                 </li>
               ))}
@@ -124,13 +124,13 @@ export function RoleSuggestions({
         </Button>
         <span className="text-sm text-[var(--muted)]">Everything found is merged into one ranked list, tagged with its role.</span>
       </div>
-      {error && <p role="alert" className="mt-2 text-sm text-red-600">{error}</p>}
+      {error && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{error}</p>}
     </Panel>
   )
 }
 
 function MatchPill({ score }: { score: number }) {
-  const tone = score >= 70 ? 'bg-emerald-100 text-emerald-800' : score >= 50 ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
+  const tone = score >= 70 ? 'bg-[var(--success-soft)] text-[var(--success)]' : score >= 50 ? 'bg-[var(--warn-soft)] text-[var(--warn)]' : 'bg-[var(--line)] text-[var(--muted)]'
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${tone}`} aria-label={`Match ${score} out of 100`}>match {score}</span>
 }
 
@@ -151,7 +151,7 @@ function ReadOnlyRoles({ roles }: { roles: RoleView[] }) {
               <span className="ml-auto text-xs text-[var(--muted)]">{r.searched ? `${r.jobCount} ads found` : 'not searched'}</span>
             </div>
             {r.reasoning && <p className="mt-1 text-[var(--muted)]">{r.reasoning}</p>}
-            {r.gaps && <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">Gaps: {r.gaps}</p>}
+            {r.gaps && <p className="mt-1 text-xs text-[var(--warn)]">Gaps: {r.gaps}</p>}
           </li>
         ))}
       </ul>

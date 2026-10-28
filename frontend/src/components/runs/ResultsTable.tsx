@@ -170,7 +170,7 @@ export function ResultsTable({
         id: 'deadline', header: 'Deadline', accessorFn: (r) => r.deadline ?? '9999', sortUndefined: 'last',
         cell: ({ row }) => {
           const close = deadlineIsClose(row.original.deadline, now)
-          return <span className={close ? 'font-semibold text-red-600' : ''}>{shortDate(row.original.deadline)}</span>
+          return <span className={close ? 'font-semibold text-[var(--danger)]' : ''}>{shortDate(row.original.deadline)}</span>
         },
       },
       {
@@ -192,7 +192,7 @@ export function ResultsTable({
         cell: ({ row }) => (
           <span>
             {row.original.source}
-            {row.original.dateUnverified && <span className="block text-xs text-amber-600">date unverified</span>}
+            {row.original.dateUnverified && <span className="block text-xs text-[var(--warn)]">date unverified</span>}
           </span>
         ),
       },
@@ -282,11 +282,11 @@ export function ResultsTable({
           placeholder="Search title, employer, place"
           value={globalFilter}
           onChange={(e) => setGlobalFilter(e.target.value)}
-          className="w-64 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2.5 py-1.5 text-sm"
+          className="w-64 rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2.5 py-1.5 text-sm"
         />
         <select aria-label="Filter by status" value={(filterValue('status') as string) ?? ''}
           onChange={(e) => setFilter('status', e.target.value)}
-          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+          className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
           <option value="">All statuses</option>
           {JOB_STATUSES.map((s) => (
             <option key={s} value={s}>{s.replace('_', ' ').toLowerCase()}</option>
@@ -294,7 +294,7 @@ export function ResultsTable({
         </select>
         <select aria-label="Filter by language" value={(filterValue('language') as string) ?? ''}
           onChange={(e) => setFilter('language', e.target.value)}
-          className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+          className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
           <option value="">Any language</option>
           <option value="sv">Swedish</option>
           <option value="en">English</option>
@@ -302,7 +302,7 @@ export function ResultsTable({
         {hasRoles && (
           <select aria-label="Filter by role type" value={(filterValue('role') as string) ?? ''}
             onChange={(e) => setFilter('role', e.target.value)}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
             <option value="">All role types</option>
             {roleTypes.map((t) => <option key={t} value={t}>{t}</option>)}
           </select>
@@ -311,14 +311,14 @@ export function ResultsTable({
           Min score
           <input aria-label="Minimum score" type="number" min={0} max={100} value={(filterValue('score') as number) ?? ''}
             onChange={(e) => setFilter('score', e.target.value === '' ? undefined : Number(e.target.value))}
-            className="w-16 rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-sm" />
+            className="w-16 rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1 text-sm" />
         </label>
         <Button variant="ghost" onClick={() => setShowAll(!showAll)} disabled={jobs.length <= topN && !showAll}>
           {showAll ? `Show top ${topN}` : `Show all (${jobs.length})`}
         </Button>
         <span className="ml-auto flex items-center gap-2">
           <select aria-label="Saved views" value="" onChange={(e) => applyView(e.target.value)}
-            className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1.5 text-sm">
+            className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1.5 text-sm">
             <option value="">Saved views</option>
             {views.map((v) => <option key={v.name}>{v.name}</option>)}
           </select>
@@ -335,7 +335,7 @@ export function ResultsTable({
 
       {selectedCount > 0 && (
         <div role="region" aria-label="Selected jobs"
-          className="sticky top-0 z-10 mb-3 rounded-md border border-[var(--accent)] bg-[var(--panel)] px-3 py-3 text-sm shadow-sm">
+          className="sticky top-16 z-20 mb-4 rounded-2xl border border-[var(--accent)]/50 bg-[var(--glass)] px-4 py-3 text-sm shadow-[var(--shadow-lift)] backdrop-blur-xl">
           <div className="flex flex-wrap items-center gap-2">
             <Button
               disabled={createDocuments.isPending}
@@ -374,7 +374,7 @@ export function ResultsTable({
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-[var(--line)] bg-[var(--panel)]">
+      <div className="overflow-x-auto rounded-2xl border border-[var(--line)] bg-[var(--panel)]">
         <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
           <thead>
             {table.getHeaderGroups().map((hg) => (

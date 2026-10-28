@@ -62,8 +62,8 @@ describe('results table', () => {
     mockApi({})
     renderTable(rows())
 
-    expect(screen.getByText('2026-10-27')).toHaveClass('text-red-600')
-    expect(screen.getAllByText('2026-12-01')[0]).not.toHaveClass('text-red-600')
+    expect(screen.getByText('2026-10-27')).toHaveClass('text-[var(--danger)]')
+    expect(screen.getAllByText('2026-12-01')[0]).not.toHaveClass('text-[var(--danger)]')
   })
 
   it('sorts by a column header and reverses on a second click', async () => {

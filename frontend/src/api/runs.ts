@@ -169,7 +169,9 @@ export const useJobDetail = (jobId: number | null, runId: number) =>
 export function useStartRun() {
   const client = useQueryClient()
   return useMutation({
-    mutationFn: (body: { prompt: string; maxAgeDays?: number; limit?: number; includeWeb?: boolean; autoContinue?: boolean; mode?: RunMode; aggressive?: boolean }) =>
+    // The UI sends the prompt, the mode, the number of ads to score and (Discover) aggressive. Whether career pages are searched
+    // is a Settings choice kept on the server, and the profile review is always part of Prompt mode.
+    mutationFn: (body: { prompt: string; limit?: number; mode?: RunMode; aggressive?: boolean }) =>
       api<{ id: number }>('/api/runs', { method: 'POST', body }),
     onSuccess: () => client.invalidateQueries({ queryKey: ['runs'] }),
   })

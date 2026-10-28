@@ -37,7 +37,7 @@ export function SelectionPanel({ jobId, docs }: { jobId: number; docs: JobDocume
                 aria-label={`Selection of ${e.title}`}
                 value={mode(e.id)}
                 onChange={(ev) => setModes({ ...modes, [e.id]: ev.target.value as Mode })}
-                className="rounded-md border border-[var(--line)] bg-[var(--surface)] px-2 py-1 text-xs"
+                className="rounded-xl border border-[var(--line)] bg-[var(--panel-2)] px-2 py-1 text-xs"
               >
                 <option value="auto">Auto</option>
                 <option value="pin">Pin</option>
@@ -51,8 +51,8 @@ export function SelectionPanel({ jobId, docs }: { jobId: number; docs: JobDocume
       </ul>
       <div className="mt-3 flex items-center gap-3">
         <Button variant="ghost" onClick={submit} disabled={save.isPending}>Save selection</Button>
-        {save.isSuccess && <span role="status" className="text-sm text-emerald-600">Saved. Regenerate to apply.</span>}
-        {save.isError && <span role="alert" className="text-sm text-red-600">{save.error.message}</span>}
+        {save.isSuccess && <span role="status" className="text-sm text-[var(--success)]">Saved. Regenerate to apply.</span>}
+        {save.isError && <span role="alert" className="text-sm text-[var(--danger)]">{save.error.message}</span>}
       </div>
     </Panel>
   )

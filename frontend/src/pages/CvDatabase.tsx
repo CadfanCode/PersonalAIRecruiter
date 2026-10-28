@@ -20,7 +20,7 @@ export function CvDatabase() {
     return (
       <>
         <PageTitle>CV database</PageTitle>
-        <p role="alert" className="text-sm text-red-600">Cannot reach the JobPilot API. Is the backend running?</p>
+        <p role="alert" className="text-sm text-[var(--danger)]">Cannot reach the JobPilot API. Is the backend running?</p>
       </>
     )
   }

@@ -13,11 +13,15 @@ function read(): ThemePreference {
   }
 }
 
-/** Puts the choice on <html>: "system" removes the attribute so the media query decides. */
+const systemPrefersDark = () => typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: dark)').matches
+
+/** What the screen shows for a choice: "system" means whatever the operating system is set to right now. */
+export const resolveTheme = (preference: ThemePreference): 'light' | 'dark' =>
+  preference === 'system' ? (systemPrefersDark() ? 'dark' : 'light') : preference
+
+/** Puts the resolved theme on <html data-theme>, which every colour variable keys off. */
 export function applyTheme(preference: ThemePreference) {
-  const root = document.documentElement
-  if (preference === 'system') root.removeAttribute('data-theme')
-  else root.setAttribute('data-theme', preference)
+  document.documentElement.setAttribute('data-theme', resolveTheme(preference))
 }
 
 interface ThemeContextValue {
@@ -33,7 +37,15 @@ export const useTheme = () => useContext(ThemeContext)
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setState] = useState<ThemePreference>(read)
 
-  useEffect(() => applyTheme(preference), [preference])
+  useEffect(() => {
+    applyTheme(preference)
+    if (preference !== 'system' || typeof window.matchMedia !== 'function') return
+    // Following the system: switch when the system does.
+    const query = window.matchMedia('(prefers-color-scheme: dark)')
+    const onChange = () => applyTheme('system')
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [preference])
 
   const setPreference = useCallback((p: ThemePreference) => {
     setState(p)

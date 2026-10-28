@@ -19,7 +19,7 @@ export function PreviewSelection() {
         </Button>
         {preview.isPending && <span className="text-sm text-[var(--muted)]">This calls Claude once.</span>}
       </div>
-      {preview.isError && <p role="alert" className="mt-3 text-sm text-red-600">{preview.error.message}</p>}
+      {preview.isError && <p role="alert" className="mt-3 text-sm text-[var(--danger)]">{preview.error.message}</p>}
       {preview.data && (
         <div className="mt-4">
           <p className="mb-2 text-xs text-[var(--muted)]">Ad language: {preview.data.language === 'sv' ? 'Swedish' : 'English'}</p>

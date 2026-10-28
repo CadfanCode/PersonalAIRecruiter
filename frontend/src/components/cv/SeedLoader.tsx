@@ -19,7 +19,7 @@ export function SeedLoader() {
         }}
       />
       {seed.isError && (
-        <p role="alert" className="mt-3 text-sm text-red-600">
+        <p role="alert" className="mt-3 text-sm text-[var(--danger)]">
           {seed.error.message}
         </p>
       )}

@@ -1,124 +1,195 @@
-import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { type Application, isGenerating, MODE_LABEL, useApplications, useCreateDocuments } from '../api/applications'
+import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
+import {
+  type Application,
+  type ApprovalResult,
+  isGenerating,
+  MODE_LABEL,
+  useApplications,
+  useApplyApproved,
+  useApproveAll,
+  useCreateDocuments,
+} from '../api/applications'
 import { useDocOverview } from '../api/documents'
 import { Button } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
+import { ApprovalTick } from '../components/ui/ApprovalTick'
+import { ArrowRightIcon, CheckIcon } from '../components/ui/Icons'
+import { Pill } from '../components/ui/Pill'
+import { Processing } from '../components/ui/Processing'
 
-const docLine = (a: Application) =>
-  [a.cv ? `CV ${a.cv.approved ? 'approved' : 'to review'}` : null, a.letter ? `letter ${a.letter.approved ? 'approved' : 'to review'}` : null]
-    .filter(Boolean)
-    .join(' · ')
-
+/** Stage 3, Documents: one row per selected job, the two approvals, and what goes on to the Apply stage. */
 export function DocumentsIndexPage() {
   const docs = useDocOverview()
   const apps = useApplications()
   const retry = useCreateDocuments()
+  const approveAll = useApproveAll()
+  const apply = useApplyApproved()
   const navigate = useNavigate()
-  const [params] = useSearchParams()
+  const [results, setResults] = useState<ApprovalResult[] | null>(null)
 
-  // A submitted application is finished: it lives in Finalize and the Activity Report, not in this list.
+  // A submitted application is finished: it lives in Submitted applications, not in this list.
   const selected = (apps.data ?? []).filter((a) => !a.submittedAt)
   const selectedIds = new Set((apps.data ?? []).map((a) => a.jobId))
   const others = (docs.data ?? []).filter((d) => !selectedIds.has(d.jobId))
-  const generating = selected.filter(isGenerating).length
-  const ready = selected.filter((a) => a.cv && a.letter).length
-  const failed = selected.filter((a) => a.generation?.status === 'FAILED' && !(a.cv && a.letter)).length
+  const generating = selected.filter(isGenerating)
+  const ready = selected.filter((a) => a.readyToApply)
+  const waiting = selected.filter((a) => !a.readyToApply)
+  const unapproved = selected.some((a) => (a.cv && !a.cv.approved) || (a.letter && !a.letter.approved))
+  const writingPercent = selected.length === 0 ? 0 : Math.round(selected.reduce((sum, a) => sum + (isGenerating(a) ? (a.generation?.progress ?? 0) : 100), 0) / selected.length)
+
+  const approveEverything = () => approveAll.mutate(undefined, { onSuccess: setResults })
+  const goApply = () => apply.mutate(undefined, { onSuccess: (r) => navigate('/apply', { state: { skipped: r.skipped } }) })
+  const refused = (results ?? []).filter((r) => !r.approved)
+  const newlyApproved = (results ?? []).filter((r) => r.approved && !r.alreadyApproved).length
 
   return (
     <>
-      <PageTitle>Documents</PageTitle>
-      {(docs.isError || apps.isError) && <p role="alert" className="text-sm text-red-600">Cannot reach the JobPilot API. Is the backend running?</p>}
+      <PageTitle subtitle="Each selected job gets its own CV and cover letter, written for that ad. Open one to read, change or ask Claude to adjust it, then approve it.">
+        Your documents
+      </PageTitle>
+      {(docs.isError || apps.isError) && <p role="alert" className="text-sm text-[var(--danger)]">Cannot reach the JobPilot API. Is the backend running?</p>}
+
+      {generating.length > 0 && (
+        <div className="mb-6">
+          <Processing title="Writing your tailored documents" percent={writingPercent}
+            message={`${generating.length} of ${selected.length} ${selected.length === 1 ? 'job is' : 'jobs are'} still being written. You can open the finished ones already.`} />
+        </div>
+      )}
 
       {selected.length > 0 && (
-        <section aria-label="Documents for your selected jobs" className="mb-8 max-w-4xl">
-          <div className="mb-3 flex flex-wrap items-center gap-3 rounded-lg border border-[var(--accent)] bg-[var(--panel)] px-4 py-3">
-            <p role="status" className="text-sm">
-              {generating > 0
-                ? `Writing documents: ${generating} of ${selected.length} still in progress`
-                : params.get('new')
-                  ? `Done: ${ready} of ${selected.length} selected jobs have a CV and a cover letter${failed ? `, ${failed} failed` : ''}`
-                  : `${ready} of ${selected.length} selected jobs have a CV and a cover letter${failed ? `, ${failed} failed` : ''}`}
+        <section aria-label="Documents for your selected jobs">
+          <div className="mb-4 flex flex-wrap items-center gap-3">
+            <p role="status" className="text-[15px]">
+              <strong className="font-semibold">{ready.length}</strong> of {selected.length} {selected.length === 1 ? 'application is' : 'applications are'} ready for the next step
             </p>
-            <Button className="ml-auto" disabled={ready === 0} onClick={() => navigate('/finalize')}
-              title={ready === 0 ? 'Wait for at least one set of documents' : 'Review and fill in the applications'}>
-              Continue to Finalize Applications
+            <Button variant="ghost" className="ml-auto" onClick={approveEverything} disabled={!unapproved || approveAll.isPending || generating.length > 0}
+              title="Approves every CV and cover letter that has no problems. Ones with problems are listed with the reason.">
+              {approveAll.isPending ? 'Approving…' : 'Approve all'}
             </Button>
           </div>
-          <ul className="flex flex-col gap-2">
-            {selected.map((a) => (
-              <li key={a.jobId} className="rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <Link to={`/documents/job/${a.jobId}`} className="font-medium hover:underline">{a.title}</Link>
-                  <span className="text-sm text-[var(--muted)]">{a.employer}</span>
-                  <span className="ml-auto text-xs text-[var(--muted)]">
-                    {MODE_LABEL[a.searchMode]}{a.roleType ? ` · ${a.roleType}` : ''}
-                  </span>
-                </div>
-                {isGenerating(a) && a.generation && (
-                  <div className="mt-2">
-                    <div role="progressbar" aria-label={`Progress: ${a.title}`} aria-valuenow={a.generation.progress} aria-valuemin={0} aria-valuemax={100}
-                      className="h-1.5 overflow-hidden rounded-full bg-[var(--line)]">
-                      <div className="h-full bg-navy transition-all" style={{ width: `${a.generation.progress}%` }} />
-                    </div>
-                    <p className="mt-1 text-xs text-[var(--muted)]">{a.generation.message}</p>
-                  </div>
-                )}
-                {!isGenerating(a) && a.generation?.status === 'FAILED' && !(a.cv && a.letter) && (
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    <p role="alert" className="text-sm text-red-600">Failed: {a.generation.message}</p>
-                    <Button variant="ghost" disabled={retry.isPending}
-                      onClick={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })}>
-                      Try again
-                    </Button>
-                  </div>
-                )}
-                {!isGenerating(a) && !a.cv && !a.letter && !a.generation && (
-                  <div className="mt-2 flex items-center gap-3">
-                    <span className="text-sm text-[var(--muted)]">No documents yet.</span>
-                    <Button disabled={retry.isPending} onClick={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })}>
-                      Create documents
-                    </Button>
-                  </div>
-                )}
-                {!isGenerating(a) && (a.cv || a.letter) && (
-                  <p className="mt-1 text-xs text-[var(--muted)]">
-                    {docLine(a)}
-                    {a.generation?.status === 'DONE' && a.generation.message?.includes('problems') ? ' · has problems to fix before approval' : ''}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
-          {retry.isError && <p role="alert" className="mt-2 text-sm text-red-600">{retry.error.message}</p>}
+
+          {results && (
+            <div role="status" className="mb-4 rounded-2xl bg-[var(--panel-2)] px-4 py-3 text-sm">
+              {newlyApproved > 0 && <p className="flex items-center gap-2 font-medium text-[var(--success)]"><CheckIcon width={16} height={16} /> Approved {newlyApproved} {newlyApproved === 1 ? 'document' : 'documents'}.</p>}
+              {newlyApproved === 0 && refused.length === 0 && <p className="text-[var(--muted)]">Everything was already approved.</p>}
+              {refused.length > 0 && (
+                <ul className="mt-1 flex flex-col gap-1 text-[var(--ink)]">
+                  {refused.map((r) => (
+                    <li key={`${r.jobId}-${r.kind}`}>
+                      Could not approve the {r.kind === 'cv' ? 'CV' : 'cover letter'} for{' '}
+                      <Link className="font-medium text-[var(--accent)] underline" to={`/documents/job/${r.jobId}${r.kind === 'letter' ? '?tab=letter' : ''}`}>{r.title}</Link>: {r.reason}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--panel)] shadow-[var(--shadow)]">
+            <div className="hidden grid-cols-[1fr_7rem_9rem_14rem] gap-4 border-b border-[var(--line)] bg-[var(--panel-2)] px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] sm:grid">
+              <span>Job</span><span className="text-center">CV approved</span><span className="text-center">Cover letter approved</span><span>Next step</span>
+            </div>
+            <ul>
+              {selected.map((a) => <Row key={a.jobId} app={a} retrying={retry.isPending} onRetry={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })} />)}
+            </ul>
+          </div>
+          {retry.isError && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{retry.error.message}</p>}
+
+          <div className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]">
+            <div className="min-w-0 flex-1 text-sm">
+              {ready.length > 0 ? (
+                <p>
+                  <strong className="font-semibold">{ready.length}</strong> {ready.length === 1 ? 'application goes' : 'applications go'} to Apply.
+                  JobPilot opens each one in its own browser tab and fills it in with the approved documents. Nothing is submitted.
+                </p>
+              ) : (
+                <p className="text-[var(--muted)]">Approve the CV and the cover letter of at least one job to go on.</p>
+              )}
+              {waiting.length > 0 && ready.length > 0 && (
+                <p className="mt-1 text-[var(--muted)]">{waiting.length} {waiting.length === 1 ? 'is' : 'are'} left out for now: see "Next step" above.</p>
+              )}
+            </div>
+            <Button size="lg" onClick={goApply} disabled={ready.length === 0 || apply.isPending || generating.length > 0}>
+              <span className="flex items-center gap-2">{apply.isPending ? 'Opening…' : `Apply (${ready.length})`}<ArrowRightIcon width={18} height={18} /></span>
+            </Button>
+            {apply.isError && <p role="alert" className="w-full text-sm text-[var(--danger)]">{apply.error.message}</p>}
+          </div>
         </section>
       )}
 
       {selected.length === 0 && docs.data?.length === 0 && (
         <Panel>
           <p className="text-sm text-[var(--muted)]">
-            No documents yet. Select ads in the <Link className="underline" to="/runs">results</Link> and choose "Create tailored documents".
+            No documents yet. Find jobs in a <Link className="text-[var(--accent)] underline" to="/">search</Link>, tick the ones you like and choose "Create tailored documents".
           </p>
         </Panel>
       )}
 
       {others.length > 0 && (
-        <>
-          {selected.length > 0 && <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">Other documents</h2>}
-          <ul className="flex max-w-4xl flex-col gap-2">
+        <details className="mt-8">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Other documents ({others.length})</summary>
+          <ul className="mt-3 flex max-w-4xl flex-col gap-2">
             {others.map((d) => (
               <li key={d.jobId}>
-                <Link to={`/documents/job/${d.jobId}`} className="block rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4 hover:border-[var(--accent)]">
-                  <span className="font-medium">{d.title}</span>
-                  <span className="ml-3 text-sm text-[var(--muted)]">{d.employer}</span>
-                  <span className="block text-xs text-[var(--muted)]">
-                    {d.language === 'sv' ? 'Swedish' : 'English'} · CV {d.cvApproved ? 'approved' : 'to review'} · letter {d.letterApproved ? 'approved' : 'to review'}
-                  </span>
+                <Link to={`/documents/job/${d.jobId}`} className="flex items-center gap-3 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 transition hover:border-[var(--accent)]">
+                  <span className="min-w-0 flex-1"><span className="font-medium">{d.title}</span><span className="ml-3 text-sm text-[var(--muted)]">{d.employer}</span></span>
+                  <ApprovalTick approved={d.cvApproved} exists label="CV" />
+                  <ApprovalTick approved={d.letterApproved} exists label="Cover letter" />
                 </Link>
               </li>
             ))}
           </ul>
-        </>
+        </details>
       )}
     </>
+  )
+}
+
+function Row({ app: a, retrying, onRetry }: { app: Application; retrying: boolean; onRetry: () => void }) {
+  const writing = isGenerating(a)
+  const failed = !writing && a.generation?.status === 'FAILED' && !(a.cv && a.letter)
+  const empty = !writing && !a.cv && !a.letter && !a.generation
+  return (
+    <li className="grid items-center gap-x-4 gap-y-2 border-b border-[var(--line)] px-5 py-4 last:border-b-0 sm:grid-cols-[1fr_7rem_9rem_14rem]">
+      <div className="min-w-0">
+        <Link to={`/documents/job/${a.jobId}`} className="block truncate text-[15px] font-semibold tracking-tight hover:text-[var(--accent)]">{a.title}</Link>
+        <p className="truncate text-sm text-[var(--muted)]">
+          {[a.employer, MODE_LABEL[a.searchMode], a.roleType].filter(Boolean).join(' · ')}
+        </p>
+        {writing && a.generation && (
+          <div className="mt-2">
+            <div role="progressbar" aria-label={`Progress: ${a.title}`} aria-valuenow={a.generation.progress} aria-valuemin={0} aria-valuemax={100} className="h-1.5 overflow-hidden rounded-full bg-[var(--line)]">
+              <div className="shimmer h-full rounded-full" style={{ width: `${Math.max(a.generation.progress, 6)}%` }} />
+            </div>
+            <p className="mt-1 text-xs text-[var(--muted)]">{a.generation.message}</p>
+          </div>
+        )}
+        {failed && (
+          <p role="alert" className="mt-2 flex flex-wrap items-center gap-3 text-sm text-[var(--danger)]">
+            Failed: {a.generation?.message}
+            <Button variant="ghost" disabled={retrying} onClick={onRetry}>Try again</Button>
+          </p>
+        )}
+        {empty && (
+          <p className="mt-2 flex items-center gap-3 text-sm text-[var(--muted)]">No documents yet.
+            <Button disabled={retrying} onClick={onRetry}>Create documents</Button></p>
+        )}
+      </div>
+      <div className="flex sm:justify-center"><ApprovalTick approved={!!a.cv?.approved} exists={!!a.cv} label="CV" /></div>
+      <div className="flex sm:justify-center"><ApprovalTick approved={!!a.letter?.approved} exists={!!a.letter} label="Cover letter" /></div>
+      <div className="text-sm">
+        {a.readyToApply ? (
+          <Pill tone="success"><CheckIcon width={12} height={12} /> Goes to Apply</Pill>
+        ) : writing ? (
+          <Pill tone="accent">Being written</Pill>
+        ) : (
+          <span className="flex flex-col gap-1">
+            <Pill tone="warn" className="self-start">Left out for now</Pill>
+            <span className="text-xs text-[var(--muted)]">{a.blockers.join('. ')}</span>
+          </span>
+        )}
+      </div>
+    </li>
   )
 }

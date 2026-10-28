@@ -31,7 +31,7 @@ export function EntryList({ entries, tagSuggestions }: { entries: Entry[]; tagSu
       <div className="flex items-center gap-3">
         <Button onClick={() => setOpenId('new')}>Add entry</Button>
         {needAttention > 0 && (
-          <span className="text-sm text-amber-600">
+          <span className="text-sm text-[var(--warn)]">
             {needAttention} {needAttention === 1 ? 'entry needs' : 'entries need'} your attention
           </span>
         )}
@@ -51,7 +51,7 @@ export function EntryList({ entries, tagSuggestions }: { entries: Entry[]; tagSu
             <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-[var(--muted)]">{KIND_LABEL[kind]}</h2>
             <ul className="flex flex-col gap-2">
               {group.map((e) => (
-                <li key={e.id} className="rounded-lg border border-[var(--line)] bg-[var(--panel)] p-4">
+                <li key={e.id} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
                   <button
                     type="button"
                     aria-expanded={openId === e.id}
@@ -75,7 +75,7 @@ export function EntryList({ entries, tagSuggestions }: { entries: Entry[]; tagSu
                       <span className="block">{formatRange(e)}</span>
                       <span className="block">{e.facts.length} facts</span>
                       {attentionReasons(e).map((r) => (
-                        <span key={r} className="mt-1 block rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+                        <span key={r} className="mt-1 block rounded bg-[var(--warn-soft)] px-1.5 py-0.5 text-xs text-[var(--warn)]">
                           {r}
                         </span>
                       ))}
