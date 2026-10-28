@@ -3,8 +3,9 @@ spring:
     name: jobpilot
   datasource:
     url: ${JOBPILOT_DB_URL:jdbc:postgresql://127.0.0.1:5432/jobpilot}
-    username: ${JOBPILOT_DB_USER:jobpilot}
-    password: ${JOBPILOT_DB_PASSWORD:jobpilot}
+    # No credentials are shipped: the embedded database needs none, and an external one is configured through these variables.
+    username: ${JOBPILOT_DB_USER:}
+    password: ${JOBPILOT_DB_PASSWORD:}
   flyway:
     enabled: true
   servlet:

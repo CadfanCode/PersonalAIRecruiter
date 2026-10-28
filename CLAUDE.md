@@ -35,7 +35,8 @@ packaging/  jpackage installer script, icons (docker-compose.yml is optional, fo
 ## Commands
 
 - `cd backend && ./mvnw spring-boot:run` starts the API on http://localhost:8080 with the embedded database in `~/.jobpilot/db`
-  (`JOBPILOT_DATA_DIR` moves it; `JOBPILOT_DB_EMBEDDED=false` plus `docker compose up -d` uses a Docker PostgreSQL instead)
+  (`JOBPILOT_DATA_DIR` moves it; `JOBPILOT_DB_EMBEDDED=false` plus `docker compose up -d` uses a Docker PostgreSQL instead, with
+  `JOBPILOT_DB_USER=jobpilot JOBPILOT_DB_PASSWORD=jobpilot` set, since no credentials are shipped in the app)
 - `packaging/build-installer.sh [app-image]` builds the desktop installer for the current OS
 - `cd backend && ./mvnw verify` runs all backend tests
 - `cd frontend && npm run dev` starts the UI on http://localhost:5173 (proxies /api to 8080)
@@ -81,7 +82,7 @@ one automatic rewrite before failing:
 
 ## Conventions
 
-- Package root `se.caibirch.jobpilot`. Feature packages: `profile`, `cvdb`, `search`, `jobs`,
+- Package root `app.jobpilot`. Feature packages: `profile`, `cvdb`, `search`, `jobs`,
   `ranking`, `documents`, `apply`, `applications`, `aktivitet`, `claude`, `pipeline`, `discovery`, `manual`,
   `settings`, `desktop`, `country`, `credentials`, `onboarding`.
 - Constructor injection, records for DTOs, no Lombok.

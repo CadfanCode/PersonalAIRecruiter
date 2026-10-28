@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>se.caibirch</groupId>
+    <groupId>app.jobpilot</groupId>
     <artifactId>jobpilot</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <name>jobpilot</name>
