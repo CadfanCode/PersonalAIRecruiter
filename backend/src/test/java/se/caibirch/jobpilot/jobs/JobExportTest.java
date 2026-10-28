@@ -35,7 +35,7 @@ class JobExportTest {
     void csvQuotesCommasQuotesAndNewlines() {
         String csv = new String(JobExport.csv(List.of(row("Java, junior", "Acme \"AB\"", "line1\nline2"))), StandardCharsets.UTF_8);
 
-        assertThat(csv).startsWith("﻿Rank,Score,Tech");
+        assertThat(csv).startsWith("﻿Rank,Score,Skills");
         assertThat(csv).contains("\"Java, junior\"").contains("\"Acme \"\"AB\"\"\"").contains("\"line1\nline2\"");
         assertThat(csv).contains("1,83,40,25,18,");
     }

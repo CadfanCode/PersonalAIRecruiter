@@ -1,16 +1,16 @@
 import type { Score } from '../../api/runs'
 
-const MAX = { tech: 50, experience: 30, eligibility: 20 } as const
+const MAX = { skills: 50, experience: 30, eligibility: 20 } as const
 
 /** Stacked bar of the three rubric parts; the tooltip lists them. Blank when the ad is not scored. */
 export function ScoreBar({ score }: { score: Score | null }) {
   if (!score) return <span className="text-xs text-[var(--muted)]">not scored</span>
-  const tip = `Tech ${score.tech}/${MAX.tech} · Experience ${score.experience}/${MAX.experience} · Eligibility ${score.eligibility}/${MAX.eligibility}`
+  const tip = `Skills ${score.skills}/${MAX.skills} · Experience ${score.experience}/${MAX.experience} · Eligibility ${score.eligibility}/${MAX.eligibility}`
   return (
     <div className="flex items-center gap-2" title={tip}>
       <span className="w-7 text-right text-sm font-semibold tabular-nums">{score.total}</span>
       <div role="img" aria-label={tip} className="flex h-2 w-24 overflow-hidden rounded-full bg-[var(--line)]">
-        <span className="bg-navy" style={{ width: `${score.tech}%` }} />
+        <span className="bg-navy" style={{ width: `${score.skills}%` }} />
         <span className="bg-sky-500" style={{ width: `${score.experience}%` }} />
         <span className="bg-teal-400" style={{ width: `${score.eligibility}%` }} />
       </div>
@@ -20,7 +20,7 @@ export function ScoreBar({ score }: { score: Score | null }) {
 
 export function ScoreBreakdown({ score }: { score: Score }) {
   const rows: [string, number, number, string][] = [
-    ['Tech', score.tech, MAX.tech, 'bg-navy'],
+    ['Skills', score.skills, MAX.skills, 'bg-navy'],
     ['Experience', score.experience, MAX.experience, 'bg-sky-500'],
     ['Eligibility', score.eligibility, MAX.eligibility, 'bg-teal-400'],
   ]

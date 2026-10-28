@@ -117,7 +117,7 @@ class DiscoverIT {
         claude.respond("buildSearchProfile", BASE);
         claude.respond("suggestRoles", "{\"roles\":[" + String.join(",",
                 role("Javautvecklare", "RELATED", 85, "Java developer role", "Systemutvecklare/Programmerare", "java utvecklare"),
-                role("Lärare i idrott och hälsa", "OUTSIDE_TECH", 72, "Teaching role", "Grundskollärare", "idrottslärare"),
+                role("Lärare i idrott och hälsa", "OUTSIDE_FIELD", 72, "Teaching role", "Grundskollärare", "idrottslärare"),
                 role("Säkerhetsrådgivare", "HYBRID", 50, "Security advisor role", "Säkerhetsrådgivare", "säkerhet"),
                 role("javautvecklare", "RELATED", 80, "Duplicate of the first", "x", "dup")) + "]}");
         claude.respond("profileRoles", "{\"roles\":[{\"title\":\"Behandlingsassistent\",\"profile\":"
@@ -144,8 +144,8 @@ class DiscoverIT {
 
     // ---- helpers ----
 
-    static String score(int tech, int exp, int elig, String fit) {
-        return "{\"tech\":" + tech + ",\"techMax\":50,\"experience\":" + exp + ",\"experienceMax\":30,\"eligibility\":" + elig
+    static String score(int skills, int exp, int elig, String fit) {
+        return "{\"skills\":" + skills + ",\"skillsMax\":50,\"experience\":" + exp + ",\"experienceMax\":30,\"eligibility\":" + elig
                 + ",\"eligibilityMax\":20,\"asksForNewGraduates\":false,\"experienceRequiredText\":\"\",\"language\":\"sv\",\"fit\":\""
                 + fit + "\",\"gaps\":\"None\",\"dealBreakers\":[]}";
     }
@@ -234,7 +234,7 @@ class DiscoverIT {
         JsonNode roles = call(get("/api/runs/" + id + "/roles"), null, 200);
         assertThat(roles).hasSize(3); // the duplicate title was dropped
         assertThat(roles.get(0).get("title").asText()).isEqualTo("Javautvecklare");
-        assertThat(roles.get(1).get("category").asText()).isEqualTo("OUTSIDE_TECH");
+        assertThat(roles.get(1).get("category").asText()).isEqualTo("OUTSIDE_FIELD");
         assertThat(roles.get(1).get("reasoning").asText()).isNotBlank();
         assertThat(roles.get(1).get("gaps").asText()).isNotBlank();
         // strong matches start ticked, the weak one does not
@@ -243,7 +243,7 @@ class DiscoverIT {
         assertThat(roles.get(2).get("selected").asBoolean()).isFalse();
         // the prompt gave Claude the whole CV digest and the "think widely" rule only in aggressive mode
         String prompt = claude.calls().stream().filter(c -> c.name().equals("suggestRoles")).findFirst().orElseThrow().prompt();
-        assertThat(prompt).contains("Only include roles with a matchScore of 55 or more").contains("OUTSIDE_TECH");
+        assertThat(prompt).contains("Only include roles with a matchScore of 55 or more").contains("OUTSIDE_FIELD");
         assertThat(jobs(id)).isEmpty();
     }
 

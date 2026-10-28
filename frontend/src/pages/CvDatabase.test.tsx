@@ -8,7 +8,7 @@ import { CvDatabase } from './CvDatabase'
 
 const profile: Profile = {
   id: 1, fullName: 'Cai Birch', headline: null, email: null, phone: null, phoneInternational: null, city: 'Stockholm',
-  website: null, github: null, linkedin: null, workAuthorisation: null, securityVetting: null, languages: [],
+  website: null, github: null, linkedin: null, workAuthorisation: null, languages: [],
 }
 
 const braive: Entry = {

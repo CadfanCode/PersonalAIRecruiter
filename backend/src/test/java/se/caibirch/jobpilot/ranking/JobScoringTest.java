@@ -11,8 +11,8 @@ import se.caibirch.jobpilot.jobs.JobModel.Score;
 
 class JobScoringTest {
 
-    static JobScoring.Raw raw(int tech, int exp, int elig, String fit, String gaps) {
-        return new JobScoring.Raw(tech, 50, exp, 30, elig, 20, false, "", "sv", fit, gaps, List.of());
+    static JobScoring.Raw raw(int skills, int exp, int elig, String fit, String gaps) {
+        return new JobScoring.Raw(skills, 50, exp, 30, elig, 20, false, "", "sv", fit, gaps, List.of());
     }
 
     @Test
@@ -20,14 +20,14 @@ class JobScoringTest {
         Score s = JobScoring.toScore(raw(41, 22, 17, "fit", "gaps"), "m", Instant.EPOCH);
 
         assertThat(s.total()).isEqualTo(80);
-        assertThat(s.tech()).isEqualTo(41);
+        assertThat(s.skills()).isEqualTo(41);
     }
 
     @Test
     void componentsAreClampedToTheRubric() {
         Score s = JobScoring.toScore(raw(70, 45, -5, "fit", "gaps"), "m", Instant.EPOCH);
 
-        assertThat(s.tech()).isEqualTo(50);
+        assertThat(s.skills()).isEqualTo(50);
         assertThat(s.experience()).isEqualTo(30);
         assertThat(s.eligibility()).isZero();
         assertThat(s.total()).isEqualTo(80);

@@ -58,7 +58,7 @@ describe('app shell', () => {
   it('renders the dashboard with example chips', () => {
     renderApp()
     expect(screen.getByRole('heading', { level: 1, name: 'New run' })).toBeInTheDocument()
-    expect(screen.getByText('PE teacher, Nacka')).toBeInTheDocument()
+    expect(screen.getByText('Accountant, Malmö, part time')).toBeInTheDocument()
   })
 })
 

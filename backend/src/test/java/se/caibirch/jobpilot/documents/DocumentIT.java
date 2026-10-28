@@ -706,7 +706,7 @@ class DocumentIT {
 
     @Test
     void anEnglishAdGetsEnglishDocumentsAndFileNames() throws Exception {
-        long en = addJob("Software Developer", "Ravion Nordic AB", "en", "We are looking for a developer with Java experience.", runId);
+        long en = addJob("Software Developer", "Harbourline Logistics AB", "en", "We are looking for a developer with Java experience.", runId);
         claude.respond("writeCv", t -> cvJson("en", "Built microservices in Java and Kotlin.", "Fixed race conditions in the logging flows."));
         claude.respond("writeLetter", t -> letterJson("en", "I am a Java developer with experience in microservices."));
 
@@ -718,9 +718,9 @@ class DocumentIT {
         assertThat(cv.get("content").get("languagesLine").asText()).isEqualTo("English (native) and Swedish (fluent)");
         assertThat(cv.get("content").get("gapNote").asText()).isEqualTo("Other employment 2018-2021, available on request");
         assertThat(cv.get("content").get("sections").get(1).get("items").get(0).get("title").asText()).isEqualTo("Software Developer (intern)");
-        assertThat(Files.exists(dataDir.resolve("documents/job-" + en + "/Cover_letter_Cai_Birch_Ravion.pdf"))).isTrue();
+        assertThat(Files.exists(dataDir.resolve("documents/job-" + en + "/Cover_letter_Cai_Birch_Harbourline_Logistics.pdf"))).isTrue();
         String letterPrompt = claude.calls().stream().filter(c -> c.name().equals("writeLetter")).reduce((a, b) -> b).orElseThrow().prompt();
-        assertThat(letterPrompt).contains("English").contains("Hello,").contains("Kind regards,").contains("I'm a Java developer focused on Spring Boot")
+        assertThat(letterPrompt).contains("English").contains("Hello,").contains("Kind regards,").contains("I'm an operations coordinator who has spent six years")
                 .doesNotContain("Tack för att ni överväger");
     }
 
@@ -737,7 +737,7 @@ class DocumentIT {
 
     @Test
     void aLetterThatNamesAnExampleLettersEmployerFails() throws Exception {
-        String bad = letterJson("sv", "Jag vill jobba på Knowit för att jag gillar Java.");
+        String bad = letterJson("sv", "Jag vill jobba på Norrvik för att jag gillar Java.");
         claude.respond("writeLetter", t -> bad);
         claude.respond("rewriteForViolations", t -> bad);
 

@@ -26,7 +26,7 @@ public class CvSeedImporter {
 
     public record SeedProfile(String fullName, String headline, String email, String phone, String phoneInternational,
                               String city, String website, String github, String linkedin,
-                              List<Language> languages, String workAuthorisation, String securityVetting) {
+                              List<Language> languages, String workAuthorisation) {
     }
 
     public record SeedFact(String en, String sv, String evidence, List<String> tags) {
@@ -79,7 +79,7 @@ public class CvSeedImporter {
         SeedProfile p = seed.profile();
         service.saveProfile(new Profile(null, p.fullName(), p.headline(), p.email(), p.phone(),
                 p.phoneInternational(), p.city(), p.website(), p.github(), p.linkedin(), p.workAuthorisation(),
-                p.securityVetting(), p.languages()));
+                p.languages()));
 
         seed.tags().forEach(repo::upsertTag);
         for (SeedSkill s : seed.skills()) {

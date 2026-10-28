@@ -4,7 +4,7 @@ import { DISCOVER_AGGRESSIVE_LIMIT, DISCOVER_LIMIT, DISCOVER_MAX_LIMIT, type Run
 import { Button, Field, TextArea, TextInput } from './Form'
 import { Panel } from './Panel'
 
-const EXAMPLES = ['New-grad Java, Stockholm, 7 days', 'PE teacher, Nacka', 'Logistics, Uppsala, part time']
+const EXAMPLES = ['Nurse positions in Stockholm, last 7 days', 'Accountant, Malmö, part time', 'Electrician, Uppsala, this week']
 const DISCOVER_EXAMPLES = ['Stockholm region, full time', 'Uppsala or Stockholm, 14 days', 'Anywhere in Sweden, remote is fine']
 
 const MODES: { key: RunMode; label: string; hint: string }[] = [
@@ -86,7 +86,7 @@ export function NewRunForm() {
         onChange={(e) => setPrompt(e.target.value)}
         placeholder={discover
           ? 'Optional: where and how you want to work, for example: Stockholm region, full time, ads from the last 14 days'
-          : 'Describe the roles you want, for example: new-grad Java roles in Stockholm posted in the last 7 days'}
+          : 'Describe the roles you want, for example: nurse positions in Stockholm posted in the last 7 days'}
       />
       <div className="mt-3 flex flex-wrap items-center gap-2">
         {(discover ? DISCOVER_EXAMPLES : EXAMPLES).map((text) => (

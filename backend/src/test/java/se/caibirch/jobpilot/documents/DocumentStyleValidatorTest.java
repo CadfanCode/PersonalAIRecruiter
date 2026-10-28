@@ -26,7 +26,7 @@ class DocumentStyleValidatorTest {
     }
 
     List<Violation> check(boolean asksNewGrad, List<String> banned, boolean letter, String... pairs) {
-        return new DocumentStyleValidator(asksNewGrad, banned, Set.of("Knowit")).validate(doc(pairs), letter);
+        return new DocumentStyleValidator(asksNewGrad, banned, Set.of("Norrvik")).validate(doc(pairs), letter);
     }
 
     List<String> codes(List<Violation> v) {
@@ -77,7 +77,7 @@ class DocumentStyleValidatorTest {
 
     @Test
     void anotherEmployersNameFromAnExampleLetterFails() {
-        var v = check(false, BANNED_SV, true, "paragraphs[1]", "Jag gillar kulturen på Knowit mycket");
+        var v = check(false, BANNED_SV, true, "paragraphs[1]", "Jag gillar kulturen på Norrvik mycket");
 
         assertThat(codes(v)).containsExactly("foreign_employer");
         assertThat(v.get(0).severity()).isEqualTo(Severity.FAIL);

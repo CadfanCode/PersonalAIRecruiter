@@ -18,7 +18,7 @@ import se.caibirch.jobpilot.cvdb.CvModel.Profile;
 class ActionValidatorTest {
 
     static final Profile PROFILE = new Profile(1L, "Cai Birch", "Systemutvecklare", "caibirch@proton.me", "076-185 95 27",
-            "+46 76 185 95 27", "Stockholm", "https://www.caibirch.com", "https://github.com/CadfanCode", null, null, null,
+            "+46 76 185 95 27", "Stockholm", "https://www.caibirch.com", "https://github.com/CadfanCode", null, null,
             List.of(new Language("Swedish", "fluent")));
 
     static FormField text(String id, String label) {

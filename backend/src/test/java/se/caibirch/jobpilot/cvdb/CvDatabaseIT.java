@@ -91,7 +91,7 @@ class CvDatabaseIT {
         JsonNode profile = getJson("/api/profile");
         JsonNode sp = seed.get("profile");
         for (String f : List.of("fullName", "headline", "email", "phone", "phoneInternational", "city", "website",
-                "github", "workAuthorisation", "securityVetting")) {
+                "github", "workAuthorisation")) {
             assertThat(text(profile, f)).as("profile." + f).isEqualTo(text(sp, f));
         }
         assertThat(profile.get("languages")).isEqualTo(sp.get("languages"));

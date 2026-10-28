@@ -11,9 +11,9 @@ import { Button, TextInput } from '../Form'
 import { Panel } from '../Panel'
 
 const GROUPS: { key: RoleCategory; title: string; hint: string }[] = [
-  { key: 'RELATED', title: 'Closely related roles', hint: 'Other IT and software roles that fit your profile' },
+  { key: 'RELATED', title: 'Closely related roles', hint: 'Other roles in your main field that fit your profile' },
   { key: 'HYBRID', title: 'Hybrid roles', hint: 'Roles that combine parts of your background' },
-  { key: 'OUTSIDE_TECH', title: 'Outside tech', hint: 'Roles where your other education and experience make you a strong candidate' },
+  { key: 'OUTSIDE_FIELD', title: 'Outside your main field', hint: 'Roles where your other education and experience make you a strong candidate' },
   { key: 'CUSTOM', title: 'Your own roles', hint: '' },
 ]
 

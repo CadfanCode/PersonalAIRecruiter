@@ -24,7 +24,7 @@ public class CvService {
 
     public Profile profile() {
         return repo.findProfile().orElse(new Profile(null, "", null, null, null, null, null, null, null, null,
-                null, null, List.of()));
+                null, List.of()));
     }
 
     @Transactional

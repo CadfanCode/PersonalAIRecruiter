@@ -113,15 +113,15 @@ describe('run page', () => {
     })
     renderRun('/')
 
-    await userEvent.click(screen.getByRole('button', { name: 'PE teacher, Nacka' }))
-    expect(screen.getByLabelText('Starting prompt')).toHaveValue('PE teacher, Nacka')
+    await userEvent.click(screen.getByRole('button', { name: 'Accountant, Malmö, part time' }))
+    expect(screen.getByLabelText('Starting prompt')).toHaveValue('Accountant, Malmö, part time')
     await userEvent.type(screen.getByLabelText('Max age (days)'), '14')
     await userEvent.click(screen.getByRole('button', { name: 'Start run' }))
 
     expect(await screen.findByText('Queued')).toBeInTheDocument() // the run page has loaded
     expect(screen.getByRole('heading', { name: 'Run 7' })).toBeInTheDocument()
     expect(calls.find((c) => c.method === 'POST')!.body).toEqual({
-      prompt: 'PE teacher, Nacka', mode: 'TARGETED', maxAgeDays: 14, includeWeb: false, autoContinue: false,
+      prompt: 'Accountant, Malmö, part time', mode: 'TARGETED', maxAgeDays: 14, includeWeb: false, autoContinue: false,
     })
   })
 
@@ -139,7 +139,7 @@ describe('run page', () => {
     })
     const roles = [
       role(),
-      role({ id: 2, title: 'Lärare i idrott och hälsa', category: 'OUTSIDE_TECH', matchScore: 72, reasoning: 'Master in sport science.', gaps: 'No teaching licence.', selected: false }),
+      role({ id: 2, title: 'Lärare i idrott och hälsa', category: 'OUTSIDE_FIELD', matchScore: 72, reasoning: 'Master in sport science.', gaps: 'No teaching licence.', selected: false }),
       role({ id: 3, title: 'Säkerhetsrådgivare', category: 'HYBRID', matchScore: 50, selected: false }),
     ]
     const discoverRun = (over = {}) => run({
@@ -173,7 +173,7 @@ describe('run page', () => {
       expect(within(related).getByText('Javautvecklare')).toBeInTheDocument()
       expect(within(related).getByLabelText('Match 85 out of 100')).toBeInTheDocument()
       expect(within(related).getByText('Your Java internships.')).toBeInTheDocument()
-      const outside = screen.getByRole('region', { name: 'Outside tech' })
+      const outside = screen.getByRole('region', { name: 'Outside your main field' })
       expect(within(outside).getByText('Gaps: No teaching licence.')).toBeInTheDocument()
       expect(screen.getByRole('region', { name: 'Hybrid roles' })).toBeInTheDocument()
       expect(screen.getByRole('listitem', { current: 'step' })).toHaveTextContent('Roles')

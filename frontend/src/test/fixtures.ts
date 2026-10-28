@@ -34,7 +34,7 @@ export const job = (over: Partial<JobRow> & { total?: number | null } = {}): Job
     publishedAt: '2026-10-25T10:00:00Z', deadline: '2026-12-01T10:00:00Z', language: 'sv', employmentType: 'Heltid',
     asksForNewGraduates: false, experienceRequiredText: null, status: 'NEW', notes: null, dateUnverified: false,
     evidenceUrl: null,
-    score: total === null ? null : { total, tech: Math.round(total * 0.5), experience: Math.round(total * 0.3),
+    score: total === null ? null : { total, skills: Math.round(total * 0.5), experience: Math.round(total * 0.3),
       eligibility: Math.round(total * 0.2), dealBreakers: [], fit: `fit ${id}`, gaps: `gaps ${id}`, model: 'm' },
     ...rest,
   }

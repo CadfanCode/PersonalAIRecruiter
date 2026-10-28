@@ -37,7 +37,7 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
         }
     }
 
-    public record Search(int defaultMaxAgeDays, int defaultLimit, int resultsTopN, String defaultYrkesroll) {
+    public record Search(int defaultMaxAgeDays, int defaultLimit, int resultsTopN) {
     }
 
     /** apiKey is optional: the live API needs none (SPEC 6.1). */
@@ -76,7 +76,7 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
 
     /** Defaults for everything beyond the first three settings; used by tests that only care about those. */
     public JobPilotProperties(Path dataDir, List<String> allowedOrigins, Claude claude) {
-        this(dataDir, allowedOrigins, claude, new Search(7, 50, 10, "Systemutvecklare/Programmerare"),
+        this(dataDir, allowedOrigins, claude, new Search(7, 50, 10),
                 new JobTech("http://localhost:0", "http://localhost:0", "", 5), new Browser(true, 5, false, 5_000),
                 new Aktivitet("https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera/lagg-till-aktivitet",
                         "https://arbetsformedlingen.se/for-arbetssokande/mina-sidor/aktivitetsrapportera"),

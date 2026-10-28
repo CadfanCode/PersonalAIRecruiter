@@ -15,7 +15,6 @@ const FIELDS: [TextKey, string][] = [
   ['github', 'GitHub'],
   ['linkedin', 'LinkedIn'],
   ['workAuthorisation', 'Work authorisation'],
-  ['securityVetting', 'Security vetting'],
 ]
 
 export function ProfileForm({ profile }: { profile: Profile }) {

@@ -16,7 +16,7 @@ import se.caibirch.jobpilot.cvdb.CvModel.Profile;
 class ActionExecutorTest extends PlaywrightTest {
 
     static final Profile PROFILE = new Profile(1L, "Cai Birch", "Systemutvecklare", "caibirch@proton.me", "076-185 95 27",
-            "+46 76 185 95 27", "Stockholm", "https://www.caibirch.com", "https://github.com/CadfanCode", null, null, null, List.of());
+            "+46 76 185 95 27", "Stockholm", "https://www.caibirch.com", "https://github.com/CadfanCode", null, null, List.of());
 
     static MappedAction act(FormField f, String action, String value, String file, String source) {
         return new MappedAction(f.id(), action, value, file, "r", false, source);

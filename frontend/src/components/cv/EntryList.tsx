@@ -12,6 +12,8 @@ const KIND_LABEL: Record<string, string> = {
   PROJECT: 'Projects',
   EDUCATION: 'Education',
   CERTIFICATION: 'Certifications',
+  LICENCE: 'Licences',
+  COURSE: 'Courses',
   AWARD: 'Awards',
   CONFERENCE: 'Conferences',
   PUBLICATION: 'Publications',

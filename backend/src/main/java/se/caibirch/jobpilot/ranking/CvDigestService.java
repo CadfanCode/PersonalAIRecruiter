@@ -46,7 +46,6 @@ public class CvDigestService {
         candidate.put("city", p.city());
         candidate.put("languages", p.languages());
         candidate.put("workAuthorisation", p.workAuthorisation());
-        candidate.put("securityVetting", p.securityVetting());
 
         List<Map<String, Object>> entries = new ArrayList<>();
         for (Entry e : cv.entries()) {

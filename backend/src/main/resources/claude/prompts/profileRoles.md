@@ -21,7 +21,7 @@ For each role, in the same order, return its title unchanged and a profile:
 - seniority and acceptExperienceUpToYears: use "any" and 3 unless the role is clearly entry level only.
 - exclusions: words in an ad title that rule it out, short and specific. May be empty.
 - yrkesrollForAktivitetsrapport: the Arbetsförmedlingen occupation name for this role, written as the official
-  list writes it. If unsure, use: {{defaultYrkesroll}}
+  list writes it. If unsure, give the closest general occupation name.
 - relevantTags: tag names from the list above that matter for this role.
 - jobtechQueries: 3 to 6 short free-text queries for the JobTech search API, each about one idea. Mix Swedish
   and English.

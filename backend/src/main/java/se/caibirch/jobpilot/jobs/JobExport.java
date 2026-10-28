@@ -13,7 +13,7 @@ import se.caibirch.jobpilot.jobs.JobModel.Row;
 /** CSV and XLSX export of the results table. Ad text is third-party input, so cells are sanitised. */
 public final class JobExport {
 
-    static final List<String> HEADER = List.of("Rank", "Score", "Tech", "Experience", "Eligibility", "Title",
+    static final List<String> HEADER = List.of("Rank", "Score", "Skills", "Experience", "Eligibility", "Title",
             "Employer", "End client", "Location", "Published", "Deadline", "Language", "Experience asked", "Fit",
             "Gaps", "Source", "Status", "Ad URL", "Apply URL");
 
@@ -28,7 +28,7 @@ public final class JobExport {
             List<Object> cells = new ArrayList<>();
             cells.add(r.rank());
             cells.add(s == null ? null : s.total());
-            cells.add(s == null ? null : s.tech());
+            cells.add(s == null ? null : s.skills());
             cells.add(s == null ? null : s.experience());
             cells.add(s == null ? null : s.eligibility());
             cells.add(r.title());

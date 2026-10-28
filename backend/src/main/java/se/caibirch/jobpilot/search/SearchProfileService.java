@@ -57,8 +57,7 @@ public class SearchProfileService {
         SearchProfile built = claude.run(ClaudeTask.of("buildSearchProfile",
                 ClaudeResources.prompt("buildSearchProfile", Map.of(
                         "today", today.toString(), "prompt", prompt, "constraints", constraints,
-                        "candidate", candidate, "tags", tags.isEmpty() ? "(none)" : tags,
-                        "defaultYrkesroll", props.search().defaultYrkesroll())),
+                        "candidate", candidate, "tags", tags.isEmpty() ? "(none)" : tags)),
                 ClaudeResources.schema("searchProfile"), SearchProfile.class));
 
         SearchProfile profile = options.maxAgeDays() != null ? built.withMaxAgeDays(options.maxAgeDays()) : built;

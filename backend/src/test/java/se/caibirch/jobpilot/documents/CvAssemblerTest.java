@@ -24,7 +24,7 @@ class CvAssemblerTest {
             "YH Akademin", "Sundsvall", "2024", "2026", false, null, null, 2, false, List.of(), List.of());
     Map<Long, Entry> entries = Map.of(1L, braive, 2L, kv, 5L, yh);
 
-    Profile profile = new Profile(1L, "Cai Birch", null, null, null, null, null, null, null, null, null, null,
+    Profile profile = new Profile(1L, "Cai Birch", null, null, null, null, null, null, null, null, null,
             List.of(new Language("English", "native"), new Language("Swedish", "fluent")));
 
     Selection selection = new Selection(List.of(new SelectedEntry(1, List.of(10L), "both", "r"),

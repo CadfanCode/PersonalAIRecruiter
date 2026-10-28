@@ -140,7 +140,7 @@ class FullFlowIT {
 
         claude.respond("buildSearchProfile", PROFILE);
         claude.respond("suggestRoles", ROLE);
-        claude.respond("scoreJob", "{\"tech\":45,\"techMax\":50,\"experience\":25,\"experienceMax\":30,\"eligibility\":18,\"eligibilityMax\":20,"
+        claude.respond("scoreJob", "{\"skills\":45,\"skillsMax\":50,\"experience\":25,\"experienceMax\":30,\"eligibility\":18,\"eligibilityMax\":20,"
                 + "\"asksForNewGraduates\":false,\"experienceRequiredText\":\"\",\"language\":\"sv\",\"fit\":\"Java fit\",\"gaps\":\"None\",\"dealBreakers\":[]}");
         claude.respond("selectFacts", "{\"entries\":[{\"entryId\":" + braive + ",\"factIds\":[" + fact1 + "," + fact2 + "],\"use\":\"both\",\"reason\":\"relevant\"},"
                 + "{\"entryId\":" + personal + ",\"factIds\":[" + factPersonal + "],\"use\":\"letter\",\"reason\":\"the person\"}]}");

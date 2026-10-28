@@ -54,7 +54,7 @@ describe('results table', () => {
     expect(titles()).toEqual(['Alpha', 'Bravo', 'Charlie', 'Delta'])
     expect(screen.getByText('(Taxi Stockholm)')).toBeInTheDocument()
     expect(screen.getByText('date unverified')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: /Tech 45\/50 · Experience 27\/30 · Eligibility 18\/20/ })).toBeInTheDocument()
+    expect(screen.getByRole('img', { name: /Skills 45\/50 · Experience 27\/30 · Eligibility 18\/20/ })).toBeInTheDocument()
     expect(screen.getByText('not scored')).toBeInTheDocument()
   })
 

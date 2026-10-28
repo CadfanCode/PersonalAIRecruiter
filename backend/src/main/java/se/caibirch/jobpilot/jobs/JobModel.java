@@ -10,7 +10,7 @@ public final class JobModel {
 
     public enum Status { NEW, SHORTLISTED, DOCS_READY, FILLED, APPLIED, LOGGED, REJECTED, ARCHIVED }
 
-    public record Score(int total, int tech, int experience, int eligibility, List<String> dealBreakers, String fit,
+    public record Score(int total, int skills, int experience, int eligibility, List<String> dealBreakers, String fit,
                         String gaps, String model, Instant scoredAt) {
     }
 

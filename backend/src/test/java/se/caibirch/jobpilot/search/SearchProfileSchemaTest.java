@@ -56,6 +56,6 @@ class SearchProfileSchemaTest {
         JsonNode emptyWeb = mapper.readTree("{\"jobs\":[]}");
         assertThat(JsonSchemas.validate("discoverJobsWeb", emptyWeb)).isEmpty();
         assertThat(JsonSchemas.validate("discoverJobsWeb", mapper.readTree("{}"))).isNotEmpty();
-        assertThat(JsonSchemas.validate("scoreJob", mapper.readTree("{\"tech\":1}"))).isNotEmpty();
+        assertThat(JsonSchemas.validate("scoreJob", mapper.readTree("{\"skills\":1}"))).isNotEmpty();
     }
 }

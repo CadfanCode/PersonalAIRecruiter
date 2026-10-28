@@ -93,8 +93,7 @@ public class RoleDiscoveryService {
                 : "Only include roles with a matchScore of 55 or more.";
         Suggested answer = claude.run(ClaudeTask.longRunning("suggestRoles", ClaudeResources.prompt("suggestRoles", Map.of(
                 "today", today.toString(), "context", context == null || context.isBlank() ? "(nothing)" : context,
-                "cv", digests.build().json(), "tags", tagList(), "count", String.valueOf(count), "breadth", breadth,
-                "defaultYrkesroll", props.search().defaultYrkesroll())),
+                "cv", digests.build().json(), "tags", tagList(), "count", String.valueOf(count), "breadth", breadth)),
                 ClaudeResources.schema("suggestRoles"), Suggested.class));
         int preselect = aggressive ? 45 : 60;
         Set<String> seen = new LinkedHashSet<>();
@@ -177,7 +176,7 @@ public class RoleDiscoveryService {
                     "today", today.toString(), "roles", json(missing.stream().map(RoleRepository.Row::title).toList()),
                     "candidate", json(Map.of("headline", java.util.Objects.toString(cv.profile().headline(), ""),
                             "city", java.util.Objects.toString(cv.profile().city(), ""))),
-                    "tags", tagList(), "defaultYrkesroll", props.search().defaultYrkesroll())),
+                    "tags", tagList())),
                     ClaudeResources.schema("roleProfiles"), RoleProfiles.class));
             if (built.roles().size() != missing.size()) {
                 throw new IllegalStateException("Claude returned " + built.roles().size() + " role profiles for " + missing.size() + " roles");

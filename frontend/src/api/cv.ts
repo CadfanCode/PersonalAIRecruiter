@@ -8,6 +8,8 @@ export const KINDS = [
   'PROJECT',
   'EDUCATION',
   'CERTIFICATION',
+  'LICENCE',
+  'COURSE',
   'AWARD',
   'CONFERENCE',
   'PUBLICATION',
@@ -73,7 +75,6 @@ export interface Profile {
   github: string | null
   linkedin: string | null
   workAuthorisation: string | null
-  securityVetting: string | null
   languages: Language[]
 }
 

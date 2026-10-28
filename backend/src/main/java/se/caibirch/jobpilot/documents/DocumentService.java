@@ -381,7 +381,7 @@ public class DocumentService {
 
     /** Employers named in the example letters, minus the one being applied to. */
     static Set<String> foreignEmployers(String language, String targetEmployer) {
-        Set<String> names = new LinkedHashSet<>(List.of("Knowit", "Ravion"));
+        Set<String> names = new LinkedHashSet<>(List.of("Norrvik", "Harbourline"));
         String target = targetEmployer == null ? "" : targetEmployer.toLowerCase();
         names.removeIf(n -> target.contains(n.toLowerCase()));
         return names;

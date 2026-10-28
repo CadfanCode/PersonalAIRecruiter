@@ -26,7 +26,7 @@ public class JobRepository {
     }
 
     private static final String SELECT_ROW = """
-            SELECT j.*, s.total, s.tech, s.experience AS score_experience, s.eligibility, s.deal_breakers_json,
+            SELECT j.*, s.total, s.skills, s.experience AS score_experience, s.eligibility, s.deal_breakers_json,
                    s.fit_text, s.gaps_text, s.model, s.scored_at
             FROM job j
             LEFT JOIN job_score s ON s.job_id = j.id AND s.search_profile_id = :profile
@@ -35,7 +35,7 @@ public class JobRepository {
 
     /** Rows of a Discover run: each ad's score is the one for the role it was scored against (its primary role). */
     private static final String SELECT_DISCOVER = """
-            SELECT j.*, s.total, s.tech, s.experience AS score_experience, s.eligibility, s.deal_breakers_json,
+            SELECT j.*, s.total, s.skills, s.experience AS score_experience, s.eligibility, s.deal_breakers_json,
                    s.fit_text, s.gaps_text, s.model, s.scored_at, rs.title AS role_title,
                    (SELECT array_agg(r2.title ORDER BY r2.sort_order, r2.id) FROM run_job_role x
                       JOIN role_suggestion r2 ON r2.id = x.role_suggestion_id
@@ -290,15 +290,15 @@ public class JobRepository {
     public void saveScore(long jobId, long searchProfileId, String cvVersion, Score s) {
         try {
             jdbc.sql("""
-                    INSERT INTO job_score (job_id, search_profile_id, cv_version, total, tech, experience, eligibility,
+                    INSERT INTO job_score (job_id, search_profile_id, cv_version, total, skills, experience, eligibility,
                         deal_breakers_json, fit_text, gaps_text, model)
-                    VALUES (:j, :p, :v, :total, :tech, :exp, :elig, :deals::jsonb, :fit, :gaps, :model)
+                    VALUES (:j, :p, :v, :total, :skills, :exp, :elig, :deals::jsonb, :fit, :gaps, :model)
                     ON CONFLICT (job_id, search_profile_id, cv_version) DO UPDATE SET total = EXCLUDED.total,
-                        tech = EXCLUDED.tech, experience = EXCLUDED.experience, eligibility = EXCLUDED.eligibility,
+                        skills = EXCLUDED.skills, experience = EXCLUDED.experience, eligibility = EXCLUDED.eligibility,
                         deal_breakers_json = EXCLUDED.deal_breakers_json, fit_text = EXCLUDED.fit_text,
                         gaps_text = EXCLUDED.gaps_text, model = EXCLUDED.model, scored_at = now()
                     """).param("j", jobId).param("p", searchProfileId).param("v", cvVersion).param("total", s.total())
-                    .param("tech", s.tech()).param("exp", s.experience()).param("elig", s.eligibility())
+                    .param("skills", s.skills()).param("exp", s.experience()).param("elig", s.eligibility())
                     .param("deals", mapper.writeValueAsString(s.dealBreakers())).param("fit", s.fit())
                     .param("gaps", s.gaps()).param("model", s.model()).update();
         } catch (JsonProcessingException e) {
@@ -311,7 +311,7 @@ public class JobRepository {
     private Row row(ResultSet rs, int n) throws SQLException {
         Score score = null;
         if (rs.getObject("total") != null) {
-            score = new Score(rs.getInt("total"), rs.getInt("tech"), rs.getInt("score_experience"),
+            score = new Score(rs.getInt("total"), rs.getInt("skills"), rs.getInt("score_experience"),
                     rs.getInt("eligibility"), strings(rs.getString("deal_breakers_json")), rs.getString("fit_text"),
                     rs.getString("gaps_text"), rs.getString("model"), instant(rs, "scored_at"));
         }

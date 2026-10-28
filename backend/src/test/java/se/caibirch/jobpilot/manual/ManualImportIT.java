@@ -109,7 +109,7 @@ class ManualImportIT {
         claude.calls().clear();
         claude.respond("extractJob", AD);
         claude.respond("buildSearchProfile", PROFILE);
-        claude.respond("scoreJob", "{\"tech\":30,\"techMax\":50,\"experience\":20,\"experienceMax\":30,\"eligibility\":15,\"eligibilityMax\":20,"
+        claude.respond("scoreJob", "{\"skills\":30,\"skillsMax\":50,\"experience\":20,\"experienceMax\":30,\"eligibility\":15,\"eligibilityMax\":20,"
                 + "\"asksForNewGraduates\":false,\"experienceRequiredText\":\"\",\"language\":\"sv\",\"fit\":\"Teaching fit\",\"gaps\":\"No licence\",\"dealBreakers\":[]}");
         site.resetAll();
     }

@@ -12,7 +12,7 @@ class FileNamesTest {
     void followsTheSpecPatterns() {
         assertThat(FileNames.of(Kind.CV, "sv", "Cai Birch", "Comstream AB")).isEqualTo("CV_Cai_Birch_Comstream.pdf");
         assertThat(FileNames.of(Kind.LETTER, "sv", "Cai Birch", "Comstream AB")).isEqualTo("Personligt_brev_Cai_Birch_Comstream.pdf");
-        assertThat(FileNames.of(Kind.LETTER, "en", "Cai Birch", "Ravion Nordic AB")).isEqualTo("Cover_letter_Cai_Birch_Ravion.pdf");
+        assertThat(FileNames.of(Kind.LETTER, "en", "Cai Birch", "Harbourline Logistics AB")).isEqualTo("Cover_letter_Cai_Birch_Harbourline_Logistics.pdf");
     }
 
     @Test

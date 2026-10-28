@@ -140,8 +140,8 @@ class PipelineIT {
 
     // ---- helpers ----
 
-    static String score(int tech, int exp, int elig, String fit) {
-        return "{\"tech\":" + tech + ",\"techMax\":50,\"experience\":" + exp + ",\"experienceMax\":30,\"eligibility\":" + elig
+    static String score(int skills, int exp, int elig, String fit) {
+        return "{\"skills\":" + skills + ",\"skillsMax\":50,\"experience\":" + exp + ",\"experienceMax\":30,\"eligibility\":" + elig
                 + ",\"eligibilityMax\":20,\"asksForNewGraduates\":false,\"experienceRequiredText\":\"1 år\",\"language\":\"sv\",\"fit\":\""
                 + fit + "\",\"gaps\":\"No Angular\",\"dealBreakers\":[]}";
     }

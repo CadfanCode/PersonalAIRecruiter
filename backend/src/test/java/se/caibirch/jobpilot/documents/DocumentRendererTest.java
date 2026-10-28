@@ -28,7 +28,7 @@ class DocumentRendererTest {
     DocumentRenderer renderer = new DocumentRenderer(new ObjectMapper());
 
     Profile profile = new Profile(1L, "Cai Birch", "Systemutvecklare", "caibirch@proton.me", "076-185 95 27", "+46 76 185 95 27",
-            "Stockholm", "https://www.caibirch.com", "https://github.com/CadfanCode", null, null, null,
+            "Stockholm", "https://www.caibirch.com", "https://github.com/CadfanCode", null, null,
             List.of(new Language("English", "native")));
 
     static CvContent cv(String language, List<Section> sections) {
@@ -147,7 +147,7 @@ class DocumentRendererTest {
 
     @Test
     void contactLineSkipsMissingPartsAndUrlSchemes() {
-        var p = new Profile(1L, "A", null, null, null, null, "Stockholm", "https://www.example.com/", null, null, null, null, List.of());
+        var p = new Profile(1L, "A", null, null, null, null, "Stockholm", "https://www.example.com/", null, null, null, List.of());
 
         assertThat(DocumentRenderer.contactLine(p)).isEqualTo("Stockholm | www.example.com");
     }

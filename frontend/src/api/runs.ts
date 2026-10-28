@@ -64,7 +64,7 @@ export interface RunView {
 
 export interface Score {
   total: number
-  tech: number
+  skills: number
   experience: number
   eligibility: number
   dealBreakers: string[]
@@ -100,7 +100,7 @@ export interface JobRow {
   roleTypes?: string[]
 }
 
-export type RoleCategory = 'RELATED' | 'HYBRID' | 'OUTSIDE_TECH' | 'CUSTOM'
+export type RoleCategory = 'RELATED' | 'HYBRID' | 'OUTSIDE_FIELD' | 'CUSTOM'
 
 export interface RoleView {
   id: number

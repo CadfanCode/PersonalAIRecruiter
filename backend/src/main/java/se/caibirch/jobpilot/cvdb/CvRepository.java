@@ -40,7 +40,7 @@ public class CvRepository {
                 rs.getLong("id"), rs.getString("full_name"), rs.getString("headline"), rs.getString("email"),
                 rs.getString("phone"), rs.getString("phone_international"), rs.getString("city"),
                 rs.getString("website"), rs.getString("github"), rs.getString("linkedin"),
-                rs.getString("work_authorisation"), rs.getString("security_vetting"),
+                rs.getString("work_authorisation"),
                 readLanguages(rs.getString("languages_json")))).optional();
     }
 
@@ -52,16 +52,16 @@ public class CvRepository {
                     UPDATE profile SET full_name = :fullName, headline = :headline, email = :email, phone = :phone,
                         phone_international = :phoneInternational, city = :city, website = :website,
                         github = :github, linkedin = :linkedin, work_authorisation = :workAuthorisation,
-                        security_vetting = :securityVetting, languages_json = :languages::jsonb, updated_at = now()
+                        languages_json = :languages::jsonb, updated_at = now()
                     WHERE id = :id
                     """)
                     .params(profileParams(p, languages)).param("id", existing.get().id()).update();
         } else {
             jdbc.sql("""
                     INSERT INTO profile (full_name, headline, email, phone, phone_international, city, website,
-                        github, linkedin, work_authorisation, security_vetting, languages_json)
+                        github, linkedin, work_authorisation, languages_json)
                     VALUES (:fullName, :headline, :email, :phone, :phoneInternational, :city, :website,
-                        :github, :linkedin, :workAuthorisation, :securityVetting, :languages::jsonb)
+                        :github, :linkedin, :workAuthorisation, :languages::jsonb)
                     """)
                     .params(profileParams(p, languages)).update();
         }
@@ -80,7 +80,6 @@ public class CvRepository {
         m.put("github", p.github());
         m.put("linkedin", p.linkedin());
         m.put("workAuthorisation", p.workAuthorisation());
-        m.put("securityVetting", p.securityVetting());
         m.put("languages", languagesJson);
         return m;
     }

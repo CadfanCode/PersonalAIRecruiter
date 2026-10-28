@@ -121,7 +121,7 @@ aktivitet_log(id, job_id, yrkesroll, employer_label, municipality, omfattning,
               answered_ad, applied_date, saved_at, result, message)
 
 -- added in V2 (milestone 2), to hold the whole seed:
---   profile: phone_international, work_authorisation, security_vetting
+--   profile: phone_international, work_authorisation
 --   cv_entry: title_en, note (note is an owner to-do, internal only, never sent to a prompt)
 --   start_ym / end_ym hold "YYYY-MM", or "YYYY" when the month is unknown
 known_gap(id, text, sort_order)
@@ -145,7 +145,7 @@ pipeline_run.mode (TARGETED | DISCOVER | MANUAL), pipeline_run.source_url (MANUA
 application(job_id PK -> job, run_id, search_mode, role_type, selected_at, submitted_at, docs_json)
   -- the pipeline basket. submitted_at is set only by the user's own "I submitted it" click; docs_json records the document
   -- ids, versions and file names used then.
-role_suggestion(id, run_id, title, category RELATED|HYBRID|OUTSIDE_TECH|CUSTOM, match_score, reasoning, gaps, selected,
+role_suggestion(id, run_id, title, category RELATED|HYBRID|OUTSIDE_FIELD|CUSTOM, match_score, reasoning, gaps, selected,
                 user_added, profile_json, search_profile_id, sort_order)
 run_job.role_suggestion_id          -- the role an ad was scored and is tailored against (its best-relevance role)
 run_job_role(run_id, job_id, role_suggestion_id)   -- every role that found the ad

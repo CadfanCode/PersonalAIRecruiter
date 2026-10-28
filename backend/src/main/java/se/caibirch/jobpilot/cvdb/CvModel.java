@@ -10,7 +10,7 @@ public final class CvModel {
     }
 
     public enum Kind {
-        EDUCATION, WORK, INTERNSHIP, PROJECT, OWN_BUSINESS, VOLUNTEER, CERTIFICATION, AWARD, PUBLICATION,
+        EDUCATION, WORK, INTERNSHIP, PROJECT, OWN_BUSINESS, VOLUNTEER, CERTIFICATION, LICENCE, COURSE, AWARD, PUBLICATION,
         CONFERENCE, LANGUAGE, OTHER
     }
 
@@ -19,7 +19,7 @@ public final class CvModel {
 
     public record Profile(Long id, String fullName, String headline, String email, String phone,
                           String phoneInternational, String city, String website, String github, String linkedin,
-                          String workAuthorisation, String securityVetting, List<Language> languages) {
+                          String workAuthorisation, List<Language> languages) {
     }
 
     public record Fact(Long id, Long entryId, String textEn, String textSv, String evidence, String metrics,

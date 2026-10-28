@@ -15,7 +15,7 @@
             "enum": [
               "RELATED",
               "HYBRID",
-              "OUTSIDE_TECH"
+              "OUTSIDE_FIELD"
             ]
           },
           "matchScore": {

@@ -110,7 +110,7 @@ public class AktivitetService {
             return new Plan(row.id(), row.title(), null, "The job is outside Sweden; log this one by hand (choose Utomlands).");
         }
         String yrkesroll = jobs.latestSearchProfileId(row.id()).flatMap(profiles::find)
-                .map(p -> p.profile().yrkesrollForAktivitetsrapport()).orElse(props.search().defaultYrkesroll());
+                .map(p -> p.profile().yrkesrollForAktivitetsrapport()).filter(y -> y != null && !y.isBlank()).orElse(row.title());
         LocalDate date = (row.appliedAt() == null ? clock.instant() : row.appliedAt()).atZone(ZoneId.of("Europe/Stockholm")).toLocalDate();
         return new Plan(row.id(), row.title(), new Entry(row.id(), row.title(), yrkesroll, employerLabel(row), row.municipality(),
                 omfattning(row.employmentType()), "Sverige", true, date), null);

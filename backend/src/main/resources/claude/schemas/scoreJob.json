@@ -1,8 +1,8 @@
 {
   "type": "object",
   "properties": {
-    "tech": { "type": "integer" },
-    "techMax": { "type": "integer" },
+    "skills": { "type": "integer" },
+    "skillsMax": { "type": "integer" },
     "experience": { "type": "integer" },
     "experienceMax": { "type": "integer" },
     "eligibility": { "type": "integer" },
@@ -14,7 +14,7 @@
     "gaps": { "type": "string" },
     "dealBreakers": { "type": "array", "items": { "type": "string" } }
   },
-  "required": ["tech", "techMax", "experience", "experienceMax", "eligibility", "eligibilityMax",
+  "required": ["skills", "skillsMax", "experience", "experienceMax", "eligibility", "eligibilityMax",
                "asksForNewGraduates", "experienceRequiredText", "language", "fit", "gaps", "dealBreakers"],
   "additionalProperties": false
 }

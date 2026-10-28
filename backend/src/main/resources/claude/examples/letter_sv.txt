@@ -1,42 +1,34 @@
+Ansökan: Sjuksköterska till Norrvik vårdcentral
 
-Ansökan: Utvecklare (.NET/Java) till Knowit Secure Solutions
-Signport-teamet, Stockholm
+Norrvik vårdcentral, Uppsala
 
 Hej,
 
-Jag är systemutvecklare med erfarenhet av Java och Spring Boot från två medtechbolag och en
-bakgrund som forskare och laborationslärare inom hälso- och idrottsvetenskap. Det som
-verkligen fångar mig är säkerhet: hur ett system vet vem du är, vad du får göra och varför det går
-att lita på en underskrift. När jag läste om Signport blev jag därför genuint glad. Elektroniska
-underskrifter, PKI och IAM är precis där jag vill fördjupa mig, och att göra det i en produkt som
-svenska organisationer förlitar sig på varje dag känns meningsfullt.
+Jag är sjuksköterska med fem års erfarenhet av primärvård och akutmottagning, och jag söker mig
+nu till en vårdcentral där jag får följa patienter över tid. När jag läste om Norrvik fastnade jag
+för att ni arbetar i team runt patienten och satsar på förebyggande vård, för det är precis det jag
+vill göra mer av.
 
-Det tydligaste exemplet på hur jag arbetar är Skepparklar, en e-lärandeplattform med kurser
-inför Förarintyg, Kustskepparintyg och VHF/SRC som jag har byggt från grunden i Java 21, Spring
-Boot 4, PostgreSQL och React. Inloggningen byggde jag själv i stället för att lägga den hos en
-extern leverantör: lösenord hashade med Argon2, tvåfaktorsautentisering med TOTP,
-e-postverifiering, rate limiting och sessioner i PostgreSQL. Riskfyllda åtgärder i adminkonsolen
-kräver ny autentisering och hamnar i en granskningslogg, och konton raderas genom
-anonymisering så att GDPR och orderhistorik går ihop. Plattformen driftsätts via GitHub Actions
-till en Linux-server bakom Cloudflare och nginx, med Testcontainers i testerna och automatiska
-backuper.
+Det tydligaste exemplet på hur jag arbetar är omorganisationen av mottagningen för
+drop-in-patienter på akutmottagningen i Västerås. Väntetiderna var långa eftersom alla
+patienter gick genom samma första bedömning. Jag föreslog en enklare prioritering vid
+ankomsten, tog fram en kort checklista tillsammans med två kollegor och handledde nya
+medarbetare i rutinen. Efter ett halvår var väntetiden för de lindrigaste fallen tydligt kortare,
+och färre patienter lämnade mottagningen utan att ha blivit sedda.
 
-På Braive utvecklade och driftsatte jag mikrotjänster i Java och Kotlin med Spring Boot,
-PostgreSQL, Docker och Kubernetes, och gjorde hanteringen av känsliga vårddata säkrare. På
-Omika Health byggde jag en P2P-videochatt med WebRTC och säker autentisering. Jag har också
-arbetat med OAuth 2.0 och OpenID Connect via Keycloak och Auth0. PKI och HSM:er har jag ännu
-inte arbetat med i produktion, men kryptografi, TLS och certifikat är mitt största tekniska intresse,
-och jag ser fram emot att lära mig av ett team som kan det på djupet.
+På akutmottagningen arbetade jag med triage, provtagning, sårvård och dokumentation i
+journalsystemet, och på en vårdcentral i Enköping ansvarade jag för vaccinationer, diabetes-
+och blodtrycksmottagning. Jag har ännu inte arbetat med hembesök i den omfattning som ni
+beskriver, men jag har gjort ett fåtal tillsammans med distriktssköterskor och ser fram emot att
+bygga vidare på det.
 
-Jag trivs i team där man hjälps åt och gillar produkter som får växa och bli bättre över tid. Som
-kriminalvårdare och laborationslärare har jag vant mig vid miljöer där noggrannhet, sekretess
-och ett lugnt bemötande är en självklarhet, och jag har genomgått säkerhetsprövning enligt
-säkerhetsskyddslagen. Svenska talar och skriver jag flytande, och engelska är mitt modersmål.
-När jag inte kodar är jag oftast ute på sjön, vilket kanske förklarar varför mitt största sidoprojekt
-handlar om båtar.
+Jag trivs i team där man hjälps åt och pratar öppet när något är svårt. Kollegor beskriver mig som lugn
+och tydlig, vilket hjälper på hektiska dagar. Svenska och engelska talar och skriver jag
+flytande. På fritiden tränar jag ett ungdomslag i innebandy, vilket har lärt mig mycket om att få en
+grupp att dra åt samma håll.
 
 Tack för att ni överväger min ansökan, och jag hoppas få höra av er i sinom tid.
 
 Vänliga hälsningar,
 
-Cai Birch
+Alex Lindgren
