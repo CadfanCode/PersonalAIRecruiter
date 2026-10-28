@@ -91,6 +91,39 @@ class NoUnguardedBrowserCallsTest {
     }
 
     @Test
+    void theSavedLoginMethodTypesTwiceAndNeverClicksPressesOrSubmits() throws IOException {
+        String guard = code(MAIN.resolve("se/caibirch/jobpilot/apply/BrowserGuard.java"));
+        int start = guard.indexOf("public LoginResult fillSavedLogin");
+        int end = guard.indexOf("private static String hostOf");
+        assertThat(start).isGreaterThan(0);
+        String method = guard.substring(start, end);
+
+        assertThat(Pattern.compile("\\.fill\\s*\\(").matcher(method).results().count()).as("the username and the password, nothing else").isEqualTo(2);
+        assertThat(method).contains("user.first().fill(username,").contains("pw.fill(password,");
+        assertThat(method).doesNotContainPattern("\\.(click|press|check|uncheck|selectOption|setInputFiles|evaluate|dispatchEvent)\\s*\\(")
+                .doesNotContain("Enter").doesNotContain("submit(");
+        // the host must match before anything is typed
+        assertThat(method.indexOf("HOST_MISMATCH")).isLessThan(method.indexOf(".fill("));
+        // the credentials never reach a log line or an exception message in the guard
+        assertThat(method).doesNotContainPattern("log\\.|Logger|getMessage\\(\\)|toString\\(\\)");
+    }
+
+    @Test
+    void onlyTheApplyServiceTypesASavedLogin() throws IOException {
+        List<String> callers = new ArrayList<>();
+        for (Path file : javaFiles()) {
+            if (code(file).contains(".fillSavedLogin(") && !is(file, "BrowserGuard.java") && !is(file, "BrowserService.java")) {
+                callers.add(file.getFileName().toString());
+            }
+        }
+        assertThat(callers).containsExactly("ApplyService.java");
+        // and only from the one place that first checks the saved login belongs to exactly the page's host
+        String apply = code(MAIN.resolve("se/caibirch/jobpilot/apply/ApplyService.java"));
+        assertThat(Pattern.compile("fillSavedLogin\\(").matcher(apply).results().count()).isEqualTo(1);
+        assertThat(apply).contains("savedLogins.credentialsFor(host)");
+    }
+
+    @Test
     void pageScriptsRunsOnlyTheTwoFixedScriptsFromTheClasspath() throws IOException {
         String scripts = code(MAIN.resolve("se/caibirch/jobpilot/apply/PageScripts.java"));
 

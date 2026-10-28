@@ -18,7 +18,24 @@ public final class TabState {
 
     /** The JSON the UI gets. */
     public record View(long jobId, String title, String employer, String url, Status status, String message,
-                       List<Done> done, List<Skipped> skipped, List<Question> questions, int passes) {
+                       List<Done> done, List<Skipped> skipped, List<Question> questions, int passes, String phase,
+                       String signInHost, boolean loginFilled) {
+    }
+
+    /**
+     * The six things the user sees (plus queued and closed), whatever the tab is doing underneath: FILLING, NEEDS_LOGIN,
+     * NEEDS_ATTENTION, READY_FOR_SUBMISSION, FAILED, QUEUED, CLOSED. SUBMITTED comes from the application, not from the tab.
+     */
+    public static String phaseOf(Status s) {
+        return switch (s) {
+            case QUEUED -> "QUEUED";
+            case OPENING, FILLING -> "FILLING";
+            case WAITING_FOR_SIGN_IN -> "NEEDS_LOGIN";
+            case READY_FOR_USER -> "READY_FOR_SUBMISSION";
+            case ERROR -> "FAILED";
+            case CLOSED -> "CLOSED";
+            case NEEDS_MANUAL_APPLY, NEEDS_ANSWERS, SESSION_EXPIRED, EMAIL_ONLY, NO_APPLY_LINK, APPLY_MANUALLY -> "NEEDS_ATTENTION";
+        };
     }
 
     private final long jobId;
@@ -31,6 +48,8 @@ public final class TabState {
     private List<Skipped> skipped = List.of();
     private List<Question> questions = List.of();
     private int passes;
+    private String signInHost;
+    private String loginFilledUrl;
     final AtomicBoolean busy = new AtomicBoolean();
     private static final java.util.concurrent.atomic.AtomicLong SEQUENCE = new java.util.concurrent.atomic.AtomicLong();
     private final long seq = SEQUENCE.incrementAndGet();
@@ -60,6 +79,19 @@ public final class TabState {
         questions = rest;
     }
 
+    synchronized void signInHost(String host) {
+        this.signInHost = host;
+    }
+
+    /** Records that the saved login was typed into the page at this address, so it is not typed again over the user's edits. */
+    synchronized void loginFilled(String url) {
+        this.loginFilledUrl = url;
+    }
+
+    synchronized boolean loginFilledFor(String url) {
+        return url != null && url.equals(loginFilledUrl);
+    }
+
     synchronized void url(String url) {
         this.url = url;
     }
@@ -86,6 +118,7 @@ public final class TabState {
     }
 
     synchronized View view() {
-        return new View(jobId, title, employer, url, status, message, done, skipped, questions, passes);
+        return new View(jobId, title, employer, url, status, message, done, skipped, questions, passes, phaseOf(status), signInHost,
+                loginFilledUrl != null);
     }
 }

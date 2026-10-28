@@ -126,6 +126,11 @@ public class BrowserService implements DisposableBean {
         });
     }
 
+    /** Types the saved login into the tab's login form (see {@link BrowserGuard#fillSavedLogin}); never presses anything. */
+    public BrowserGuard.LoginResult fillSavedLogin(long jobId, String host, String username, String password) {
+        return withTab(jobId, page -> new BrowserGuard(page).fillSavedLogin(host, username, password));
+    }
+
     public boolean hasTab(long jobId) {
         return call(() -> {
             Page p = tabs.get(jobId);

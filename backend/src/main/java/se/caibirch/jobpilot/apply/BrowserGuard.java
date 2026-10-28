@@ -62,6 +62,56 @@ public final class BrowserGuard {
         this.aktivitetFormUrl = aktivitetFormUrl;
     }
 
+    // ---- saved portal login (CLAUDE.md rule 2, ADR 0016) ----
+
+    /** What {@link #fillSavedLogin} did. Never carries a value from the page or the credentials. */
+    public enum LoginResult { FILLED, HOST_MISMATCH, NOT_A_LOGIN_FORM, FAILED }
+
+    private static final int LOGIN_FORM_MAX_INPUTS = 3;
+    private static final String TEXT_INPUT = "input:visible:not([type=hidden]):not([type=password]):not([type=submit]):not([type=button])"
+            + ":not([type=image]):not([type=reset]):not([type=checkbox]):not([type=radio]):not([type=file])";
+
+    /**
+     * Types a login the user chose to save for this portal: the username, then the password, nothing else. It refuses unless the
+     * page's host is exactly {@code expectedHost} and the page shows one login form with exactly one password field and at most
+     * three inputs (a sign-up form has a second password field or more inputs). It never clicks the login button and never
+     * presses a key: the user presses "Log in" (rule 1). The values come only from the credential store and are never logged.
+     */
+    public LoginResult fillSavedLogin(String expectedHost, String username, String password) {
+        String host = hostOf(page.url());
+        if (host == null || expectedHost == null || !host.equalsIgnoreCase(expectedHost)) {
+            return LoginResult.HOST_MISMATCH;
+        }
+        try {
+            Locator passwords = page.locator("input[type=password]:visible");
+            if (passwords.count() != 1) {
+                return LoginResult.NOT_A_LOGIN_FORM;
+            }
+            Locator pw = passwords.first();
+            Locator form = pw.locator("xpath=ancestor::form[1]");
+            Locator scope = form.count() > 0 ? form : page.locator("body");
+            Locator visibleInputs = scope.locator("input:visible:not([type=hidden]):not([type=submit]):not([type=button]):not([type=image])"
+                    + ":not([type=reset]):not([type=checkbox]):not([type=radio])");
+            Locator user = scope.locator(TEXT_INPUT);
+            if (visibleInputs.count() > LOGIN_FORM_MAX_INPUTS || user.count() < 1) {
+                return LoginResult.NOT_A_LOGIN_FORM;
+            }
+            user.first().fill(username, new Locator.FillOptions().setTimeout(5_000));
+            pw.fill(password, new Locator.FillOptions().setTimeout(5_000));
+            return LoginResult.FILLED;
+        } catch (PlaywrightException e) {
+            return LoginResult.FAILED; // the message could echo a value, so it is dropped
+        }
+    }
+
+    private static String hostOf(String url) {
+        try {
+            return java.net.URI.create(url).getHost();
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
     // ---- fields ----
 
     public Outcome fill(FormField f, String value) {

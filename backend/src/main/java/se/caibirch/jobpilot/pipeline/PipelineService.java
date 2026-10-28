@@ -1,6 +1,7 @@
 package se.caibirch.jobpilot.pipeline;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -34,6 +35,7 @@ import se.caibirch.jobpilot.country.JobSource;
 import se.caibirch.jobpilot.search.SearchProfile;
 import se.caibirch.jobpilot.search.SearchProfileService;
 import se.caibirch.jobpilot.search.WebDiscoveryService;
+import se.caibirch.jobpilot.settings.AppSettings;
 import se.caibirch.jobpilot.settings.JobPilotProperties;
 
 /**
@@ -48,6 +50,7 @@ public class PipelineService {
     private final RunRepository runs;
     private final SearchProfileService profiles;
     private final CountryRegistry countries;
+    private final AppSettings settings;
     private final WebDiscoveryService web;
     private final JobRepository jobs;
     private final CvDigestService digests;
@@ -63,11 +66,20 @@ public class PipelineService {
     static final int DISCOVER_AGGRESSIVE_LIMIT = 150;
     static final int DISCOVER_MAX_LIMIT = 150;
     static final int AGGRESSIVE_MAX_AGE_DAYS = 14;
+    /** Hard cap of ads scored by one run, in every mode. */
+    static final int MAX_LIMIT = 150;
+    /** Progress range of the scoring step. */
+    static final int RANK_START = 45;
+    static final int RANK_END = 95;
+    /** Settings key: also search employers' own career pages (slower, uses web search). Off by default. */
+    public static final String CAREER_PAGES_KEY = "search.careerPages";
     static final String DISCOVER_DEFAULT_CONTEXT = "Any suitable job within commuting distance of the candidate's city, full time or part time";
 
     public PipelineService(RunRepository runs, SearchProfileService profiles, CountryRegistry countries,
                            WebDiscoveryService web, JobRepository jobs, CvDigestService digests, ScoreService scorer,
-                           RoleDiscoveryService discovery, ExecutorService pipelineExecutor, Clock clock, JobPilotProperties props) {
+                           RoleDiscoveryService discovery, ExecutorService pipelineExecutor, Clock clock, JobPilotProperties props,
+                           AppSettings settings) {
+        this.settings = settings;
         this.runs = runs;
         this.profiles = profiles;
         this.countries = countries;
@@ -118,7 +130,23 @@ public class PipelineService {
     public RunView view(long id) {
         Run run = runs.find(id).orElseThrow(() -> new NotFoundException("No run " + id));
         SearchProfile profile = run.searchProfileId() == null ? null : profiles.get(run.searchProfileId()).profile();
-        return new RunView(run, profile);
+        return new RunView(run, profile, etaSeconds(run));
+    }
+
+    /**
+     * Time left while ads are being scored, from how long this step has taken for the share of it that is done. Null while the
+     * run is in any other step or has not progressed far enough to say.
+     */
+    Integer etaSeconds(Run run) {
+        if (run.status() != Status.RUNNING || !Step.RANK.equals(run.step()) || run.stepStartedAt() == null) {
+            return null;
+        }
+        double done = (run.progress() - RANK_START) / (double) (RANK_END - RANK_START);
+        if (done < 0.05 || done >= 1) {
+            return null;
+        }
+        double elapsed = Duration.between(run.stepStartedAt(), clock.instant()).toMillis() / 1000.0;
+        return (int) Math.round(elapsed * (1 - done) / done);
     }
 
     public List<Run> list() {
@@ -289,7 +317,7 @@ public class PipelineService {
         }
 
         String summary = "Found " + found + " ads for " + roles.size() + " roles, " + merged.size() + " distinct after filters, scoring " + picked;
-        runs.update(id, Status.RUNNING, Step.RANK, 45, summary);
+        runs.update(id, Status.RUNNING, Step.RANK, RANK_START, summary);
         checkCancelled(id);
         CvDigestService.Digest cv = digests.build();
         int total = picked;
@@ -303,7 +331,7 @@ public class PipelineService {
             ResolvedRole role = roles.get(entry.getKey());
             int base0 = doneBefore[0];
             ScoreService.Summary result = scorer.score(entry.getValue(), role.searchProfileId(), role.profile(), cv,
-                    done -> runs.progress(id, 45 + (total == 0 ? 50 : 50 * (base0 + done) / total), "Scored " + (base0 + done) + " of " + total),
+                    done -> runs.progress(id, RANK_START + (total == 0 ? RANK_END - RANK_START : (RANK_END - RANK_START) * (base0 + done) / total), "Scored " + (base0 + done) + " of " + total),
                     () -> cancelRequested.contains(id));
             doneBefore[0] += entry.getValue().size();
             scored += result.scored();
@@ -348,7 +376,7 @@ public class PipelineService {
         List<NewJob> candidates = new ArrayList<>(collected.jobs());
         List<String> notes = new ArrayList<>(collected.notes());
 
-        if (options.web()) {
+        if (options.web() || settings.getBoolean(CAREER_PAGES_KEY, false)) {
             checkCancelled(id);
             runs.progress(id, 40, "Searching career pages");
             try {
@@ -373,12 +401,12 @@ public class PipelineService {
         String dropped = filtered.dropped().isEmpty() ? "" : " (dropped: " + filtered.dropSummary() + ")";
         String summary = "Found " + candidates.size() + " ads, " + kept.size() + " after filters" + dropped
                 + ", scoring " + toScore.size();
-        runs.update(id, Status.RUNNING, Step.RANK, 45, summary);
+        runs.update(id, Status.RUNNING, Step.RANK, RANK_START, summary);
         checkCancelled(id);
 
         CvDigestService.Digest cv = digests.build();
         ScoreService.Summary result = scorer.score(toScore, profileId, profile, cv,
-                done -> runs.progress(id, 45 + (toScore.isEmpty() ? 50 : 50 * done / toScore.size()),
+                done -> runs.progress(id, RANK_START + (toScore.isEmpty() ? RANK_END - RANK_START : (RANK_END - RANK_START) * done / toScore.size()),
                         "Scored " + done + " of " + toScore.size()),
                 () -> cancelRequested.contains(id));
         checkCancelled(id);
@@ -447,8 +475,8 @@ public class PipelineService {
         if (o.maxAgeDays() != null && (o.maxAgeDays() < 1 || o.maxAgeDays() > 90)) {
             throw new IllegalArgumentException("maxAgeDays must be between 1 and 90");
         }
-        if (o.limit() != null && (o.limit() < 1 || o.limit() > (o.discover() ? DISCOVER_MAX_LIMIT : 200))) {
-            throw new IllegalArgumentException("limit must be between 1 and " + (o.discover() ? DISCOVER_MAX_LIMIT : 200));
+        if (o.limit() != null && (o.limit() < 1 || o.limit() > MAX_LIMIT)) {
+            throw new IllegalArgumentException("limit must be between 1 and " + MAX_LIMIT);
         }
         if (!java.util.Set.of("TARGETED", "DISCOVER", "MANUAL").contains(o.modeName())) {
             throw new IllegalArgumentException("mode must be TARGETED or DISCOVER");

@@ -97,6 +97,8 @@ class PipelineIT {
     @Autowired
     JdbcClient jdbc;
     @Autowired
+    se.caibirch.jobpilot.settings.JobPilotProperties props;
+    @Autowired
     ObjectMapper mapper;
     @Autowired
     FakeClaudeRunner claude;
@@ -206,6 +208,46 @@ class PipelineIT {
     }
 
     // ---- tests ----
+
+    // ---- live progress: the time left is estimated while ads are being scored ----
+
+    long runningRun(String step, int progress, int stepStartedSecondsAgo) {
+        return jdbc.sql("""
+                INSERT INTO pipeline_run (status, step, progress, message, started_at, step_started_at, options_json)
+                VALUES ('RUNNING', :step, :p, 'working', now() - interval '10 minutes', now() - (:ago || ' seconds')::interval, '{}'::jsonb)
+                RETURNING id""").param("step", step).param("p", progress).param("ago", String.valueOf(stepStartedSecondsAgo))
+                .query(Long.class).single();
+    }
+
+    @Test
+    void whileAdsAreBeingScoredTheViewEstimatesTheTimeLeftFromTheShareDone() throws Exception {
+        // scoring covers progress 45 to 95: at 70 it is half done after 60 s, so about 60 s are left
+        long id = runningRun("RANK", 70, 60);
+
+        JsonNode view = call(get("/api/runs/" + id), null, 200);
+
+        assertThat(view.get("etaSeconds").asInt()).isBetween(55, 70);
+    }
+
+    @Test
+    void noEstimateIsGivenBeforeScoringHasProgressedOrInAnotherStep() throws Exception {
+        assertThat(call(get("/api/runs/" + runningRun("RANK", 46, 30)), null, 200).get("etaSeconds").isNull()).as("barely started").isTrue();
+        assertThat(call(get("/api/runs/" + runningRun("SEARCH", 30, 30)), null, 200).get("etaSeconds").isNull()).as("searching").isTrue();
+        long done = jdbc.sql("""
+                INSERT INTO pipeline_run (status, step, progress, message, started_at, options_json)
+                VALUES ('DONE', 'DONE', 100, 'done', now(), '{}'::jsonb) RETURNING id""").query(Long.class).single();
+        assertThat(call(get("/api/runs/" + done), null, 200).get("etaSeconds").isNull()).isTrue();
+    }
+
+    @Test
+    void theAdsToScoreDefaultToTwentyAndAreCappedAt150InEveryMode() throws Exception {
+        call(post("/api/runs"), "{\"prompt\":\"java\",\"limit\":151}", 400);
+        call(post("/api/runs"), "{\"prompt\":\"java\",\"limit\":0}", 400);
+        call(post("/api/runs"), "{\"mode\":\"DISCOVER\",\"limit\":151}", 400);
+        assertThat(jdbc.sql("SELECT count(*) FROM pipeline_run").query(Long.class).single()).as("nothing was started").isZero();
+        assertThat(PipelineService.MAX_LIMIT).isEqualTo(150);
+        assertThat(props.search().defaultLimit()).isEqualTo(20);
+    }
 
     @Test
     void autoRunSearchesFiltersDedupesScoresAndRanks() throws Exception {

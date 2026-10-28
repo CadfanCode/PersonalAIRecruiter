@@ -30,6 +30,7 @@ import se.caibirch.jobpilot.apply.PageClassifier.Kind;
 import se.caibirch.jobpilot.apply.TabState.Status;
 import se.caibirch.jobpilot.claude.ClaudeResources;
 import se.caibirch.jobpilot.claude.ClaudeRunner;
+import se.caibirch.jobpilot.credentials.SavedLoginService;
 import se.caibirch.jobpilot.claude.ClaudeTask;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
 import se.caibirch.jobpilot.cvdb.AnswerKeys;
@@ -63,13 +64,15 @@ public class ApplyService {
     private final SnapshotRepository snapshots;
     private final ExecutorService executor;
     private final PasteOnlyHosts pasteOnly;
+    private final SavedLoginService savedLogins;
     private final ObjectMapper mapper;
     private final JobPilotProperties props;
     private final Map<Long, TabState> tabs = new ConcurrentHashMap<>();
 
     public ApplyService(BrowserService browser, ClaudeRunner claude, JobRepository jobs, CvService cv, CvDigestService digests,
                         DocumentRepository documents, SnapshotRepository snapshots, ExecutorService applyExecutor, PasteOnlyHosts pasteOnly,
-                        ObjectMapper mapper, JobPilotProperties props) {
+                        ObjectMapper mapper, JobPilotProperties props, SavedLoginService savedLogins) {
+        this.savedLogins = savedLogins;
         this.browser = browser;
         this.claude = claude;
         this.jobs = jobs;
@@ -280,7 +283,8 @@ public class ApplyService {
             state.url(snap.url());
             switch (snap.kind()) {
                 case WAITING_FOR_SIGN_IN -> {
-                    state.set(Status.WAITING_FOR_SIGN_IN, "Waiting for you to sign in. JobPilot never types passwords or handles BankID.");
+                    state.set(Status.WAITING_FOR_SIGN_IN, SIGN_IN_MESSAGE);
+                    offerSavedLogin(state, snap.url());
                     return;
                 }
                 case MANUAL_APPLY -> {
@@ -334,7 +338,8 @@ public class ApplyService {
                 Kind kind = browser.withTab(jobId, page -> PageClassifier.classify(PageScripts.detect(page)));
                 if (kind == Kind.WAITING_FOR_SIGN_IN) {
                     state.result(done, skipped, new ArrayList<>(questions.values()), pass);
-                    state.set(Status.WAITING_FOR_SIGN_IN, "A sign-in or account page appeared. Waiting for you; JobPilot never types passwords or handles BankID.");
+                    state.set(Status.WAITING_FOR_SIGN_IN, "A sign-in or account page appeared. " + SIGN_IN_MESSAGE);
+                    offerSavedLogin(state, browser.withTab(jobId, page -> PageScripts.detect(page).url()));
                     return;
                 }
             }
@@ -442,16 +447,56 @@ public class ApplyService {
                 continue;
             }
             try {
-                Kind kind = browser.withTab(state.jobId(), page -> PageClassifier.classify(PageScripts.detect(page)));
-                if (kind != Kind.WAITING_FOR_SIGN_IN) {
+                PageScripts.PageState ps = browser.withTab(state.jobId(), page -> PageScripts.detect(page));
+                if (PageClassifier.classify(ps) != Kind.WAITING_FOR_SIGN_IN) {
                     state.set(Status.FILLING, "Signed in: reading the page");
                     background(state, () -> fillPage(state));
+                } else {
+                    offerSavedLogin(state, ps.url());
                 }
             } catch (BrowserService.TabClosedException e) {
                 state.set(Status.CLOSED, "The tab was closed");
             } catch (RuntimeException e) {
                 log.debug("Polling job {}: {}", state.jobId(), e.toString());
             }
+        }
+    }
+
+    private static final String SIGN_IN_MESSAGE = "Waiting for you to sign in. JobPilot never creates accounts or handles BankID.";
+
+    /**
+     * Notes which portal the tab is waiting at (so the card can offer to save a login) and, when the user saved a login for
+     * exactly that host, types it into the login form once. It never presses the login button: signing in is the user's step.
+     * The password goes from the credential store straight to the page and into no log, prompt or status text.
+     */
+    private void offerSavedLogin(TabState state, String url) {
+        String host = hostOf(url);
+        state.signInHost(host);
+        if (host == null || state.loginFilledFor(url)) {
+            return;
+        }
+        try {
+            savedLogins.credentialsFor(host).ifPresent(c -> {
+                BrowserGuard.LoginResult result = browser.fillSavedLogin(state.jobId(), host, c.username(), c.password());
+                if (result == BrowserGuard.LoginResult.FILLED) {
+                    state.loginFilled(url);
+                    savedLogins.markUsed(host);
+                    state.set(Status.WAITING_FOR_SIGN_IN, "Your saved login for " + host
+                            + " is filled in. Press Log in yourself; JobPilot carries on once you are in.");
+                }
+            });
+        } catch (BrowserService.TabClosedException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            log.info("The saved login for {} was not used ({})", host, e.getClass().getSimpleName());
+        }
+    }
+
+    private static String hostOf(String url) {
+        try {
+            return url == null ? null : java.net.URI.create(url).getHost();
+        } catch (IllegalArgumentException e) {
+            return null;
         }
     }
 

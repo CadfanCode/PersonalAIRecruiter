@@ -38,7 +38,7 @@ jobpilot:
     concurrency: 4
   search:
     default-max-age-days: 7
-    default-limit: 50
+    default-limit: 20
     results-top-n: 10
   jobtech:
     base-url: ${JOBPILOT_JOBTECH_URL:https://jobsearch.api.jobtechdev.se}

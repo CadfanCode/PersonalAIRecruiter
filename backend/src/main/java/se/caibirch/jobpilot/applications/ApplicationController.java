@@ -39,6 +39,23 @@ public class ApplicationController {
         return Map.of("items", service.createDocuments(r.jobIds(), r.runId()));
     }
 
+    /** The jobs to act on; empty or missing means every selected application that is not submitted yet. */
+    public record JobsRequest(List<Long> jobIds) {
+    }
+
+    /** "Approve all": per document, what was approved and what was refused and why. Never all-or-nothing. */
+    @PostMapping("/approve-all")
+    public List<ApplicationModel.ApprovalResult> approveAll(@RequestBody(required = false) JobsRequest r) {
+        return service.approveAll(r == null ? null : r.jobIds());
+    }
+
+    /** "Apply": tabs open only for applications with both documents approved; the rest come back as skipped, with reasons. */
+    @PostMapping("/apply")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public ApplicationModel.ApplyResult apply(@RequestBody(required = false) JobsRequest r) {
+        return service.applyApproved(r == null ? null : r.jobIds());
+    }
+
     @DeleteMapping("/{jobId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(@PathVariable long jobId) {

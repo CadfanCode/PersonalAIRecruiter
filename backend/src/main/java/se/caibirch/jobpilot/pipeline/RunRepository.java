@@ -44,7 +44,11 @@ public class RunRepository {
     }
 
     public void update(long id, Status status, String step, int progress, String message) {
-        jdbc.sql("UPDATE pipeline_run SET status = :s, step = :step, progress = :p, message = :m WHERE id = :id")
+        jdbc.sql("""
+                UPDATE pipeline_run SET status = :s, progress = :p, message = :m,
+                    step_started_at = CASE WHEN step IS DISTINCT FROM :step THEN now() ELSE step_started_at END,
+                    step = :step
+                WHERE id = :id""")
                 .param("s", status.name()).param("step", step).param("p", progress).param("m", message)
                 .param("id", id).update();
     }
@@ -144,7 +148,8 @@ public class RunRepository {
                     rs.getTimestamp("started_at").toInstant(),
                     rs.getTimestamp("finished_at") == null ? null : rs.getTimestamp("finished_at").toInstant(),
                     mapper.readValue(rs.getString("options_json"), RunOptions.class), rs.getString("sp_prompt"),
-                    rs.getString("kind"), jobIdOf(rs), rs.getString("source_url"));
+                    rs.getString("kind"), jobIdOf(rs), rs.getString("source_url"),
+                    rs.getTimestamp("step_started_at") == null ? null : rs.getTimestamp("step_started_at").toInstant());
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Corrupt options_json for run " + rs.getLong("id"), e);
         }

@@ -12,6 +12,7 @@ public class ProviderSettings {
     public static final String API = "api";
     static final String PROVIDER_KEY = "claude.provider";
     static final String MODEL_KEY = "api.model";
+    static final String TESTED_KEY = "claude.tested";
 
     private final AppSettings settings;
     private final ApiProperties api;
@@ -35,6 +36,19 @@ public class ProviderSettings {
             throw new IllegalArgumentException("Unknown provider " + id);
         }
         settings.put(PROVIDER_KEY, id);
+    }
+
+    /** True when the provider chosen now is the one whose connection test last passed (changing the key or provider resets it). */
+    public boolean selectedWorks() {
+        return selectedId().equals(settings.get(TESTED_KEY, ""));
+    }
+
+    public void testPassed(String providerId) {
+        settings.put(TESTED_KEY, providerId);
+    }
+
+    public void forgetTest() {
+        settings.delete(TESTED_KEY);
     }
 
     public String apiModel() {

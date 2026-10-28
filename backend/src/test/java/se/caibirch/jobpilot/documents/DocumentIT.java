@@ -467,6 +467,158 @@ class DocumentIT {
         assertThat(peak.get()).as("more than one job's writers ran together").isGreaterThanOrEqualTo(3);
     }
 
+    // ---- the overhaul: approval gating, Apply only for approved pairs, snapshots of what was submitted, reported status ----
+
+    JsonNode application(long job) throws Exception {
+        for (JsonNode a : call(get("/api/applications"), null, 200)) {
+            if (a.get("jobId").asLong() == job) {
+                return a;
+            }
+        }
+        throw new AssertionError("no application for job " + job);
+    }
+
+    /** A second job whose letter keeps an en dash, so approval is refused for it. */
+    long jobWithABadLetter() throws Exception {
+        long bad = addJob("Backendutvecklare", "Dash AB", "sv", "Vi söker en backendutvecklare i Stockholm.", runId);
+        claude.respond("writeLetter", t -> t.prompt().contains("Dash AB")
+                ? letterJson("sv", "Jag är systemutvecklare – med erfarenhet av Java.")
+                : letterJson("sv", "Jag är systemutvecklare med erfarenhet av Java och Kotlin."));
+        claude.respond("rewriteForViolations", t -> letterJson("sv", "Jag är systemutvecklare – med erfarenhet av Java."));
+        return bad;
+    }
+
+    @Test
+    void anApplicationIsReadyToApplyOnlyWhenBothDocumentsAreApproved() throws Exception {
+        generate(jobId);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+
+        JsonNode before = application(jobId);
+        assertThat(before.get("readyToApply").asBoolean()).isFalse();
+        assertThat(before.get("blockers").toString()).contains("The CV is not approved").contains("The cover letter is not approved");
+
+        call(post("/api/documents/" + docs(jobId).get("cv").get("id").asLong() + "/approve"), null, 200);
+        assertThat(application(jobId).get("blockers").toString()).doesNotContain("The CV is not approved").contains("The cover letter is not approved");
+
+        call(post("/api/documents/" + docs(jobId).get("letter").get("id").asLong() + "/approve"), null, 200);
+        assertThat(application(jobId).get("readyToApply").asBoolean()).isTrue();
+        assertThat(application(jobId).get("blockers")).isEmpty();
+    }
+
+    @Test
+    void approveAllApprovesWhatIsCleanAndReportsTheRefusedOnesWithTheirReasonInsteadOfFailingAsAWhole() throws Exception {
+        long bad = jobWithABadLetter();
+        generate(jobId);
+        generate(bad);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "," + bad + "],\"runId\":" + runId + "}", 200);
+
+        JsonNode results = call(post("/api/applications/approve-all"), "{}", 200);
+
+        java.util.Map<String, JsonNode> byKey = new java.util.HashMap<>();
+        results.forEach(r -> byKey.put(r.get("jobId").asLong() + ":" + r.get("kind").asText(), r));
+        assertThat(byKey.get(jobId + ":cv").get("approved").asBoolean()).isTrue();
+        assertThat(byKey.get(jobId + ":letter").get("approved").asBoolean()).isTrue();
+        assertThat(byKey.get(bad + ":cv").get("approved").asBoolean()).isTrue();
+        JsonNode refused = byKey.get(bad + ":letter");
+        assertThat(refused.get("approved").asBoolean()).isFalse();
+        assertThat(refused.get("reason").asText()).isNotBlank();
+
+        assertThat(application(jobId).get("readyToApply").asBoolean()).isTrue();
+        assertThat(application(bad).get("readyToApply").asBoolean()).isFalse();
+        assertThat(application(bad).get("blockers").toString()).contains("The cover letter is not approved");
+
+        // a second "Approve all" leaves the approved ones alone
+        JsonNode again = call(post("/api/applications/approve-all"), null, 200);
+        again.forEach(r -> {
+            if (r.get("jobId").asLong() == jobId) {
+                assertThat(r.get("alreadyApproved").asBoolean()).isTrue();
+            }
+        });
+    }
+
+    @Test
+    void applyOpensOnlyApplicationsWithBothDocumentsApprovedAndNamesTheOthersWithAReason() throws Exception {
+        long bad = jobWithABadLetter();
+        generate(jobId);
+        generate(bad);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "," + bad + "],\"runId\":" + runId + "}", 200);
+        call(post("/api/applications/approve-all"), "{}", 200);
+
+        JsonNode result = call(post("/api/applications/apply"), "{}", 202);
+
+        assertThat(result.get("started")).hasSize(1);
+        assertThat(result.get("started").get(0).get("jobId").asLong()).isEqualTo(jobId);
+        assertThat(result.get("skipped")).hasSize(1);
+        assertThat(result.get("skipped").get(0).get("jobId").asLong()).isEqualTo(bad);
+        assertThat(result.get("skipped").get(0).get("reason").asText()).contains("cover letter is not approved");
+        call(post("/api/applications/apply"), "{\"jobIds\":[999999]}", 404);
+    }
+
+    @Test
+    void whatWasSubmittedIsFrozenAndLaterEditsRegenerationAndUndoCannotChangeIt() throws Exception {
+        generate(jobId);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+        call(post("/api/applications/approve-all"), "{}", 200);
+        JsonNode cvBefore = docs(jobId).get("cv");
+
+        call(post("/api/applications/" + jobId + "/submitted"), null, 200);
+
+        JsonNode list = call(get("/api/submitted"), null, 200);
+        assertThat(list).hasSize(1);
+        long submittedId = list.get(0).get("id").asLong();
+        assertThat(list.get(0).get("title").asText()).isEqualTo("Junior Java-utvecklare");
+        assertThat(list.get(0).get("employer").asText()).isEqualTo("Comstream AB");
+        assertThat(list.get(0).get("cvVersion").asInt()).isEqualTo(1);
+        assertThat(list.get(0).get("letterVersion").asInt()).isEqualTo(1);
+        assertThat(list.get(0).get("reportedAt").isNull()).isTrue();
+        byte[] pdfAtSubmission = mvc.perform(get("/api/submitted/" + submittedId + "/cv.pdf")).andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(pdfAtSubmission, 0, 4, StandardCharsets.US_ASCII)).isEqualTo("%PDF");
+        JsonNode detail = call(get("/api/submitted/" + submittedId), null, 200);
+        assertThat(detail.get("adText").asText()).contains("Javautvecklare till vårt team");
+
+        // the live document changes afterwards ...
+        ObjectNode edited = (ObjectNode) cvBefore.get("content").deepCopy();
+        edited.put("headline", "A different headline after submission");
+        call(put("/api/documents/" + cvBefore.get("id").asLong()), mapper.writeValueAsString(edited), 200);
+        generate(jobId);
+        // ... but the record of what was submitted does not
+        JsonNode still = call(get("/api/submitted/" + submittedId), null, 200);
+        assertThat(still.get("cvContentJson").asText()).doesNotContain("A different headline after submission");
+        assertThat(still.get("cvContentJson").asText()).isEqualTo(detail.get("cvContentJson").asText());
+        byte[] pdfLater = mvc.perform(get("/api/submitted/" + submittedId + "/cv.pdf")).andReturn().getResponse().getContentAsByteArray();
+        assertThat(pdfLater).isEqualTo(pdfAtSubmission);
+
+        // submitting twice does not add a second record; undoing removes it (it was not really submitted)
+        call(post("/api/applications/" + jobId + "/submitted"), null, 200);
+        assertThat(call(get("/api/submitted"), null, 200)).hasSize(1);
+        call(delete("/api/applications/" + jobId + "/submitted"), null, 200);
+        assertThat(call(get("/api/submitted"), null, 200)).isEmpty();
+    }
+
+    @Test
+    void anApplicationReportedToArbetsformedlingenIsMarkedAndCannotBeUnsubmittedOrReportedTwice() throws Exception {
+        generate(jobId);
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);
+        call(post("/api/applications/" + jobId + "/submitted"), null, 200);
+        assertThat(call(get("/api/submitted?reported=false"), null, 200)).hasSize(1);
+
+        // what AktivitetService writes after a saved activity
+        jdbc.sql("""
+                INSERT INTO aktivitet_log (job_id, yrkesroll, employer_label, municipality, omfattning, answered_ad, applied_date, saved_at, result)
+                VALUES (:j, 'Systemutvecklare', 'Comstream AB', 'Stockholm', 'Heltid', TRUE, current_date, now(), 'SAVED')""").param("j", jobId).update();
+
+        JsonNode all = call(get("/api/submitted"), null, 200);
+        assertThat(all.get(0).get("reportedAt").isNull()).isFalse();
+        assertThat(call(get("/api/submitted?reported=false"), null, 200)).isEmpty();
+        assertThat(call(get("/api/submitted?reported=true"), null, 200)).hasSize(1);
+        call(delete("/api/applications/" + jobId + "/submitted"), null, 409);
+
+        // the confirmation step already refuses an application that was reported once
+        JsonNode plan = call(get("/api/aktivitet/plan?jobIds=" + jobId), null, 200);
+        assertThat(plan.get(0).get("entry").isNull()).isTrue();
+        assertThat(plan.get(0).get("ineligible").asText()).contains("Already logged");
+    }
+
     @Test
     void selectingAJobTwiceKeepsOneApplicationAndRemovingItLeavesTheDocuments() throws Exception {
         call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + runId + "}", 200);

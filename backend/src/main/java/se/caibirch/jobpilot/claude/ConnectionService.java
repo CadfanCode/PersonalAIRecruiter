@@ -72,6 +72,7 @@ public class ConnectionService {
 
     public void select(String provider) {
         settings.select(provider);
+        settings.forgetTest();
     }
 
     public void saveApiKey(String key, String model) {
@@ -83,6 +84,7 @@ public class ConnectionService {
             throw new IllegalArgumentException("That does not look like an Anthropic API key (they start with sk-ant-)");
         }
         secrets.put(ApiClaudeRunner.KEY_ACCOUNT, trimmed);
+        settings.forgetTest();
         if (model != null) {
             settings.apiModel(model);
         }
@@ -90,6 +92,7 @@ public class ConnectionService {
 
     public void deleteApiKey() {
         secrets.delete(ApiClaudeRunner.KEY_ACCOUNT);
+        settings.forgetTest();
         if (ProviderSettings.API.equals(settings.selectedId())) {
             settings.select(ProviderSettings.CLI);
         }
@@ -110,6 +113,9 @@ public class ConnectionService {
             ClaudeHealthService.HealthAnswer answer = provider.run(ClaudeTask.of("health",
                     ClaudeResources.prompt("health", Map.of()), ClaudeResources.schema("health"), ClaudeHealthService.HealthAnswer.class));
             boolean ok = "ok".equals(answer.status());
+            if (ok) {
+                settings.testPassed(providerId);
+            }
             return new TestResult(ok, providerId, ok ? null : "OTHER", ok ? "Connected." : "Unexpected answer: " + answer.status(), null, ms(started));
         } catch (ClaudeCallException e) {
             return failure(providerId, e.getMessage(), ms(started));

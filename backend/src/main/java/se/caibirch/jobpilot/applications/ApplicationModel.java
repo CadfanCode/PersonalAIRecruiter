@@ -1,6 +1,7 @@
 package se.caibirch.jobpilot.applications;
 
 import java.time.Instant;
+import java.util.List;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
@@ -22,6 +23,18 @@ public final class ApplicationModel {
      */
     public record View(long jobId, Long runId, String title, String employer, String municipality, String url, String applyUrl,
                        String searchMode, String roleType, Integer score, String jobStatus, Instant selectedAt,
-                       Instant submittedAt, DocState cv, DocState letter, Generation generation, JsonNode submittedDocs) {
+                       Instant submittedAt, DocState cv, DocState letter, Generation generation, JsonNode submittedDocs,
+                       boolean readyToApply, List<String> blockers) {
+    }
+
+    /** The outcome of "Approve all" for one document: approved now, already approved, or refused with the reason. */
+    public record ApprovalResult(long jobId, String title, String kind, boolean approved, boolean alreadyApproved, String reason) {
+    }
+
+    public record Skipped(long jobId, String title, String reason) {
+    }
+
+    /** What "Apply" did: the tabs that started, and the applications that did not proceed, each with the reason. */
+    public record ApplyResult(List<se.caibirch.jobpilot.apply.TabState.View> started, List<Skipped> skipped) {
     }
 }

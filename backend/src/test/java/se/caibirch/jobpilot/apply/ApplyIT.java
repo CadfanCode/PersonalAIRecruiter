@@ -73,6 +73,42 @@ class ApplyIT {
         FakeClaudeRunner fakeRunner() {
             return new FakeClaudeRunner();
         }
+
+        @Bean
+        @Primary
+        se.caibirch.jobpilot.credentials.InMemorySecretStore secretStore() {
+            return new se.caibirch.jobpilot.credentials.InMemorySecretStore();
+        }
+    }
+
+    /** The fixtures over http on 127.0.0.1, because a saved login is matched on the page's host and file: pages have none. */
+    static com.sun.net.httpserver.HttpServer http;
+
+    @BeforeAll
+    static void serveFixtures() throws IOException {
+        http = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress(java.net.InetAddress.getLoopbackAddress(), 0), 0);
+        http.createContext("/", exchange -> {
+            Path file = FIXTURES.resolve(exchange.getRequestURI().getPath().substring(1)).normalize();
+            if (!file.startsWith(FIXTURES) || !Files.isRegularFile(file)) {
+                exchange.sendResponseHeaders(404, -1);
+            } else {
+                byte[] body = Files.readAllBytes(file);
+                exchange.getResponseHeaders().add("Content-Type", "text/html; charset=utf-8");
+                exchange.sendResponseHeaders(200, body.length);
+                exchange.getResponseBody().write(body);
+            }
+            exchange.close();
+        });
+        http.start();
+    }
+
+    @org.junit.jupiter.api.AfterAll
+    static void stopFixtures() {
+        http.stop(0);
+    }
+
+    static String httpUrl(String fixture) {
+        return "http://127.0.0.1:" + http.getAddress().getPort() + "/" + fixture;
     }
 
     @Autowired
@@ -83,6 +119,8 @@ class ApplyIT {
     ObjectMapper mapper;
     @Autowired
     FakeClaudeRunner claude;
+    @Autowired
+    se.caibirch.jobpilot.credentials.InMemorySecretStore secrets;
     @Autowired
     BrowserService browser;
     @Autowired
@@ -104,6 +142,8 @@ class ApplyIT {
         call(put("/api/profile"), """
                 {"fullName":"Cai Birch","headline":"Systemutvecklare","email":"caibirch@proton.me","phone":"076-185 95 27",
                  "phoneInternational":"+46 76 185 95 27","city":"Stockholm","website":"https://www.caibirch.com","languages":[]}""", 200);
+        secrets.contents().clear();
+        jdbc.sql("DELETE FROM saved_login").update();
         for (long open : currentTabs()) {
             call(post("/api/apply/" + open + "/close"), null, 204);
         }
@@ -247,6 +287,103 @@ class ApplyIT {
         assertThat(claude.calls().get(0).prompt()).contains("\"cv\":{\"available\":false}");
     }
 
+    // ---- saved portal logins (ADR 0016): typed by JobPilot's own code, only for the exact host, never submitted ----
+
+    JsonNode awaitLoginFilled(long id) throws Exception {
+        long deadline = System.currentTimeMillis() + 20_000;
+        JsonNode last = null;
+        while (System.currentTimeMillis() < deadline) {
+            for (JsonNode v : call(get("/api/apply/status"), null, 200)) {
+                if (v.get("jobId").asLong() == id) {
+                    last = v;
+                    if (v.get("loginFilled").asBoolean()) {
+                        return v;
+                    }
+                }
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("the saved login was not filled in: " + last);
+    }
+
+    JsonNode waitAtLogin(long id) throws Exception {
+        JsonNode waiting = awaitStatus(id, "WAITING_FOR_SIGN_IN", "ERROR");
+        assertThat(waiting.get("status").asText()).isEqualTo("WAITING_FOR_SIGN_IN");
+        Thread.sleep(1_200); // several polls: a login that was going to be typed has been typed by now
+        return call(get("/api/apply/status"), null, 200).findParents("jobId").stream()
+                .filter(v -> v.get("jobId").asLong() == id).findFirst().orElseThrow();
+    }
+
+    @Test
+    void aSavedLoginForExactlyThisHostIsTypedIntoTheLoginFormAndTheLoginButtonIsLeftToTheUser() throws Exception {
+        call(put("/api/logins"), "{\"host\":\"127.0.0.1\",\"username\":\"cai@example.com\",\"password\":\"s3cret-pw!\"}", 200);
+        long id = job("Varbi ad", httpUrl("varbi_login.html"), null);
+        approvedDoc(id, "CV", true);
+
+        open(id);
+        JsonNode view = awaitLoginFilled(id);
+
+        assertThat(view.get("status").asText()).isEqualTo("WAITING_FOR_SIGN_IN");
+        assertThat(view.get("phase").asText()).isEqualTo("NEEDS_LOGIN");
+        assertThat(view.get("signInHost").asText()).isEqualTo("127.0.0.1");
+        assertThat(view.get("message").asText()).contains("saved login").contains("Press Log in yourself");
+        assertThat(view.toString()).doesNotContain("s3cret-pw");
+        assertThat(value(id, "#u")).isEqualTo("cai@example.com");
+        assertThat(value(id, "#pw")).isEqualTo("s3cret-pw!");
+        assertThat(submitted(id)).as("the login form was never submitted").isFalse();
+        assertThat(clicks(id)).as("nothing was clicked, not even Log in").isEmpty();
+        assertThat(claude.calls()).as("the password never goes near the model").isEmpty();
+        assertThat(call(get("/api/logins"), null, 200).toString()).doesNotContain("s3cret-pw").contains("cai@example.com");
+        assertThat(jdbc.sql("SELECT host || username FROM saved_login").query(String.class).single()).doesNotContain("s3cret");
+
+        // once the user is in, the page is filled as usual
+        browser.withTab(id, p -> p.navigate(httpUrl("varbi_form.html")));
+        assertThat(awaitStatus(id, "NEEDS_ANSWERS", "READY_FOR_USER", "ERROR").get("status").asText()).isNotEqualTo("ERROR");
+    }
+
+    @Test
+    void aLoginSavedForAnotherHostIsNeverTyped() throws Exception {
+        call(put("/api/logins"), "{\"host\":\"example.com\",\"username\":\"cai@example.com\",\"password\":\"s3cret-pw!\"}", 200);
+        long id = job("Varbi ad", httpUrl("varbi_login.html"), null);
+        approvedDoc(id, "CV", true);
+
+        open(id);
+        JsonNode view = waitAtLogin(id);
+
+        assertThat(view.get("loginFilled").asBoolean()).isFalse();
+        assertThat(view.get("signInHost").asText()).isEqualTo("127.0.0.1");
+        assertThat(value(id, "#u")).isEmpty();
+        assertThat(value(id, "#pw")).isEmpty();
+    }
+
+    @Test
+    void aSignUpFormGetsNothingEvenWhenALoginIsSavedForTheHost() throws Exception {
+        call(put("/api/logins"), "{\"host\":\"127.0.0.1\",\"username\":\"cai@example.com\",\"password\":\"s3cret-pw!\"}", 200);
+        long id = job("Signup ad", httpUrl("signup.html"), null);
+        approvedDoc(id, "CV", true);
+
+        open(id);
+        JsonNode view = waitAtLogin(id);
+
+        assertThat(view.get("loginFilled").asBoolean()).isFalse();
+        assertThat(value(id, "#pw1")).isEmpty();
+        assertThat(value(id, "#pw2")).isEmpty();
+        assertThat(value(id, "#em")).isEmpty();
+    }
+
+    @Test
+    void withoutASavedLoginTheTabJustWaitsAndNamesThePortalSoTheUserCanSaveOne() throws Exception {
+        long id = job("Varbi ad", httpUrl("varbi_login.html"), null);
+        approvedDoc(id, "CV", true);
+
+        open(id);
+        JsonNode view = waitAtLogin(id);
+
+        assertThat(view.get("loginFilled").asBoolean()).isFalse();
+        assertThat(view.get("signInHost").asText()).isEqualTo("127.0.0.1");
+        assertThat(value(id, "#pw")).isEmpty();
+    }
+
     @Test
     void waitsAtALoginWallWithoutTouchingThePasswordThenFillsAfterTheUserSignedIn() throws Exception {
         long id = job("Varbi ad", url("varbi_login.html"), null);
@@ -255,7 +392,7 @@ class ApplyIT {
 
         open(id);
         JsonNode waiting = awaitStatus(id, "WAITING_FOR_SIGN_IN", "ERROR");
-        assertThat(waiting.get("message").asText()).contains("never types passwords");
+        assertThat(waiting.get("message").asText()).contains("never creates accounts");
         assertThat(value(id, "#pw")).isEmpty();
         assertThat(claude.calls()).as("nothing is sent to the model while a login wall is up").isEmpty();
 

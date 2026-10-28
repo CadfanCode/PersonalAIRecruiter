@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import se.caibirch.jobpilot.claude.ClaudeConcurrency;
 import se.caibirch.jobpilot.common.ApiExceptions.NotFoundException;
 import se.caibirch.jobpilot.documents.StyleRuleRepository;
+import se.caibirch.jobpilot.pipeline.PipelineService;
 import se.caibirch.jobpilot.documents.StyleRuleRepository.Phrase;
 import se.caibirch.jobpilot.documents.StyleRuleRepository.Rule;
 
@@ -39,12 +40,29 @@ public class SettingsController {
     public record PerformanceInput(Integer claudeConcurrency) {
     }
 
+    public record SearchSettings(boolean careerPages) {
+    }
+
     private final StyleRuleRepository repo;
     private final ClaudeConcurrency concurrency;
+    private final AppSettings settings;
 
-    public SettingsController(StyleRuleRepository repo, ClaudeConcurrency concurrency) {
+    public SettingsController(StyleRuleRepository repo, ClaudeConcurrency concurrency, AppSettings settings) {
         this.repo = repo;
         this.concurrency = concurrency;
+        this.settings = settings;
+    }
+
+    /** Search options that are not asked for on every run. Platsbanken is always searched; career pages are opt-in. */
+    @GetMapping("/search")
+    public SearchSettings search() {
+        return new SearchSettings(settings.getBoolean(PipelineService.CAREER_PAGES_KEY, false));
+    }
+
+    @PutMapping("/search")
+    public SearchSettings updateSearch(@RequestBody SearchSettings in) {
+        settings.put(PipelineService.CAREER_PAGES_KEY, in.careerPages());
+        return search();
     }
 
     /** How many model calls run at once: more is faster, but your Claude plan's rate limits are the real ceiling. */

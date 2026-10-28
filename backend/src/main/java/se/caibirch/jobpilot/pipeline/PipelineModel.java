@@ -26,10 +26,10 @@ public final class PipelineModel {
 
     public record Run(long id, Long searchProfileId, Status status, String step, int progress, String message,
                       Instant startedAt, Instant finishedAt, RunOptions options, String prompt, String kind, Long jobId,
-                      String sourceUrl) {
+                      String sourceUrl, Instant stepStartedAt) {
     }
 
     /** A run with its current search profile, as the UI polls it. */
-    public record RunView(Run run, SearchProfile profile) {
+    public record RunView(Run run, SearchProfile profile, Integer etaSeconds) {
     }
 }
