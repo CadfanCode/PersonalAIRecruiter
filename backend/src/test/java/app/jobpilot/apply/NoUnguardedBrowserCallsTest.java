@@ -87,7 +87,35 @@ class NoUnguardedBrowserCallsTest {
         assertThat(guard).contains(".press(\"ArrowDown\"").doesNotContain("\"Enter\"").doesNotContain("Key.ENTER");
         assertThat(FORM_SUBMIT.matcher(guard).find()).isFalse();
         // the only reasons a click may have; a new one has to change this test on purpose
-        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA }");
+        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA, OPEN_APPLICATION_FORM, ADVANCE_STEP, OPEN_DROPDOWN }");
+    }
+
+    @Test
+    void onlyTheGuardLoadsOrOpensPagesFromAnAdAndNobodyWatchesForPopupsElsewhere() throws IOException {
+        List<String> offenders = new ArrayList<>();
+        for (Path file : javaFiles()) {
+            String code = code(file);
+            if (code.contains(".onPopup(") && !is(file, "BrowserGuard.java")) {
+                offenders.add(file + " listens for popups");
+            }
+            // the one other navigation is BrowserService.openTab, the application's own first load of the ad
+            if (Pattern.compile("\\.navigate\\s*\\(").matcher(code).find() && !is(file, "BrowserGuard.java") && !is(file, "BrowserService.java")) {
+                offenders.add(file + " navigates a page");
+            }
+        }
+        assertThat(offenders).isEmpty();
+        String guard = code(MAIN.resolve("app/jobpilot/apply/BrowserGuard.java"));
+        // an address is only loaded after the address check, and a click for OPEN_APPLICATION_FORM only after the page-is-a-form
+        // and something-was-filled refusals
+        int open = guard.indexOf("public Opened follow");
+        String method = guard.substring(open, guard.indexOf("private String absolute"));
+        assertThat(method.indexOf("anythingFilled")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("fieldCount() > 0")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("addressAllowed.test")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("anythingFilled")).isLessThan(method.indexOf("click(target"));
+        // only a label that is exactly an advance word may be pressed at all, and a sending word is refused on top of it
+        assertThat(method.indexOf("GuardPatterns.isAdvance(label)")).isLessThan(method.indexOf("click(target"));
+        assertThat(guard).contains("pageMaySend(target)");
     }
 
     @Test
@@ -124,7 +152,7 @@ class NoUnguardedBrowserCallsTest {
     }
 
     @Test
-    void pageScriptsRunsOnlyTheTwoFixedScriptsFromTheClasspath() throws IOException {
+    void pageScriptsRunsOnlyTheFixedScriptsFromTheClasspath() throws IOException {
         String scripts = code(MAIN.resolve("app/jobpilot/apply/PageScripts.java"));
 
         assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(4);

@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { useApplications, useApplyApproved } from '../api/applications'
+import { useApplications, useApplyApproved, useWithdrawFromApply } from '../api/applications'
 import { useApplyStatus } from '../api/apply'
 import { ApplyCard } from '../components/apply/ApplyCard'
 import { enableSystemNotifications } from '../components/apply/notifications'
@@ -16,10 +16,12 @@ export function ApplyPage() {
   const status = useApplyStatus()
   const apps = useApplications()
   const apply = useApplyApproved()
+  const withdraw = useWithdrawFromApply()
   const skipped = (useLocation().state as { skipped?: { jobId: number; title: string; reason: string }[] } | null)?.skipped ?? []
 
   const tabs = new Map((status.data ?? []).map((t) => [t.jobId, t]))
-  const open = (apps.data ?? []).filter((a) => !a.submittedAt)
+  // Only what the user sent on from Documents belongs here; everything else stays in Documents.
+  const open = (apps.data ?? []).filter((a) => !a.submittedAt && a.sentToApply)
   const started = open.filter((a) => tabs.has(a.jobId) && tabs.get(a.jobId)?.phase !== 'CLOSED')
   const notStarted = open.filter((a) => !started.includes(a))
   const toStart = notStarted.filter((a) => a.readyToApply)
@@ -58,16 +60,24 @@ export function ApplyPage() {
             <p className="min-w-0 flex-1 text-sm">
               <strong className="font-semibold">{toStart.length}</strong> approved {toStart.length === 1 ? 'application has' : 'applications have'} not been opened yet.
             </p>
-            <Button size="lg" disabled={apply.isPending} onClick={() => { enableSystemNotifications(); apply.mutate() }}>
+            <Button size="lg" disabled={apply.isPending} onClick={() => { enableSystemNotifications(); apply.mutate(toStart.map((a) => a.jobId)) }}>
               {apply.isPending ? 'Opening…' : `Open and fill (${toStart.length})`}
             </Button>
           </div>
+          <ul className="mt-3 flex flex-col gap-1 text-sm">
+            {toStart.map((a) => (
+              <li key={a.jobId} className="flex items-center gap-3">
+                <span className="min-w-0 flex-1 truncate">{a.title}{a.employer ? <span className="text-[var(--muted)]"> · {a.employer}</span> : null}</span>
+                <Button variant="quiet" disabled={withdraw.isPending} onClick={() => withdraw.mutate(a.jobId)}>Take out of Apply</Button>
+              </li>
+            ))}
+          </ul>
           {apply.isError && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{apply.error.message}</p>}
         </Panel>
       )}
 
       {open.length === 0 && !status.isError && !apps.isError && (
-        <Panel><p className="text-sm text-[var(--muted)]">Nothing to apply for yet. Approve documents in <Link className="text-[var(--accent)] underline" to="/documents">Documents</Link> first.</p></Panel>
+        <Panel><p className="text-sm text-[var(--muted)]">Nothing to apply for yet. Approve documents in <Link className="text-[var(--accent)] underline" to="/documents">Documents</Link>, tick the applications to send and press Apply.</p></Panel>
       )}
 
       <div className="grid gap-4">
@@ -79,7 +89,7 @@ export function ApplyPage() {
 
       {left.length > 0 && (
         <details className="mt-6">
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Not ready yet ({left.length})</summary>
+          <summary className="cursor-pointer text-[13px] font-medium text-[var(--muted)]">Not ready yet ({left.length})</summary>
           <div className="mt-3 grid gap-3">{left.map((a) => <ApplyCard key={a.jobId} app={a} tab={undefined} />)}</div>
         </details>
       )}

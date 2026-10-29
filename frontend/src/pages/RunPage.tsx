@@ -35,7 +35,7 @@ function stageTitle(run: Run): string {
   }
 }
 
-/** Stage 2, Run search: progress with the time left, results as they are found and scored, and your selection. */
+/** Stage 2, Search and ranking: progress with the time left, results as they are found and scored, and your selection. */
 export function RunPage() {
   const runId = Number(useParams().id)
   const view = useRun(runId)
@@ -62,7 +62,7 @@ export function RunPage() {
     return (
       <>
         <PageTitle>Search {runId}</PageTitle>
-        <p role="alert" className="text-sm text-[var(--danger)]">Could not load this search. <Link className="underline" to="/">Back to Search mode</Link></p>
+        <p role="alert" className="text-sm text-[var(--danger)]">Could not load this search. <Link className="underline" to="/">Back to Mode</Link></p>
       </>
     )
   }
@@ -93,7 +93,7 @@ export function RunPage() {
       {failed && (
         <Panel className="mb-8">
           <p role="alert" className="text-[15px] text-[var(--danger)]">{run.message}</p>
-          <div className="mt-4"><Link to="/"><Button variant="ghost">Back to Search mode</Button></Link></div>
+          <div className="mt-4"><Link to="/"><Button variant="ghost">Back to Mode</Button></Link></div>
         </Panel>
       )}
 

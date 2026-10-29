@@ -3,37 +3,38 @@ package app.jobpilot.claude;
 import org.springframework.stereotype.Component;
 
 import app.jobpilot.settings.AppSettings;
+import app.jobpilot.settings.JobPilotProperties;
 
-/** Which provider the user chose, and the API model they picked; stored in app_setting. */
+/** Which provider the user chose and the models they picked for each; stored in app_setting. */
 @Component
 public class ProviderSettings {
 
     public static final String CLI = "cli";
-    public static final String API = "api";
     static final String PROVIDER_KEY = "claude.provider";
-    static final String MODEL_KEY = "api.model";
+    static final String CLI_MODEL_KEY = "claude.model";
+    static final String STAGE_MODEL_PREFIX = "claude.model.";
     static final String TESTED_KEY = "claude.tested";
-    static final String KEY_HINT = "api.keyHint";
 
     private final AppSettings settings;
-    private final ApiProperties api;
+    private final JobPilotProperties.Claude claude;
 
-    public ProviderSettings(AppSettings settings, ApiProperties api) {
+    public ProviderSettings(AppSettings settings, JobPilotProperties props) {
         this.settings = settings;
-        this.api = api;
+        this.claude = props.claude();
     }
 
+    /** Claude Code is the only provider. Whatever an older install stored ("gemini", "api") is read as "cli". */
     public String selectedId() {
-        String id = settings.get(PROVIDER_KEY, CLI);
-        return API.equals(id) ? API : CLI;
+        return CLI;
     }
 
+    /** False for a database that never confirmed Claude Code, or one from before Gemini was removed ("gemini", "api"): that user is asked again. */
     public boolean chosen() {
-        return settings.get(PROVIDER_KEY).isPresent();
+        return settings.get(PROVIDER_KEY).filter(CLI::equals).isPresent();
     }
 
     public void select(String id) {
-        if (!CLI.equals(id) && !API.equals(id)) {
+        if (!CLI.equals(id)) {
             throw new IllegalArgumentException("Unknown provider " + id);
         }
         settings.put(PROVIDER_KEY, id);
@@ -52,36 +53,38 @@ public class ProviderSettings {
         settings.delete(TESTED_KEY);
     }
 
-    /**
-     * That a key was saved, and its last four characters, are remembered here so that showing the connection never has to read the
-     * secret itself: reading it can raise an unlock prompt on a locked keyring or Keychain. The key stays only in the credential store.
-     */
-    public boolean apiKeySaved() {
-        return settings.get(KEY_HINT).isPresent();
-    }
-
-    public java.util.Optional<String> apiKeyHint() {
-        return settings.get(KEY_HINT);
-    }
-
-    public void apiKeyRecorded(String hint) {
-        settings.put(KEY_HINT, hint);
-    }
-
-    public void apiKeyForgotten() {
-        settings.delete(KEY_HINT);
-    }
-
-    public String apiModel() {
-        String saved = settings.get(MODEL_KEY, "");
-        return saved.isBlank() ? api.model() : saved;
-    }
-
-    public void apiModel(String model) {
-        if (model == null || model.isBlank()) {
-            settings.delete(MODEL_KEY);
-        } else {
-            settings.put(MODEL_KEY, model.trim());
+    /** Read on every request, so a change in Settings applies to the next call without a restart. Blank means the CLI's own default. */
+    public String cliModel() {
+        String saved = settings.get(CLI_MODEL_KEY, "");
+        if (!saved.isBlank()) {
+            return saved;
         }
+        return claude.model() == null ? "" : claude.model();
+    }
+
+    public void cliModel(String model) {
+        if (model == null || model.isBlank()) {
+            settings.delete(CLI_MODEL_KEY);
+        } else {
+            settings.put(CLI_MODEL_KEY, model.trim());
+        }
+    }
+
+    /** The model for one stage, or blank when that stage follows the default. */
+    public String stageModel(ModelStage stage) {
+        return settings.get(STAGE_MODEL_PREFIX + stage.name(), "");
+    }
+
+    public void stageModel(ModelStage stage, String model) {
+        if (model == null || model.isBlank()) {
+            settings.delete(STAGE_MODEL_PREFIX + stage.name());
+        } else {
+            settings.put(STAGE_MODEL_PREFIX + stage.name(), model.trim());
+        }
+    }
+
+    /** What to pass as --model for a Claude task: its stage's choice, else the default. Read on every call. */
+    public String modelFor(String taskName) {
+        return ModelStage.ofTask(taskName).map(this::stageModel).filter(m -> !m.isBlank()).orElseGet(this::cliModel);
     }
 }

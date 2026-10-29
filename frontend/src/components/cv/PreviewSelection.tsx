@@ -10,14 +10,14 @@ export function PreviewSelection() {
   return (
     <Panel title="Preview selection for an ad">
       <p className="mb-3 text-sm text-[var(--muted)]">
-        Paste a job ad to see which entries and facts Claude would pick, using your newest search profile. Nothing is stored.
+        Paste a job ad to see which entries and facts the AI would pick, using your newest search profile. Nothing is stored.
       </p>
       <TextArea aria-label="Pasted ad" rows={8} value={ad} onChange={(e) => setAd(e.target.value)} placeholder="Paste the ad text here" />
       <div className="mt-3 flex items-center gap-3">
         <Button disabled={!ad.trim() || preview.isPending} onClick={() => preview.mutate(ad)}>
           {preview.isPending ? 'Choosing...' : 'Preview selection'}
         </Button>
-        {preview.isPending && <span className="text-sm text-[var(--muted)]">This calls Claude once.</span>}
+        {preview.isPending && <span className="text-sm text-[var(--muted)]">This calls the AI once.</span>}
       </div>
       {preview.isError && <p role="alert" className="mt-3 text-sm text-[var(--danger)]">{preview.error.message}</p>}
       {preview.data && (

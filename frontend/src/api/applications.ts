@@ -39,6 +39,8 @@ export interface Application {
   readyToApply: boolean
   /** Why it does not go on yet (empty when it does). */
   blockers: string[]
+  /** The user ticked it in Documents and sent it on: only these appear in the Apply stage. */
+  sentToApply: boolean
 }
 
 export interface ApprovalResult {
@@ -88,9 +90,20 @@ export const useCreateDocuments = () =>
 /** "Approve all": what was approved, and what was refused with its reason. */
 export const useApproveAll = () => useApplicationMutation(() => api<ApprovalResult[]>('/api/applications/approve-all', { method: 'POST', body: {} }))
 
-/** "Apply": tabs open for the applications whose two documents are approved; the rest come back with a reason. */
+/**
+ * "Apply": tabs open for the named applications whose two documents are approved, and those are sent on to the Apply stage;
+ * the rest come back with a reason. Without names it opens the ones already sent on that have no tab yet.
+ */
 export const useApplyApproved = () =>
-  useApplicationMutation(() => api<ApplyResult>('/api/applications/apply', { method: 'POST', body: {} }))
+  useApplicationMutation((jobIds?: number[]) => api<ApplyResult>('/api/applications/apply', { method: 'POST', body: { jobIds } }))
+
+/** Deletes applications completely: selection, documents, files and the ad. Refused for submitted or still-being-written ones. */
+export const useDeleteApplications = () =>
+  useApplicationMutation((jobIds: number[]) => api<{ deleted: number }>('/api/applications/delete', { method: 'POST', body: { jobIds } }))
+
+/** Takes one application back out of the Apply stage. */
+export const useWithdrawFromApply = () =>
+  useApplicationMutation((jobId: number) => api<void>(`/api/applications/${jobId}/apply`, { method: 'DELETE' }))
 
 export const useRemoveApplication = () =>
   useApplicationMutation((jobId: number) => api<void>(`/api/applications/${jobId}`, { method: 'DELETE' }))

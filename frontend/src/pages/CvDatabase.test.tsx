@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Entry, Profile } from '../api/cv'
 import { mockApi } from '../test/mockApi'
@@ -27,7 +28,7 @@ function renderPage() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <CvDatabase />
+      <MemoryRouter><CvDatabase /></MemoryRouter>
     </QueryClientProvider>,
   )
 }
@@ -158,36 +159,128 @@ describe('CV database page', () => {
 })
 
 describe('import wizard', () => {
-  const preview = {
-    previewId: 'p1', files: ['cv.pdf'], skills: [{ name: 'Java', category: 'language' }],
-    entries: [
-      { entry: { kind: 'INTERNSHIP', title: 'Systemutvecklare (praktik)', titleEn: null, organisation: 'Braive AB', location: null, startYm: '2026-01', endYm: '2026-05', ongoing: false, tags: [], facts: [{ textEn: 'Built microservices.', textSv: null, tags: [] }] }, duplicateOfEntryId: 1 },
-      { entry: { kind: 'WORK', title: 'Idrottslärare', titleEn: null, organisation: 'Nacka skola', location: null, startYm: '2019', endYm: null, ongoing: true, tags: ['teaching'], facts: [{ textEn: 'Taught PE.', textSv: null, tags: [] }] }, duplicateOfEntryId: null },
-    ],
+  const entries = [
+    { entry: { kind: 'INTERNSHIP', title: 'Systemutvecklare (praktik)', titleEn: null, organisation: 'Braive AB', location: null, startYm: '2026-01', endYm: '2026-05', ongoing: false, tags: [], facts: [{ textEn: 'Built microservices.', textSv: null, tags: [] }] },
+      matchEntryId: 1, matchTitle: 'Systemutvecklare (praktik), Braive AB', newFacts: 1, knownFacts: [] },
+    { entry: { kind: 'WORK', title: 'Idrottslärare', titleEn: null, organisation: 'Nacka skola', location: null, startYm: '2019', endYm: null, ongoing: true, tags: ['teaching'], facts: [{ textEn: 'Taught PE.', textSv: null, tags: [] }] },
+      matchEntryId: null, matchTitle: null, newFacts: 0, knownFacts: [] },
+    { entry: { kind: 'WORK', title: 'Gammalt jobb', titleEn: null, organisation: 'Old AB', location: null, startYm: '2010', endYm: '2012', ongoing: false, tags: [], facts: [] },
+      matchEntryId: 2, matchTitle: 'Gammalt jobb, Old AB', newFacts: 0, knownFacts: [] },
+  ]
+  const done = { runId: 5, status: 'DONE', message: 'Ready to review', files: ['cv.pdf'], preview: { previewId: 'p1', files: ['cv.pdf'], skills: [{ name: 'Java', category: 'language' }], entries } }
+
+  /** The server side of a reading: starting one makes it current, and it can be set to any state. */
+  function reading(initial: unknown = null) {
+    let current: unknown = initial
+    return {
+      set: (v: unknown) => { current = v },
+      routes: {
+        'GET /api/cv/import/current': () => current,
+        'POST /api/cv/import': () => { current = { ...done, status: 'RUNNING', preview: null }; return current },
+        'DELETE /api/cv/import/5': () => { current = null; return null },
+      },
+    }
   }
 
-  it('uploads, leaves duplicates unchecked and commits only the checked entries', async () => {
+  async function upload() {
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
+    await userEvent.upload(screen.getByLabelText('CV and letter files'), new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' }))
+  }
+
+  it('has a real Browse files button, not just a clickable line of text', async () => {
+    mockApi({ ...baseRoutes(), ...reading().routes })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
+
+    expect(screen.getByRole('button', { name: 'Browse files' })).toBeInTheDocument()
+  })
+
+  it('reads in the background, then adds new facts to the entry it matches and creates entries for the rest', async () => {
+    const server = reading()
     const calls = mockApi({
-      ...baseRoutes(),
-      'POST /api/cv/import': preview,
-      'POST /api/cv/import/p1/commit': { entryIds: [3], facts: 1, skills: 1 },
+      ...baseRoutes(), ...server.routes,
+      'POST /api/cv/import/p1/commit': { entryIds: [1, 3], created: 1, enriched: 1, facts: 2, skills: 1, profileFilled: false },
+    })
+    renderPage()
+
+    await upload()
+    await userEvent.click(screen.getByRole('button', { name: 'Read this file' }))
+    expect(calls.find((c) => c.url === '/api/cv/import')!.body).toBeInstanceOf(FormData)
+    expect(await screen.findByText('Reading your CV')).toBeInTheDocument()
+
+    server.set(done)
+
+    expect(await screen.findByText('Adds 1 fact to Systemutvecklare (praktik), Braive AB', {}, { timeout: 4000 })).toBeInTheDocument()
+    expect(screen.getByLabelText('Import Systemutvecklare (praktik)')).toBeChecked()
+    expect(screen.getByLabelText('Import Idrottslärare')).toBeChecked()
+    expect(screen.getByLabelText('Import Gammalt jobb')).not.toBeChecked() // matches, and has nothing new
+
+    await userEvent.click(screen.getByRole('button', { name: 'Import 2 entries' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('1 new entry, 1 entry enriched, 2 facts added')
+    const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: { entry: { title: string }; mergeIntoEntryId: number | null }[] }
+    expect(commit.entries.map((e) => [e.entry.title, e.mergeIntoEntryId])).toEqual([['Systemutvecklare (praktik)', 1], ['Idrottslärare', null]])
+  })
+
+  it('marks the facts an entry already has, and commits that decision', async () => {
+    const withKnown = { ...done, preview: { ...done.preview, entries: [{
+      ...entries[0], newFacts: 1, knownFacts: [0],
+      entry: { ...entries[0].entry, facts: [{ textEn: 'Built microservices.', textSv: null, tags: [] }, { textEn: 'Mentored four students.', textSv: null, tags: [] }] },
+    }] } }
+    const calls = mockApi({
+      ...baseRoutes(), ...reading(withKnown).routes,
+      'POST /api/cv/import/p1/commit': { entryIds: [1], created: 0, enriched: 1, facts: 1, skills: 0, profileFilled: false },
     })
     renderPage()
 
     await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
-    await userEvent.upload(screen.getByLabelText('CV and letter files'), new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Analyse' }))
 
-    expect(await screen.findByText('already in database')).toBeInTheDocument()
-    expect(screen.getByLabelText('Import Systemutvecklare (praktik)')).not.toBeChecked()
-    expect(screen.getByLabelText('Import Idrottslärare')).toBeChecked()
-    expect(calls.find((c) => c.url === '/api/cv/import')!.body).toBeInstanceOf(FormData)
-
+    expect(await screen.findByText('Adds 1 fact to Systemutvecklare (praktik), Braive AB')).toBeInTheDocument()
+    expect(within(screen.getByText('Built microservices.').closest('li')!).getByText('already stored')).toBeInTheDocument()
+    expect(screen.getByText('Mentored four students.').closest('li')).not.toHaveTextContent('already stored')
     await userEvent.click(screen.getByRole('button', { name: 'Import 1 entry' }))
 
-    expect(await screen.findByRole('status')).toHaveTextContent('Imported 1 entries with 1 facts')
-    const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: { title: string }[] }
-    expect(commit.entries.map((e) => e.title)).toEqual(['Idrottslärare'])
+    await screen.findByRole('status')
+    const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: { skipFacts: number[] }[] }
+    expect(commit.entries[0].skipFacts).toEqual([0])
+  })
+
+  it('lets a matched entry be added as a new entry instead', async () => {
+    const calls = mockApi({
+      ...baseRoutes(), ...reading(done).routes,
+      'POST /api/cv/import/p1/commit': { entryIds: [3], created: 2, enriched: 0, facts: 2, skills: 1, profileFilled: false },
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Add as a new entry instead' }))[0])
+    expect(screen.getByText('Will be a new entry')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Import 2 entries' }))
+
+    await screen.findByRole('status')
+    const commit = calls.find((c) => c.url === '/api/cv/import/p1/commit')!.body as { entries: { mergeIntoEntryId: number | null }[] }
+    expect(commit.entries.map((e) => e.mergeIntoEntryId)).toEqual([null, null])
+  })
+
+  it('finds a reading again after the page was left, and keeps showing it while it runs', async () => {
+    mockApi({ ...baseRoutes(), ...reading({ ...done, status: 'RUNNING', preview: null }).routes })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
+
+    expect(await screen.findByText('Reading your CV')).toBeInTheDocument()
+    expect(screen.getByText(/You can leave this page/)).toBeInTheDocument()
+  })
+
+  it('says why a reading failed and offers to try again', async () => {
+    mockApi({ ...baseRoutes(), ...reading({ ...done, status: 'FAILED', message: 'Claude took too long', preview: null }).routes })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('tab', { name: 'Import' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Claude took too long')
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 })
 

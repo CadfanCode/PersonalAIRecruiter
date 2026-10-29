@@ -31,11 +31,17 @@ Rules:
 - Pick the entries and facts that best show the candidate fits THIS ad, using "relevantTags" and the ad's
   requirements. Prefer recent and relevant entries. Omit unrelated ones: a CV for one field drops the tools and projects of an unrelated
   field, and keeps unrelated experience at most as one short fact that shows a transferable skill.
-- Keep at most 5 facts per entry for a CV. List an entry's facts in the order they should appear.
+- Keep at most 5 facts per entry for a CV, and fewer for an entry that matters little for this ad (one or two facts, or none
+  for a minor project). List an entry's facts in the order they should appear. A focused CV of the entries that matter beats
+  a complete one: leave out small projects, side jobs and courses that do not help with this ad.
 - "use" says where an entry is used: "cv", "letter" or "both". Work, internships, placements, projects, education, courses, certifications and licences
   are normally "both". Personal or leisure facts that show the person behind the CV (for example time on the
   water) are "letter" only. Awards and conferences are normally "cv" only.
-- Include entries of kind EDUCATION; the system adds them anyway.
+- Education: include EVERY completed degree, one line each and the most relevant first, even in a field other than the ad's,
+  because together they show the candidate's breadth; add the courses, certifications and licences that matter for this ad,
+  and always one the ad requires (a teaching qualification, a licence). Leave out only unfinished programmes, a second entry
+  for the same degree and minor courses that do not help with this ad. Give the most relevant education its facts and the
+  others none or one.
 - Never choose an entry that is excluded. Never invent ids: use only ids from the CV database. A factId must
   belong to the entry it is listed under.
 - "reason" is one short sentence in English saying why the entry is included.

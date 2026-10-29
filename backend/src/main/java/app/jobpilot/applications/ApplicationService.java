@@ -26,6 +26,7 @@ import app.jobpilot.documents.DocumentRepository;
 import app.jobpilot.documents.DocumentService;
 import app.jobpilot.jobs.JobRepository;
 import app.jobpilot.jobs.JobModel.Status;
+import app.jobpilot.pipeline.RetentionService;
 import app.jobpilot.pipeline.RunRepository;
 
 /**
@@ -42,13 +43,15 @@ public class ApplicationService {
     private final DocumentService documentService;
     private final ApplyService apply;
     private final SubmittedApplicationRepository submitted;
+    private final RetentionService retention;
     private final ObjectMapper mapper;
     private final Clock clock;
 
     public ApplicationService(ApplicationRepository applications, JobRepository jobs, RunRepository runs,
                               DocumentRepository documents, DocumentService documentService, ApplyService apply,
-                              SubmittedApplicationRepository submitted, ObjectMapper mapper, Clock clock) {
+                              SubmittedApplicationRepository submitted, RetentionService retention, ObjectMapper mapper, Clock clock) {
         this.submitted = submitted;
+        this.retention = retention;
         this.applications = applications;
         this.jobs = jobs;
         this.runs = runs;
@@ -88,6 +91,31 @@ public class ApplicationService {
         if (!applications.remove(jobId)) {
             throw new NotFoundException("Job " + jobId + " is not selected");
         }
+    }
+
+    /**
+     * Deletes these applications completely: the selection, both documents and their PDF files, the form-filling state and the
+     * ad itself. Nothing is left behind. Submitted applications are never deleted here (they are the user's record), and nothing
+     * is deleted at all if one of the named applications is submitted or is still being written.
+     */
+    public int delete(List<Long> jobIds) {
+        if (jobIds == null || jobIds.isEmpty()) {
+            throw new IllegalArgumentException("jobIds is required");
+        }
+        List<Long> ids = jobIds.stream().distinct().toList();
+        for (long id : ids) {
+            var row = applications.find(id).orElseThrow(() -> new NotFoundException("Job " + id + " is not selected"));
+            if (row.submittedAt() != null) {
+                throw new app.jobpilot.common.ApiExceptions.ConflictException(
+                        "“" + row.title() + "” is submitted, so it stays in Submitted applications");
+            }
+            if (runs.activeDocumentsRun(id).isPresent()) {
+                throw new app.jobpilot.common.ApiExceptions.ConflictException(
+                        "The documents for “" + row.title() + "” are still being written. Delete it when they are done");
+            }
+        }
+        ids.forEach(apply::discard);
+        return retention.deleteJobs(ids);
     }
 
     /** The user's own confirmation that they submitted the application by hand. Idempotent. */
@@ -177,7 +205,7 @@ public class ApplicationService {
         List<String> blockers = blockers(r, cv, letter, generation);
         return new View(r.jobId(), r.runId(), r.title(), r.employer(), r.municipality(), r.url(), r.applyUrl(), r.searchMode(),
                 r.roleType(), r.score(), r.jobStatus(), r.selectedAt(), r.submittedAt(), cv, letter, generation, submittedDocs,
-                blockers.isEmpty() && r.submittedAt() == null, blockers);
+                blockers.isEmpty() && r.submittedAt() == null, blockers, r.sentToApplyAt() != null);
     }
 
     /** Why an application cannot go on to the Apply stage; empty when both documents exist and are approved. */
@@ -236,13 +264,19 @@ public class ApplicationService {
     }
 
     /**
-     * "Apply": opens a tab for every application whose CV and cover letter are BOTH approved and fills it in (never
-     * submitting). The others do not proceed and come back with the reason, so the user sees which ones are left out.
+     * "Apply": opens a tab for every named application (the user's ticks in Documents) whose CV and cover letter are BOTH
+     * approved and fills it in (never submitting). Those are marked as sent to the Apply stage and stay there. The others do
+     * not proceed and come back with the reason, so the user sees which ones are left out. Without names it acts on the ones
+     * already sent to Apply (the "Open and fill" button there); an application nobody ticked is never opened.
      */
     public ApplyResult applyApproved(List<Long> jobIds) {
         List<Long> ready = new java.util.ArrayList<>();
         List<Skipped> skipped = new java.util.ArrayList<>();
-        for (ApplicationRepository.Row r : pending(jobIds)) {
+        List<ApplicationRepository.Row> chosen = pending(jobIds);
+        if (jobIds == null || jobIds.isEmpty()) {
+            chosen = chosen.stream().filter(r -> r.sentToApplyAt() != null).toList();
+        }
+        for (ApplicationRepository.Row r : chosen) {
             View v = view(r);
             if (v.readyToApply()) {
                 ready.add(r.jobId());
@@ -250,8 +284,15 @@ public class ApplicationService {
                 skipped.add(new Skipped(r.jobId(), r.title(), String.join("; ", v.blockers())));
             }
         }
+        applications.sendToApply(ready, clock.instant());
         List<app.jobpilot.apply.TabState.View> started = ready.isEmpty() ? List.of() : apply.openBatch(ready);
         return new ApplyResult(started, skipped);
+    }
+
+    /** Takes an application back out of the Apply stage (it stays selected, with its documents, in Documents). */
+    public void withdrawFromApply(long jobId) {
+        applications.find(jobId).orElseThrow(() -> new NotFoundException("Job " + jobId + " is not selected"));
+        applications.withdrawFromApply(jobId);
     }
 
     private List<ApplicationRepository.Row> pending(List<Long> jobIds) {

@@ -12,7 +12,7 @@ function Meter({ label, window }: { label: string; window: LimitWindow | null })
     )
   }
   const percent = Math.round(window.utilization * 100)
-  const warn = window.utilization >= 0.9 ? 'bg-[var(--danger)]' : window.utilization >= 0.75 ? 'bg-amber-500' : 'bg-navy'
+  const warn = window.utilization >= 0.9 ? 'bg-[var(--danger)]' : window.utilization >= 0.75 ? 'bg-[var(--warn)]' : 'bg-[var(--accent)]'
   return (
     <div>
       <dt className="text-xs text-[var(--muted)]">{label}</dt>

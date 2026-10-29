@@ -250,6 +250,10 @@ public class JobRepository {
                 ORDER BY r.id DESC LIMIT 1""").param("id", jobId).query(Long.class).optional();
     }
 
+    public Optional<String> statusOf(long jobId) {
+        return jdbc.sql("SELECT status FROM job WHERE id = :id").param("id", jobId).query(String.class).optional();
+    }
+
     /** An edit or regeneration revokes approval, so a DOCS_READY job goes back to SHORTLISTED. */
     public void revertDocsReady(long jobId) {
         jdbc.sql("UPDATE job SET status = 'SHORTLISTED' WHERE id = :id AND status = 'DOCS_READY'").param("id", jobId).update();

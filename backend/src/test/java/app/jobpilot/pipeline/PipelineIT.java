@@ -386,11 +386,12 @@ class PipelineIT {
     }
 
     @Test
-    void jobsKeepTheirStatusAndIdWhenFoundAgain() throws Exception {
+    void aSelectedJobKeepsItsStatusAndIdWhenFoundAgainAndTheRestOfTheOldSearchIsGone() throws Exception {
         long run1 = startRun(true);
         awaitStatus(run1, "DONE");
         JsonNode first = call(get("/api/runs/" + run1 + "/jobs"), null, 200).get(0);
         long jobId = first.get("id").asLong();
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + run1 + "}", 200);
         call(patch("/api/jobs/" + jobId), "{\"status\":\"SHORTLISTED\",\"notes\":\"call them\"}", 204);
 
         long run2 = startRun(true);
@@ -401,13 +402,32 @@ class PipelineIT {
         assertThat(again.get("status").asText()).isEqualTo("SHORTLISTED");
         assertThat(again.get("notes").asText()).isEqualTo("call them");
         assertThat(jdbc.sql("SELECT count(*) FROM job").query(Long.class).single()).isEqualTo(3);
+        // the old search is not kept: only the run the selected job came from stays, holding just that job
+        assertThat(call(get("/api/runs/" + run1 + "/jobs"), null, 200)).hasSize(1);
+    }
+
+    @Test
+    void aNewSearchClearsThePreviousOneWhenNothingWasSelected() throws Exception {
+        long run1 = startRun(true);
+        awaitStatus(run1, "DONE");
         assertThat(call(get("/api/runs/" + run1 + "/jobs"), null, 200)).hasSize(3);
+
+        long run2 = startRun(true);
+        awaitStatus(run2, "DONE");
+
+        call(get("/api/runs/" + run1), null, 404);
+        assertThat(jdbc.sql("SELECT count(*) FROM pipeline_run WHERE kind = 'SEARCH'").query(Long.class).single()).isEqualTo(1);
+        assertThat(jdbc.sql("SELECT count(*) FROM job").query(Long.class).single()).isEqualTo(3);
+        assertThat(call(get("/api/runs/" + run2 + "/jobs"), null, 200)).hasSize(3);
     }
 
     @Test
     void aShorterDescriptionNeverReplacesARicherOne() throws Exception {
-        awaitStatus(startRun(true), "DONE");
+        long first = startRun(true);
+        awaitStatus(first, "DONE");
         String before = jdbc.sql("SELECT description_text FROM job WHERE title = 'Junior Javautvecklare'").query(String.class).single();
+        long kept = jdbc.sql("SELECT id FROM job WHERE title = 'Junior Javautvecklare'").query(Long.class).single();
+        call(post("/api/applications"), "{\"jobIds\":[" + kept + "],\"runId\":" + first + "}", 200); // a search clears unselected ads
         String shorter = hit("1", "Junior Javautvecklare", "Comstream AB", "Stockholm", 0.9, 5000, false)
                 .replace("Vi söker en utvecklare som har erfarenhet av Java och Spring för Junior Javautvecklare", "Kort");
         stubSearch("java utvecklare", shorter);

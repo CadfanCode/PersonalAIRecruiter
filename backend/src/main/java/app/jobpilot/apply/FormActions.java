@@ -15,4 +15,15 @@ public record FormActions(List<MappedAction> actions, List<Question> questionsFo
 
     public record Question(String fieldId, String question) {
     }
+
+    /**
+     * One look at the page and what to do about it (schema {@code browseApplication}). {@code fieldId} of an action is a snapshot ref.
+     * {@code pageKind} is what the model thinks the page is: form, ad, login, review, confirmation or error.
+     */
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record Step(String pageKind, String summary, List<MappedAction> actions, List<Question> questionsForUser) {
+        FormActions asActions() {
+            return new FormActions(actions, questionsForUser);
+        }
+    }
 }

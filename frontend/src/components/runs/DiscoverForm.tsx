@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useDraft } from '../../lib/useDraft'
 import { useNavigate } from 'react-router-dom'
 import { DISCOVER_AGGRESSIVE_LIMIT, DISCOVER_LIMIT, DISCOVER_MAX_LIMIT, useStartRun } from '../../api/runs'
 import { Button, Field, TextArea, TextInput } from '../Form'
@@ -7,20 +7,16 @@ const EXAMPLES = ['Stockholm region, full time', 'Uppsala or Stockholm, last 14 
 
 /** Discovery mode: nothing to configure but, if you like, where and how you want to work. The search profile is made for you. */
 export function DiscoverForm() {
-  const [context, setContext] = useState('')
-  const [limit, setLimit] = useState('')
-  const [aggressive, setAggressive] = useState(false)
+  const [context, setContext, clearContext] = useDraft('mode.discover', '')
+  const [limit, setLimit, clearLimit] = useDraft('mode.discover.limit', '')
+  const [aggressive, setAggressive, clearAggressive] = useDraft('mode.discover.wide', false)
   const start = useStartRun()
   const navigate = useNavigate()
   const submit = () =>
-    start.mutate({ prompt: context, mode: 'DISCOVER', aggressive, ...(limit ? { limit: Number(limit) } : {}) }, { onSuccess: ({ id }) => navigate(`/runs/${id}`) })
+    start.mutate({ prompt: context, mode: 'DISCOVER', aggressive, ...(limit ? { limit: Number(limit) } : {}) }, { onSuccess: ({ id }) => { clearContext(); clearLimit(); clearAggressive(); navigate(`/runs/${id}`) } })
 
   return (
     <div>
-      <p className="mb-4 max-w-2xl text-[15px] leading-relaxed text-[var(--muted)]">
-        JobPilot reads your whole CV, not just your latest job, and suggests roles you would be a strong match for: close to what you do,
-        mixing your different backgrounds, and outside your main field.
-      </p>
       <Field label="Where and how you want to work (optional)">
         <TextArea aria-label="Where and how you want to work" rows={2} value={context} onChange={(e) => setContext(e.target.value)}
           placeholder="For example: Stockholm region, full time, ads from the last 14 days" className="text-[15px]" />

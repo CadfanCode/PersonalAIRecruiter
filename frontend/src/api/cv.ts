@@ -116,10 +116,37 @@ export interface ImportedProfile {
   github: string | null
 }
 
+/** An entry found in the documents. {@code matchEntryId} is the stored entry it describes: confirming it adds {@code newFacts} facts to that entry. */
+export interface PreviewEntry {
+  entry: ImportedEntry
+  matchEntryId: number | null
+  matchTitle: string | null
+  newFacts: number
+  /** Positions in {@code entry.facts} of facts the stored entry already has: they are not added. */
+  knownFacts: number[]
+}
+
+/** One entry the user confirmed: {@code mergeIntoEntryId} null creates a new entry, a number adds to that stored entry. */
+export interface CommitEntry {
+  entry: ImportedEntry
+  mergeIntoEntryId: number | null
+  /** The preview's decision about which facts are already stored; omitted for a new entry. */
+  skipFacts?: number[]
+}
+
+/** A reading of the uploaded files, which goes on in the background. status: RUNNING, DONE (with the preview) or FAILED. */
+export interface ImportJob {
+  runId: number
+  status: 'RUNNING' | 'DONE' | 'FAILED'
+  message: string
+  files: string[]
+  preview: ImportPreview | null
+}
+
 export interface ImportPreview {
   previewId: string
   files: string[]
-  entries: { entry: ImportedEntry; duplicateOfEntryId: number | null }[]
+  entries: PreviewEntry[]
   skills: { name: string; category: string | null }[]
   profile: ImportedProfile | null
 }
@@ -165,18 +192,53 @@ export const useSaveGaps = () =>
 export const useImportSeed = () =>
   useCvMutation((json: string) => api('/api/cv/seed', { method: 'POST', body: json, headers: { 'Content-Type': 'application/json' } }))
 
-export const useImportPreview = () =>
-  useMutation({
+/** Uploads the files and starts the reading; it continues on the server whatever the user does next. */
+export const useStartImport = () => {
+  const client = useQueryClient()
+  return useMutation({
     mutationFn: (files: File[]) => {
       const form = new FormData()
       files.forEach((f) => form.append('files', f))
-      return api<ImportPreview>('/api/cv/import', { method: 'POST', body: form })
+      return api<ImportJob>('/api/cv/import', { method: 'POST', body: form })
+    },
+    onSuccess: (job) => client.setQueryData([...KEY, 'import'], job),
+  })
+}
+
+/** The newest reading that is still waiting for the user (null when there is none), polled while it runs. */
+export const useImportJob = () =>
+  useQuery({
+    queryKey: [...KEY, 'import'],
+    queryFn: async () => (await api<ImportJob | undefined>('/api/cv/import/current')) ?? null,
+    refetchInterval: (q) => (q.state.data?.status === 'RUNNING' ? 2000 : false),
+  })
+
+export const useDiscardImport = () => {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: number) => api<void>(`/api/cv/import/${runId}`, { method: 'DELETE' }),
+    onSuccess: () => client.setQueryData([...KEY, 'import'], null),
+  })
+}
+
+export const useImportCommit = () => {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ previewId, entries, skills, profile }: { previewId: string; entries: CommitEntry[]; skills: ImportPreview['skills']; profile?: ImportedProfile | null }) =>
+      api<ImportResult>(`/api/cv/import/${previewId}/commit`, { method: 'POST', body: { entries, skills, profile: profile ?? null } }),
+    onSuccess: () => {
+      client.setQueryData([...KEY, 'import'], null)
+      void client.invalidateQueries({ queryKey: KEY })
+      void client.invalidateQueries({ queryKey: ['onboarding'] })
     },
   })
-export const useImportCommit = () =>
-  useCvMutation(({ previewId, entries, skills, profile }: { previewId: string; entries: ImportedEntry[]; skills: ImportPreview['skills']; profile?: ImportedProfile | null }) =>
-    api<{ entryIds: number[]; facts: number; skills: number; profileFilled: boolean }>(`/api/cv/import/${previewId}/commit`, {
-      method: 'POST',
-      body: { entries, skills, profile: profile ?? null },
-    }),
-  )
+}
+
+export interface ImportResult {
+  entryIds: number[]
+  created: number
+  enriched: number
+  facts: number
+  skills: number
+  profileFilled: boolean
+}

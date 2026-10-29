@@ -33,14 +33,14 @@ export function Processing({ title, percent, message, etaSeconds, fallback = 'Es
   const own = etaSeconds === undefined && pct >= 10 && pct < 100 && elapsed >= 5 ? Math.round((elapsed * (100 - pct)) / pct) : null
   const eta = etaText(etaSeconds ?? own)
   return (
-    <section aria-label={title} className="animate-rise flex items-center gap-7 rounded-3xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-[var(--shadow)]">
+    <section aria-label={title} className="glow-border flex items-center gap-7 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-7 shadow-[var(--shadow)]">
       <div role="progressbar" aria-label={`${title} progress`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} className="relative h-32 w-32 shrink-0">
         <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90">
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--line)" strokeWidth="8" />
           <circle cx="60" cy="60" r={R} fill="none" stroke="var(--accent)" strokeWidth="8" strokeLinecap="round"
             strokeDasharray={C} strokeDashoffset={C * (1 - pct / 100)} style={{ transition: 'stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1)' }} />
         </svg>
-        <span className="absolute inset-0 flex items-center justify-center text-3xl font-semibold tabular-nums tracking-tight">{pct}%</span>
+        <span className="absolute inset-0 flex items-center justify-center text-2xl font-semibold tabular-nums tracking-tight">{pct}%</span>
       </div>
       <div className="min-w-0 flex-1">
         <h2 className="text-xl font-semibold tracking-tight">{title}</h2>

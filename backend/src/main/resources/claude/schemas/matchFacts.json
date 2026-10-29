@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "properties": {
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entryId": { "type": "integer" },
+          "alreadyStated": { "type": "array", "items": { "type": "integer" } }
+        },
+        "required": ["entryId", "alreadyStated"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["results"],
+  "additionalProperties": false
+}

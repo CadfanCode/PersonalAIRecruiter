@@ -25,7 +25,7 @@ export function SkillsAndGaps() {
       <Panel title="Skills">
         {[...byCategory.entries()].map(([cat, list]) => (
           <div key={cat} className="mb-3">
-            <h3 className="mb-1 text-xs font-semibold uppercase text-[var(--muted)]">{cat}</h3>
+            <h3 className="mb-1 text-xs font-semibold text-[var(--muted)]">{cat}</h3>
             <ul className="flex flex-wrap gap-1.5">
               {list.map((s) => (
                 <li key={s.id} className="flex items-center gap-1 rounded-full border border-[var(--line)] px-2.5 py-0.5 text-sm">

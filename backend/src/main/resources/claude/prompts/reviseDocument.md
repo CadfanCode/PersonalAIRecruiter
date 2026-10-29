@@ -37,6 +37,8 @@ The job seeker's new request:
 
 Rules:
 - Make the change that was asked for and nothing else. Keep every other part of the document as it is, word for word.
+- Write the change as polished prose in the style of the rest of the document: digest the facts into natural sentences, do
+  not paste fact wording, and never make a claim stronger than the facts.
 - Never invent anything. Every claim must come from the facts above: do not add employers, dates, tools, degrees,
   numbers or results that are not there. Cite the fact ids a bullet or paragraph rests on ("factIds" in a CV,
   "factIdsUsed" in a letter), using only ids from the list.
@@ -47,6 +49,7 @@ Rules:
   the languages line and the gap note) as they are.
 - Do not describe the candidate as newly qualified or a new graduate unless the ad asks for new graduates.
 - "reply": at most 250 characters, plain, friendly, in the language of the request: what you changed, or why you did not.
-- "document": the complete document in the same shape as above (also when "changed" is false).
+- "document": the complete document in the same shape as above (also when "changed" is false): every field, including the ones
+  you did not change, such as "closing", "signature", "language" and the section headings.
 
 Return only data matching the schema.

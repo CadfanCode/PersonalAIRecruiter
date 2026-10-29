@@ -108,16 +108,20 @@ public class DocumentChatService {
                 Map.entry("candidate", DocumentService.candidate(profile)), Map.entry("facts", docs.write(docs.factsFor(offered, entryById))),
                 Map.entry("skills", docs.write(skills)), Map.entry("language", language), Map.entry("document", docs.write(current)),
                 Map.entry("history", historyText(history)), Map.entry("message", message.strip()))),
-                ClaudeResources.schema("reviseDocument"), JsonNode.class));
+                reviseSchema(cvDoc), JsonNode.class));
 
         String reply = answer.path("reply").asText("").strip();
         JsonNode revised = answer.path("document");
+        if (answer.path("changed").asBoolean(false) && revised.equals(baseJson)) {
+            // The model says it changed something but sent the same document back: do not repeat a claim that is not true.
+            return new Result("The AI did not change the document this time. Try asking again, or in other words.", false, false, row);
+        }
         if (!answer.path("changed").asBoolean(false) || revised.equals(baseJson)) {
             return new Result(reply.isEmpty() ? "Nothing needed to change." : reply, false, false, row);
         }
         List<String> problems = JsonSchemas.validate(cvDoc ? "writeCv" : "writeLetter", revised);
         if (!problems.isEmpty()) {
-            throw new IllegalStateException("Claude answered in the wrong shape, so nothing was changed. Try asking again. (" + problems.get(0) + ")");
+            throw new IllegalStateException("The AI answered in the wrong shape, so nothing was changed. Try asking again. (" + problems.get(0) + ")");
         }
 
         Object content = docs.parse(row.kind(), revised);
@@ -128,12 +132,15 @@ public class DocumentChatService {
         }
         ValidationContext ctx = context(row, ad, language, widened, entryById, cvDoc);
         Report report = report(cvDoc, content, ctx);
-        if (!report.violations().isEmpty()) {
+        // "copied_facts" judges a whole generated CV; the chat changes only what was asked, so it never rewrites for it.
+        Report toFix = new Report(report.violations().stream().filter(v -> !v.code().equals("copied_facts")).toList(),
+                report.pages(), report.maxPages());
+        if (!toFix.violations().isEmpty()) {
             if (cvDoc) {
-                CvContent rewritten = docs.rewrite(Kind.CV, (CvContent) content, report, offered, entryById, language, CvContent.class);
+                CvContent rewritten = docs.rewrite(Kind.CV, (CvContent) content, toFix, offered, entryById, language, CvContent.class);
                 content = CvAssembler.assemble(rewritten, widened, entryById, profile, language, gapNote);
             } else {
-                content = docs.rewrite(Kind.LETTER, (LetterContent) content, report, offered, entryById, language, LetterContent.class);
+                content = docs.rewrite(Kind.LETTER, (LetterContent) content, toFix, offered, entryById, language, LetterContent.class);
             }
             widened = widen(widened, cited(content), entryById, offeredIds, cvDoc);
             ctx = context(row, ad, language, widened, entryById, cvDoc);
@@ -152,6 +159,25 @@ public class DocumentChatService {
         boolean revoked = row.approved();
         String note = report.hasFailures() ? " It has problems to fix before it can be approved." : "";
         return new Result(reply + note, true, revoked, docs.get(documentId));
+    }
+
+    /**
+     * The revision answer with the real document schema inside it. A bare {@code "document": {"type": "object"}} lets some models
+     * answer with an empty object; spelling the document out makes every provider return the whole document.
+     */
+    private String reviseSchema(boolean cvDoc) {
+        try {
+            com.fasterxml.jackson.databind.node.ObjectNode wrapper = (com.fasterxml.jackson.databind.node.ObjectNode)
+                    mapper.readTree(ClaudeResources.schema("reviseDocument"));
+            com.fasterxml.jackson.databind.node.ObjectNode document = (com.fasterxml.jackson.databind.node.ObjectNode)
+                    mapper.readTree(ClaudeResources.schema(cvDoc ? "writeCv" : "writeLetter"));
+            document.remove("$schema");
+            document.remove("$id");
+            ((com.fasterxml.jackson.databind.node.ObjectNode) wrapper.path("properties")).set("document", document);
+            return mapper.writeValueAsString(wrapper);
+        } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException e) {
+            return ClaudeResources.schema("reviseDocument"); // the loose schema still works for models that copy the document
+        }
     }
 
     private Report report(boolean cvDoc, Object content, ValidationContext ctx) {

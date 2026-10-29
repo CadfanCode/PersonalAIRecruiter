@@ -14,7 +14,7 @@ const routes = (onboarding: unknown = onboarded) => ({
   'GET /api/applications': [],
   'GET /api/apply/status': [],
   'GET /api/aktivitet/reminder': { active: false, day: 20, daysLeft: 0, forMonth: '2026-09', message: '' },
-  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null }, api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'test store' } },
+  'GET /api/claude/connection': { selected: 'cli', chosen: true, cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: '', stageModels: [{ stage: 'SEARCH', label: 'Search', model: '' }, { stage: 'RANKING', label: 'Scoring', model: '' }, { stage: 'CV_READING', label: 'Reading your CV', model: '' }, { stage: 'DOCUMENTS', label: 'CV and cover letter', model: '' }, { stage: 'AUTOFILL', label: 'Auto-fill', model: '' }] }, secureStore: { available: true, name: 'test store' } },
   'GET /api/claude/limits': { limits: null, error: null },
 })
 
@@ -31,52 +31,133 @@ function renderApp(path = '/') {
 
 afterEach(() => vi.unstubAllGlobals())
 
+const incomplete = { ...onboarded, complete: false, nextStep: 'CV', cv: { present: false, entries: 0, facts: 0, skills: 0 }, claude: { chosen: false, provider: 'cli', works: false } }
+const openApplication = { jobId: 1, title: 'x', submittedAt: null, cv: { id: 1, version: 1, approved: true }, letter: { id: 2, version: 1, approved: true }, readyToApply: true, blockers: [], generation: null, searchMode: 'TARGETED' }
+
 describe('app shell', () => {
-  it('shows the five stages across the top with the current one marked, and the menu with the places you maintain', async () => {
+  it('shows the five stages across the top with the current one marked, every one of them a link, and the menu with the places you maintain', async () => {
     mockApi(routes())
     renderApp()
 
-    const flow = await screen.findByRole('navigation', { name: 'Pipeline' })
-    const names = within(flow).getAllByRole('listitem').map((li) => li.textContent)
-    expect(names).toEqual(['Search mode', 'Run search', 'Documents', 'Apply', 'Submit'])
-    expect(within(flow).getByText('Search mode').closest('[aria-current]')).toHaveAttribute('aria-current', 'step')
-    // nothing exists beyond the first stage yet, so the later stages are faded and not links
-    expect(within(flow).getByText('Documents').closest('[aria-disabled]')).toHaveAttribute('aria-disabled', 'true')
-    expect(within(flow).queryByRole('link', { name: 'Documents' })).not.toBeInTheDocument()
+    const flow = await screen.findByRole('list', { name: 'Pipeline' })
+    expect(within(flow).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['1Mode', '2Search and ranking', '3Documents', '4Apply', '5Submit'])
+    expect(within(flow).getByRole('link', { name: /Mode/ })).toHaveAttribute('aria-current', 'step')
+    // nothing exists beyond the first stage yet: those stages still open, onto a page that says what to complete first
+    expect(within(flow).getByRole('link', { name: /Documents/ })).toHaveAttribute('href', '/not-started/documents')
+    expect(within(flow).getByRole('link', { name: /Submit/ })).toHaveAttribute('href', '/not-started/submit')
 
     const more = screen.getByRole('navigation', { name: 'More' })
-    expect(within(more).getByRole('link', { name: 'CV database' })).toHaveAttribute('href', '/cv')
-    expect(within(more).getByRole('link', { name: 'Submitted applications' })).toHaveAttribute('href', '/submitted')
-    expect(within(more).getByRole('link', { name: 'Extra features' })).toHaveAttribute('href', '/extras')
-    expect(within(more).getByRole('link', { name: 'Settings' })).toHaveAttribute('href', '/settings')
+    expect(within(more).getAllByRole('link').map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
+      ['CV database', '/cv'], ['Country', '/settings/country'], ['Submitted applications', '/submitted'],
+      ['Extra features', '/extras'], ['Help', '/help'], ['Settings', '/settings'],
+    ])
+  })
+
+  it('has the light and dark switch in the top bar', async () => {
+    mockApi(routes())
+    renderApp()
+
+    expect(await screen.findByRole('switch', { name: 'Dark mode' })).toHaveAttribute('aria-checked', 'false')
   })
 
   it('opens a stage once there is something in it, and navigates with the menu', async () => {
-    mockApi({ ...routes(), 'GET /api/applications': [{ jobId: 1, title: 'x', submittedAt: null, cv: { id: 1, version: 1, approved: true }, letter: { id: 2, version: 1, approved: true }, readyToApply: true, blockers: [], generation: null, searchMode: 'TARGETED' }] })
+    mockApi({ ...routes(), 'GET /api/applications': [openApplication] })
     renderApp()
 
-    const flow = await screen.findByRole('navigation', { name: 'Pipeline' })
-    expect(await within(flow).findByRole('link', { name: 'Documents' })).toHaveAttribute('href', '/documents')
-    expect(within(flow).getByRole('link', { name: 'Apply' })).toHaveAttribute('href', '/apply')
+    const flow = await screen.findByRole('list', { name: 'Pipeline' })
+    await vi.waitFor(() => expect(within(flow).getByRole('link', { name: /Documents/ })).toHaveAttribute('href', '/documents'))
+    expect(within(flow).getByRole('link', { name: /Apply/ })).toHaveAttribute('href', '/apply')
     await userEvent.click(within(screen.getByRole('navigation', { name: 'More' })).getByRole('link', { name: 'Settings' }))
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
   })
 
-  it('sends a first launch to the welcome steps and never shows the app before they are done', async () => {
-    mockApi(routes({ ...onboarded, complete: false, nextStep: 'CV', cv: { present: false, entries: 0, facts: 0, skills: 0 }, claude: { chosen: false, provider: 'cli', works: false } }))
+  it('says a stage has not been started and what to complete first, instead of showing an empty page', async () => {
+    mockApi(routes())
+    renderApp()
+
+    await userEvent.click(await screen.findByRole('link', { name: /Documents/ }))
+
+    expect(await screen.findByRole('heading', { name: 'Documents has not been started yet' })).toBeInTheDocument()
+    expect(screen.getByText(/Please complete/)).toHaveTextContent('Please complete Mode first.')
+    expect(screen.getByRole('link', { name: /Documents/ })).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('keeps what was typed into the search form when the menu is used and the person comes back', async () => {
+    mockApi(routes())
+    renderApp()
+
+    await userEvent.click(await screen.findByRole('radio', { name: /Prompt Mode/ }))
+    await userEvent.type(await screen.findByLabelText('Starting prompt'), 'Nurse in Uppsala')
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'More' })).getByRole('link', { name: 'Settings' }))
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('list', { name: 'Pipeline' })).getByRole('link', { name: /Mode/ }))
+
+    expect(await screen.findByLabelText('Starting prompt')).toHaveValue('Nurse in Uppsala')
+  })
+
+  it('goes straight to a stage that has become available since its "not started" page was opened', async () => {
+    mockApi({ ...routes(), 'GET /api/applications': [openApplication] })
+    renderApp('/not-started/documents')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Your documents' })).toBeInTheDocument()
+    expect(screen.queryByText(/has not been started yet/)).not.toBeInTheDocument()
+  })
+
+  it('sends a first launch to the setup steps, which are the progress bar, and keeps the bottom menu and the theme switch', async () => {
+    mockApi(routes(incomplete))
     renderApp('/documents')
 
     expect(await screen.findByRole('heading', { name: 'Start with your CV' })).toBeInTheDocument()
-    expect(screen.queryByRole('navigation', { name: 'Pipeline' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Pipeline' })).not.toBeInTheDocument()
+    expect(within(screen.getByRole('list', { name: 'Setup progress' })).getAllByRole('listitem')).toHaveLength(4)
+    expect(screen.getByRole('navigation', { name: 'More' })).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Dark mode' })).toBeInTheDocument()
   })
 
-  it('renders Search mode with both modes and examples from several professions', async () => {
+  it('opens the menu pages in the middle of setup without losing the chosen CV files or the step', async () => {
+    mockApi(routes(incomplete))
+    renderApp('/welcome')
+
+    await userEvent.upload(await screen.findByLabelText('CV files'), new File(['%PDF'], 'cv.pdf', { type: 'application/pdf' }))
+    await userEvent.click(within(screen.getByRole('navigation', { name: 'More' })).getByRole('link', { name: 'Settings' }))
+    expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
+    await userEvent.click(within(screen.getByRole('list', { name: 'Setup progress' })).getByRole('button', { name: /Your CV/ }))
+
+    expect(await screen.findByText('cv.pdf')).toBeInTheDocument()
+  })
+
+  it('does not let setup steps be skipped: a later step says what to complete first', async () => {
+    mockApi(routes(incomplete))
+    renderApp('/welcome')
+
+    await userEvent.click(await within(await screen.findByRole('list', { name: 'Setup progress' })).findByRole('button', { name: /Country/ }))
+
+    expect(await screen.findByRole('heading', { name: 'Country has not been started yet' })).toBeInTheDocument()
+    expect(screen.getByText(/Please complete/)).toHaveTextContent('Please complete Your CV first.')
+  })
+
+  it('never shows the setup steps again once setup is done: the address leads to Mode', async () => {
+    mockApi(routes())
+    renderApp('/welcome')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Find your next role' })).toBeInTheDocument()
+  })
+
+  it('renders Mode with both modes and examples from several professions', async () => {
     mockApi(routes())
     renderApp()
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Find your next role' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Discovery mode/ })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Prompt mode/ })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByRole('radio', { name: /Discovery Mode/ })).toBeInTheDocument()
+    // Nothing is chosen yet, so no prompt is shown, only the two modes and the link for a job found elsewhere
+    expect(screen.getByRole('radio', { name: /Prompt Mode/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('radio', { name: /Discovery Mode/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByLabelText('Starting prompt')).not.toBeInTheDocument()
+    expect(screen.getByText('I found a job myself, add it from a link')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('radio', { name: /Prompt Mode/ }))
+    expect(screen.getByRole('radio', { name: /Prompt Mode/ })).toHaveAttribute('aria-checked', 'true')
+    expect(await screen.findByLabelText('Starting prompt')).toBeInTheDocument()
     expect(screen.getByText('Nurse positions in Stockholm, last 7 days')).toBeInTheDocument()
     expect(screen.getByText('Accountant in Malmö, part time')).toBeInTheDocument()
     expect(screen.queryByLabelText(/Max age/)).not.toBeInTheDocument()

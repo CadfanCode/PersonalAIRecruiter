@@ -56,6 +56,7 @@ public class BrowserService implements DisposableBean {
     private Playwright playwright;
     private BrowserContext context;
     private final Map<Long, Page> tabs = new HashMap<>();
+    private volatile boolean shown; // whether the window is on screen; only meaningful for a headed, background browser
 
     public BrowserService(JobPilotProperties props) {
         this.config = props.browser();
@@ -65,6 +66,11 @@ public class BrowserService implements DisposableBean {
     /** Runs the task on the browser thread and waits for it. */
     public <T> T call(Callable<T> task) {
         return call(task, CALL_TIMEOUT_SECONDS);
+    }
+
+    /** True when the window is hidden off-screen until a person has to act. */
+    public boolean backgroundMode() {
+        return config.background() && !config.headless();
     }
 
     private <T> T call(Callable<T> task, int timeoutSeconds) {
@@ -98,8 +104,15 @@ public class BrowserService implements DisposableBean {
                 if (jobId >= 0 && tabs.keySet().stream().filter(k -> k >= 0).count() >= config.maxTabs()) {
                     throw new IllegalArgumentException("At most " + config.maxTabs() + " application tabs can be open; close one first");
                 }
+                Page foreground = shown ? ctx.pages().stream().filter(p -> !p.isClosed()).reduce((a, b) -> b).orElse(null) : null;
                 existing = ctx.newPage();
                 tabs.put(jobId, existing);
+                if (foreground != null && foreground != existing) {
+                    foreground.bringToFront(); // a new tab opens in front; the person reviewing another one keeps theirs
+                }
+            }
+            if (backgroundMode() && !shown) {
+                setWindowState(existing, "minimized"); // a new tab brings its window up: put it away again before anything loads
             }
             existing.navigate(url, new Page.NavigateOptions().setTimeout(NAVIGATION_TIMEOUT_MS));
             return null;
@@ -108,6 +121,11 @@ public class BrowserService implements DisposableBean {
 
     /** Runs {@code fn} with the job's page on the browser thread; throws {@link TabClosedException} if the tab is gone. */
     public <T> T withTab(long jobId, Function<Page, T> fn) {
+        return withTab(jobId, fn, CALL_TIMEOUT_SECONDS);
+    }
+
+    /** Like {@link #withTab(long, Function)} with a shorter limit for steps that have their own deadline. */
+    public <T> T withTab(long jobId, Function<Page, T> fn, int timeoutSeconds) {
         return call(() -> {
             Page page = tabs.get(jobId);
             if (page == null || page.isClosed()) {
@@ -123,7 +141,23 @@ public class BrowserService implements DisposableBean {
                 }
                 throw e;
             }
-        });
+        }, timeoutSeconds);
+    }
+
+    /**
+     * Makes {@code page} (a tab the application's own click opened) the job's tab and closes the one it replaces. Must be called from
+     * inside {@link #withTab}, which runs on the browser thread that owns the tab map.
+     */
+    public void adoptTab(long jobId, Page page) {
+        Page old = tabs.put(jobId, page);
+        if (old != null && old != page && !old.isClosed()) {
+            old.close();
+        }
+        if (backgroundMode() && !shown) {
+            setWindowState(page, "minimized"); // a popup is a window of its own: keep it out of sight too
+        } else {
+            page.bringToFront();
+        }
     }
 
     /** Types the saved login into the tab's login form (see {@link BrowserGuard#fillSavedLogin}); never presses anything. */
@@ -173,8 +207,16 @@ public class BrowserService implements DisposableBean {
                 playwright = Playwright.create();
             }
             Files.createDirectories(profileDir);
-            context = playwright.chromium().launchPersistentContext(profileDir,
-                    new BrowserType.LaunchPersistentContextOptions().setHeadless(config.headless()).setViewportSize(null));
+            BrowserType.LaunchPersistentContextOptions options = new BrowserType.LaunchPersistentContextOptions()
+                    .setHeadless(config.headless()).setViewportSize(null);
+            if (backgroundMode()) {
+                options.setArgs(backgroundArgs());
+                shown = false;
+            }
+            context = playwright.chromium().launchPersistentContext(profileDir, options);
+            if (backgroundMode()) {
+                context.pages().stream().findFirst().ifPresent(p -> setWindowState(p, "minimized")); // the flag is not honoured everywhere
+            }
             return context;
         } catch (java.io.IOException | PlaywrightException e) {
             throw new IllegalStateException("Cannot start the browser: " + e.getMessage()
@@ -202,6 +244,98 @@ public class BrowserService implements DisposableBean {
             log.debug("Browser shutdown: {}", e.toString());
         }
         thread.shutdownNow();
+    }
+
+    /**
+     * Chromium flags for the hidden window: started minimised, and no throttling of pages that are hidden or behind another tab,
+     * which would make fills stall. The window is minimised rather than moved off-screen because window managers (Wayland above all)
+     * keep a window on screen. On a Wayland session Chromium is started through XWayland (when there is an X display), which is what
+     * lets the DevTools window calls below work.
+     */
+    static java.util.List<String> backgroundArgs() {
+        java.util.List<String> args = new java.util.ArrayList<>(java.util.List.of(
+                "--start-minimized", "--window-size=1280,900",
+                "--disable-backgrounding-occluded-windows", "--disable-renderer-backgrounding", "--disable-background-timer-throttling"));
+        boolean linux = System.getProperty("os.name", "").toLowerCase().contains("linux");
+        if (linux && "wayland".equalsIgnoreCase(System.getenv("XDG_SESSION_TYPE")) && System.getenv("DISPLAY") != null) {
+            args.add("--ozone-platform=x11");
+        }
+        return args;
+    }
+
+    /** True when the window is on screen. */
+    public boolean windowShown() {
+        return !backgroundMode() || shown;
+    }
+
+    /**
+     * Brings the window up and the job's tab to the front: for a sign-in, a form ready for review, or a person taking over. A no-op
+     * on the window when the browser is headless or not run in the background. Never fails the caller: a window that cannot be
+     * restored is simply already where it is.
+     */
+    public void reveal(long jobId) {
+        if (!backgroundMode()) {
+            withTab(jobId, page -> {
+                page.bringToFront();
+                return null;
+            });
+            return;
+        }
+        withTab(jobId, page -> {
+            setWindowState(page, "normal");
+            page.bringToFront();
+            shown = true;
+            return null;
+        }, 30);
+    }
+
+    /** Minimises the window again when nobody has to act on any tab. */
+    public void hide() {
+        if (!backgroundMode() || !shown || context == null) {
+            return;
+        }
+        try {
+            call(() -> {
+                context.pages().stream().filter(p -> !p.isClosed()).findFirst().ifPresent(p -> setWindowState(p, "minimized"));
+                shown = false;
+                return null;
+            }, 15);
+        } catch (RuntimeException e) {
+            log.debug("Hiding the browser window: {}", e.toString());
+        }
+    }
+
+    /**
+     * DevTools: the window state is "normal" or "minimized" (a minimised page keeps running, as the flags above prevent throttling).
+     * The window manager applies it asynchronously, so the state is read back and asked for again a few times until it holds.
+     */
+    private void setWindowState(Page page, String state) {
+        try {
+            com.microsoft.playwright.CDPSession session = context.newCDPSession(page);
+            try {
+                int id = session.send("Browser.getWindowForTarget").get("windowId").getAsInt();
+                for (int attempt = 0; attempt < 8; attempt++) {
+                    com.google.gson.JsonObject params = new com.google.gson.JsonObject();
+                    params.addProperty("windowId", id);
+                    com.google.gson.JsonObject bounds = new com.google.gson.JsonObject();
+                    bounds.addProperty("windowState", state);
+                    params.add("bounds", bounds);
+                    session.send("Browser.setWindowBounds", params);
+                    page.waitForTimeout(250);
+                    com.google.gson.JsonObject read = new com.google.gson.JsonObject();
+                    read.addProperty("windowId", id);
+                    String now = session.send("Browser.getWindowBounds", read).getAsJsonObject("bounds").get("windowState").getAsString();
+                    if (state.equals(now)) {
+                        return;
+                    }
+                }
+                log.info("The browser window did not reach the state {}; it stays as it is", state);
+            } finally {
+                session.detach();
+            }
+        } catch (RuntimeException e) {
+            log.info("Could not change the browser window state ({}); it stays as it is", e.getClass().getSimpleName());
+        }
     }
 
     /** Brings a job's tab to the front (SPEC 12: "Focus tab"). */

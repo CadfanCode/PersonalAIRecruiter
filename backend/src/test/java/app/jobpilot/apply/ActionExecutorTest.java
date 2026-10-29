@@ -26,7 +26,7 @@ class ActionExecutorTest extends PlaywrightTest {
 
     ActionExecutor.Result run(List<FormField> fields, ApplyContext ctx, MappedAction... actions) {
         validated = ActionValidator.validate(fields, new FormActions(List.of(actions), List.of()), ctx);
-        return new ActionExecutor(page, new BrowserGuard(page)).execute(validated.planned(), fields);
+        return new ActionExecutor(page, new BrowserGuard(page)).execute(validated.planned());
     }
 
     @Test
@@ -49,9 +49,8 @@ class ActionExecutorTest extends PlaywrightTest {
         assertThat(page.locator("#n").inputValue()).isEqualTo("Cai Birch");
         assertThat(page.locator("#e").inputValue()).isEqualTo("caibirch@proton.me");
         assertThat(page.locator("#c").isChecked()).isFalse();
-        // the upload made the category select appear: it is reported as a new field for a second pass
-        assertThat(result.newFields()).hasSize(1);
-        assertThat(result.newFields().get(0).tag()).isEqualTo("select");
+        // the upload made the category select appear
+        assertThat(PageScripts.extract(page).stream().filter(f -> f.tag().equals("select")).count()).isEqualTo(1);
         assertThat(submitted()).isFalse();
         assertThat(clicks()).isEmpty();
     }
@@ -81,9 +80,10 @@ class ActionExecutorTest extends PlaywrightTest {
         open("ponty.html");
         var fields = PageScripts.extract(page);
         var ctx = new ApplyContext(PROFILE, Map.of(), Map.of("cv", tempPdf("CV_Cai_Birch_Friday.pdf")));
-        var first = run(fields, ctx, act(byLabel(fields, "Dokument"), "upload", "", "cv", "document"));
+        run(fields, ctx, act(byLabel(fields, "Dokument"), "upload", "", "cv", "document"));
+        var appeared = PageScripts.extract(page).stream().filter(f -> f.tag().equals("select")).toList();
 
-        var second = run(first.newFields(), ctx, act(first.newFields().get(0), "select", "CV", "none", "document"));
+        var second = run(appeared, ctx, act(appeared.get(0), "select", "CV", "none", "document"));
 
         assertThat(second.done()).hasSize(1);
         assertThat(page.locator("#cats select").inputValue()).isEqualTo("CV");

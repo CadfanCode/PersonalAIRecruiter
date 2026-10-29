@@ -16,7 +16,7 @@ export function PerformancePanel() {
     <div className="grid gap-5">
       <Panel title="Speed">
         <p className="text-sm text-[var(--muted)]">
-          Scoring ads and writing documents run several Claude calls at the same time. Raise this to go faster; lower it if Claude tells you that you are sending too many requests.
+          Scoring ads and writing documents run several AI calls at the same time. Raise this to go faster; lower it if the AI service tells you that you are sending too many requests.
         </p>
         <div className="mt-5 flex items-center gap-4">
           <input type="range" aria-label="Calls at the same time" min={perf.data?.min ?? 1} max={perf.data?.max ?? 8} step={1} value={current}
@@ -34,7 +34,7 @@ export function PerformancePanel() {
           <>
             <p className="mb-3 text-sm">JobPilot has made {usage.data.totals.calls} calls, {usage.data.totals.failures} failed.</p>
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-[var(--muted)]"><tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Tokens</th></tr></thead>
+              <thead className="text-xs text-[var(--muted)]"><tr><th className="py-1 font-semibold">Task</th><th className="py-1 font-semibold">Calls</th><th className="py-1 font-semibold">Tokens</th></tr></thead>
               <tbody>
                 {usage.data.byTask.map((t) => (
                   <tr key={t.task} className="border-t border-[var(--line)]"><td className="py-1">{t.task}</td><td>{t.calls}</td><td>{Number(t.tokens).toLocaleString('en-GB')}</td></tr>

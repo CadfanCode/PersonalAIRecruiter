@@ -49,8 +49,11 @@ The UI is one pipeline with four stages, each ending in one obvious action:
    deselect, and offers "Create tailored documents for N selected jobs": one batch writes a CV and a letter per job (one
    failure does not stop the others) and opens Documents.
 3. **Documents**: progress and retry per selected job, the unchanged editor and PDF preview per job, "Ask Claude" chat
-   (section 8.6) and "Continue to Finalize Applications".
-4. **Finalize Applications** (was "Apply monitor"): every selected job with its documents and status; "Fill all" fills the
+   (section 8.6). Each application with both documents approved has a checkbox ("Send to Apply", remembered in the browser,
+   nothing ticked by default); "Apply (N)" sends exactly the ticked ones on (`POST /api/applications/apply {jobIds}`, which
+   marks them `sent_to_apply_at`). The rest stay in Documents.
+4. **Finalize Applications** (was "Apply monitor"): only the applications sent on from Documents, each with its documents and status
+   ("Take out of Apply" returns one to Documents; `DELETE /api/applications/{jobId}/apply"); "Fill all" fills the
    forms, at most five browser tabs at a time, the rest queue. The pause before submit is permanent (CLAUDE.md rule 1).
    The user submits by hand and confirms with "I submitted it", which records the application (job, company, role type,
    search mode, date, documents used) for the Activity Report. Logging in Arbetsförmedlingen stays a separate, prefilled
@@ -63,20 +66,28 @@ JobPilot is installed like any app (one installer per OS, no Docker, no database
 **First run (onboarding)**, one step per screen with a progress indicator, shown once: (1) drop or browse the CV (PDF, DOCX, TXT,
 MD); the files are held in the browser and read after step 2, because reading needs Claude; (2) connect Claude: the Claude Code
 subscription (found in the usual folders on every OS, with an install command when missing, and "not installed" told apart
-from "not signed in") or an Anthropic API key (kept only in the OS credential store); a real test call must pass before
+from "not signed in"); there is no other AI option (ADR 0019); a real test call must pass before
 continuing; then the CV is read, a short summary of what was found is shown and confirmed (the person's contact details fill
 only blank profile fields); (3) the country (Sweden live, others "coming soon"); (4) the search mode.
-`GET /api/onboarding` reports the state and the first open step; returning users never see it unless they run setup again.
+`GET /api/onboarding` reports the state and the first open step. While setup is open, the four steps *are* the bar across the top and
+each is a button: steps up to the first one still to do open freely (back and forth), a later one shows "<step> has not been started
+yet. Please complete <first step> first." Once setup is finished `/welcome` redirects to Mode and the steps are never shown again: the
+same things are changed from the bottom menu (CV database for new CV files, Country, Claude). Everything setup holds in the browser
+(chosen files, step, the CV reading in progress) lives in `SetupProvider` above the routes, so opening the menu in the middle of
+setup loses nothing (ADR 0020).
 
-**The pipeline**, five stages across the top (current bold, others faded, completed ones open): *Search mode* (Discovery or
+**The pipeline**, five stages across the top, every one a link (current underlined, completed ones ticked; a stage with nothing in it
+yet opens `/not-started/{stage}`, which says "<stage> has not been started yet. Please complete <earlier stage> first." with a button to it): *Search mode* (Discovery or
 Prompt; paste-a-link is a secondary action) -> *Run search* (progress with percent and time left, results appear as they are
 scored, the selection basket) -> *Documents* (a tailored CV and cover letter per selected job; the overview shows "CV approved" and
 "Cover letter approved" per job, "Approve all", and an **Apply** button) -> *Apply* (a browser tab per approved application,
 filled in; per-application status: filling, needs login, needs attention, ready for submission, failed) -> *Submit* (the user
 presses the employer's own submit button and confirms; the application is stored with a snapshot). Only applications whose CV
-and cover letter are **both** approved go on to Apply; the UI says which do not and why. A hidden menu at the bottom edge holds
-CV database, Submitted applications, Extra features (the activity report) and Settings; it opens on hover at the bottom edge,
-on the handle (click or focus) and when Tab reaches it.
+and cover letter are **both** approved go on to Apply; the UI says which do not and why. A menu at the bottom edge, on every screen including setup, holds
+CV database, Country, Claude, Submitted applications, Extra features (the activity report) and Settings; it opens on hover at the
+bottom edge, on the "Menu" handle (click or focus) and when Tab reaches it. Using it only changes the page: searches, documents and
+applications run on the server, and text typed into forms, the open document's draft and chat, a CV being imported and the activity-report
+run are kept in the browser while the window is open (`useDraft`).
 
 **Prompt mode**: a text box with tips and examples from several professions; ads to score default to 20 (cap 150); recency and
 place come from the words; the search plan (the `SearchProfile`) is always shown for review and approving it starts the search.
@@ -88,7 +99,7 @@ and accepted for the user; they only pick roles (section 6.3), optionally "go wi
 ```
 React UI (served by the API in the installed app; 5173 in development) --REST/JSON--> Spring Boot API (18080 installed, 8080 dev)
                                    |                                                       --JDBC--> embedded PostgreSQL 16
-                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI  |  Anthropic Messages API (ADR 0014)
+                                   +-- ClaudeRunner ---- ProviderRouter --> `claude -p` CLI (ADR 0019)
                                    +-- CountryRegistry -- JobSource ------> one job board per country (Sweden: JobTech/Platsbanken)
                                    +-- SecretStore ------ java-keyring ----> OS credential store (API key, saved portal logins)
                                    +-- JobTechClient --- HTTPS ------------> jobsearch.api.jobtechdev.se
@@ -261,7 +272,7 @@ enabled `style_rule` texts verbatim.
 | `writeCv` | job ad, selected facts, profile, style rules, language | CvContent |
 | `writeLetter` | job ad, selected facts, profile, style rules, language, example letter | LetterContent |
 | `rewriteForViolations` | document JSON, validator report | same schema as input |
-| `mapFormFields` | extracted form fields, profile, job, available files, answers memory | FormActions |
+| `browseApplication` | accessibility snapshot of the page (no typed values), page facts, profile, job, available files, answers memory, CV digest, history | FormActions.Step |
 
 ### 5.4 Key schemas (abbreviated, write full JSON Schema files)
 
@@ -364,12 +375,11 @@ FormActions:
 
 ### 5.5 Providers (ADR 0014)
 
-`AiProvider` has two implementations: `cli` (above) and `api` (the Anthropic Messages API over HTTPS, the user's key from the OS
-credential store, structured output forced by one `respond` tool whose `input_schema` is the task's JSON Schema, the server-side
-`web_search` tool for career-page discovery, a larger answer budget for long tasks, 429/529 retried, an explicit error when an
-answer is cut off). Both share one adjustable call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings). The choice, the
-API model and the last passed connection test are in `app_setting`. `GET/PUT /api/claude/connection...` serve onboarding and Settings;
-the key is never returned (only its last four characters), never logged and never written to the database.
+`AiProvider` has one implementation, `cli` (above). The `AiProvider` / `ProviderRouter` seam stays so the rest of the app only ever
+sees `ClaudeRunner`. The call limit (`ClaudeConcurrency`, default 4, range 1 to 8, Settings), the models (`claude.model` is the default, `claude.model.<STAGE>` one per stage, see ADR 0021; each is a Claude Code
+alias such as `sonnet`, `opus`, `fable`, passed as `--model` and read on every request) and the last passed connection test are in
+`app_setting`. A database that still says provider `api` or `gemini` (both removed) is read as `cli` and "not chosen", so the person
+confirms Claude Code once more. `GET/PUT /api/claude/connection...` serve onboarding and Settings.
 
 ## 6. Job search
 
@@ -437,6 +447,18 @@ the run waits in step FETCH for the user to paste the ad text. The same wait hap
 score steps run in a MANUAL run and the job appears in the results like any other. An ad already stored is linked, not
 overwritten, and an explicit employer apply link in the ad is used for filling.
 
+A Platsbanken address (`arbetsformedlingen.se/platsbanken/annonser/{id}`) is not fetched as a page (it is drawn by a script and
+returns only menu text): the ad is read from the JobTech `GET /ad/{id}` API and mapped like a search hit (`JobTechMapper`), with no
+`extractJob` call; a bare host name as apply link gets `https://`. A removed ad fails the run with a clear message. For any other
+fetched page that `extractJob` says is not an ad, the run waits for pasted text rather than failing (ADR 0025).
+
+### 6.6 What persists (ADR 0025)
+
+Search runs and their ads are scratch data: cleared at program start, at close and when a new Discovery or Prompt search starts.
+An application the user selected stays (with its documents) until deleted or submitted. Submitted applications and the
+aktivitetsrapport log are never purged. Deleting applications in Documents (`POST /applications/delete {jobIds}`, after a
+confirmation dialog) removes the job, documents, scores and PDF files completely; submitted or still-written ones refuse (409).
+
 ### 6.5 Countries (ADR 0013)
 
 `CountryRegistry` lists the known countries; one with a `JobSource` bean is available, the rest show as "coming soon". The chosen
@@ -464,9 +486,10 @@ exists (`activityReport`, Sweden only). Adding a country is one `JobSource` bean
 
 `selectFacts` chooses entries and facts by relevance to the ad and the SearchProfile's
 `relevantTags`. Rules:
-- Always include contact details, all education entries (unless the user excluded one), and
-  languages. Education facts are the ones Claude picked; an education entry Claude left out is
-  added without bullets. Entries marked "letter" only (for example leisure facts) stay out of the CV.
+- Always include contact details and languages. Education is chosen by relevance like everything else (every completed
+  degree stays as one line, the most relevant first; unfinished programmes, duplicates of the same degree and minor
+  unrelated courses are left out); if Claude chose none, the newest education entry stays, so a CV never goes out without one. Entries marked
+  "letter" only (for example leisure facts) stay out of the CV, and education is never letter only (ADR 0024).
 - Prefer recent and relevant entries; omit unrelated ones. A teaching CV drops Spring Boot; a
   developer CV keeps teaching only as a short line that shows communication skills.
 - Keep employment gaps honest: an omitted job can be summarised as one line ("Other employment
@@ -477,7 +500,13 @@ exists (`activityReport`, Sweden only). Adding a country is one `JobSource` bean
 
 ### 8.2 Generation
 
-`writeCv` and `writeLetter` receive only the selected facts and are called at the same time (each with its own validation
+After selection, `planDocument` writes an editor's brief (ADR 0024): the field of the ad, one angle for the whole application,
+what the ad values, the strongest evidence as points that combine several facts, how the profile opens, which example the
+letter tells, the limits to state in the letter and what to keep short. If the plan call fails the writers carry on without it.
+The facts are raw material: the writers digest them into new sentences (a bullet may rest on one to four facts of its entry),
+order bullets by what the ad values, never strengthen a claim, and state limits only in the letter.
+
+`writeCv` and `writeLetter` receive only the selected facts and the plan and are called at the same time (each with its own validation
 and single rewrite); a batch of jobs also runs up to three jobs at once. The model-call limit is the only throttle. Language = the ad's language. The
 example letter (the user's Knowit letter, in `seed/`) is passed as a structure example, never as
 text to copy.
@@ -498,6 +527,8 @@ invented employers or dates, and en-dashes in date ranges.
 - Fail if the letter opens with "Jag heter" or "My name is".
 - Warn (rewrite once) on banned AI phrasing (8.4).
 - Fail on bullets without valid fact citations.
+- Warn (rewrite once) with `copied_facts` when more than half of the bullets of a CV (at least four) repeat a single cited
+  fact almost word for word (word overlap of 0.8 or more): the CV was transplanted, not written.
 - Fail when `content.language` differs from the ad's language, and when a letter names an employer
   that only appears in an example letter (Knowit, Ravion) and is not the target employer.
 - Warn (rewrite once, never block approval) on: a number in a bullet or letter paragraph that the
@@ -552,29 +583,53 @@ is saved back). A request that needs something not in the CV database changes no
 - Playwright for Java, `launchPersistentContext(~/.jobpilot/browser-profile, headless=false)`,
   Chromium. The same profile keeps the user's logins (Varbi, Jobshark, ledigajobb,
   Arbetsförmedlingen with BankID) between sessions.
-- One tab per job. Keep a map of job id to page so the UI can show per-tab status.
+- **Out of sight until needed (ADR 0018).** The window starts minimised (`--start-minimized`, then DevTools
+  `Browser.setWindowBounds windowState=minimized`) with `--disable-backgrounding-occluded-windows`,
+  `--disable-renderer-backgrounding`, `--disable-background-timer-throttling` so hidden pages run at full speed, and through XWayland
+  (`--ozone-platform=x11`) on a Wayland session. It is restored and the tab brought to the front only when a sign-in is genuinely
+  needed, the form is filled and ready for review, or the person pressed "Open the browser to take over" (which keeps it up until
+  that tab is closed); it is minimised again when no tab needs the person. `jobpilot.browser.background=false` keeps it always visible.
+  Moving the window off-screen was tried and rejected: window managers keep it on screen. One window holds every tab, so showing it
+  shows all of them.
+- One tab per job. Keep a map of job id to page so the UI can show per-tab status. A tab that the application's own Apply click
+  opened in a new window replaces the job's tab.
 - Accept only necessary cookies when a cookie banner is detected (button text matches
   "nödvändiga", "necessary", "reject", "endast").
 
 ### 9.2 Filling a page
 
-1. Navigate to `apply_url` (fall back to `url`).
-2. Detect login walls (password inputs, "Logga in", "Sign in", BankID, account-creation pages).
-   Set the tab status to `WAITING_FOR_USER` and poll every 3 s until the page changes.
-3. Extract fields with a script injected via `page.evaluate`: for every visible input, select,
-   textarea and file input, assign `data-jp-id`, then collect label text (label[for], aria-label,
-   closest label, preceding text), name, type, required, options, current value, and the
-   fieldset or question text.
-4. Call `mapFormFields` with the fields, the profile, the job, the approved documents, and the
-   answers memory (previous answers to similar screening questions, keyed by normalised question
-   text).
-5. Execute actions with Playwright locators on `[data-jp-id=...]`: `fill`, `selectOption`,
-   `check`, and `setInputFiles` for uploads (cv or letter PDF).
-6. Re-extract and show a per-tab summary: filled, skipped (with reasons), and questions for the
-   user. Screening questions that need judgment ("Har du erfarenhet av Angular?") are filled only
-   if the answers memory or CV database clearly supports an answer. Otherwise they go to
-   `questionsForUser`, and the user's answer is saved to the answers memory.
-7. Multi-step forms: the user clicks Next themselves, then presses "Fill this page" in the UI.
+1. Navigate to `apply_url` (fall back to `url` when `apply_url` is not an address), with one retry. Stage: *Opening job ad*.
+2. **Look, decide, act, repeat** (ADR 0023; `ApplyService.browse`). Each look waits for the page to settle (load, a short network
+   lull, then three equal accessibility snapshots in a row, so a button drawn late by a single-page app is seen), dismisses a
+   necessary-only cookie notice, and takes `page.ariaSnapshot` in AI mode: every element with a role, a name and a `ref`
+   (`PageSnapshot`). The snapshot sent to the model never carries what a text box holds (`[filled]` replaces it), so a typed password,
+   a personal number or anything else the person typed cannot reach a prompt. The model (`browseApplication`) answers with the kind of
+   page (ad, form, login, review, confirmation, error) and the actions for this page, by ref. The program validates and performs
+   them, then looks again. Limits: 30 looks, `find-form-seconds` (240) to reach a form, two looks in a row that change nothing end the
+   run, and a button is never pressed twice on the same page.
+3. **Wall rule.** A tab is `WAITING_FOR_SIGN_IN` (window revealed, polled every 3 s) only when a password field is visible or a
+   password is being confirmed and the page offers no guest route ("Apply manually", "Continue as guest", "Apply without account"),
+   or when the model calls the page a login page, nothing else could be done, and the main content (header, nav and footer are
+   ignored) has sign-in, BankID or account wording. A "Logga in" link in a header, an ad that says "registerkontroll", or a form that
+   offers BankID never counts. When no way on is found the tab says why (`NEEDS_MANUAL_APPLY`), offers "Open the browser to take
+   over", and carries on by itself when the form shows (poll).
+4. **Fields.** The validator sees the snapshot's controls as `FormField`s (ref as id; file inputs keep `data-jp-id` from the extract
+   script because the snapshot does not list them). Actions: `fill`, `choose` (a native select by label, or a custom drop-down:
+   open it, click the option whose text matches; only an option that exists is picked), `check`, `uncheck`, `upload`, `click`.
+5. **Clicks.** One per look, last, through `BrowserGuard.follow`: the Apply link of an ad (rules unchanged, ADR 0018) or a Next /
+   Continue / Nästa / Fortsätt / Apply manually / Continue as guest button whose whole label is such a word (`ADVANCE_LABEL`). A Next
+   is refused on a page whose visible heading or step name reads review, summary, confirm or granska, and when any other visible
+   control says submit, send, finish, register or a bare Ansök/Apply.
+6. Re-read after the actions (snapshot for refs, extract script for `jp-` ids) and show a per-tab summary: filled, skipped (with
+   reasons), and questions for the user. Screening questions that need judgment ("Har du erfarenhet av Angular?") are filled only
+   if the answers memory or CV database clearly supports an answer. Otherwise they go to `questionsForUser`, the run stops there
+   (`NEEDS_ANSWERS`), and the user's answer is saved to the answers memory; Fill this page continues from where the form is.
+7. The run ends `READY_FOR_USER` at a review page, or when the model has nothing left to do on a form that was filled. The user
+   checks the page and presses the final button.
+8. **Stages and failures.** The card shows *Opening job ad, Finding application form, Filling personal details, Uploading CV and cover
+   letter, Answering questions, Ready for your review* as a progress bar (`stage` in `GET /api/apply/status`). A step that throws, or
+   a form not found in time, ends in `ERROR` with `failedStage` and `failure`; the card names the stage and offers "Try again" and
+   "Open the browser to take over". The model call for the form is repeated once.
 
 Nothing in the model's answer is trusted (`ActionValidator`). An action runs only if its `fieldId` is
 one of the fields just extracted, it fits the field type (fill only text and textarea, check only
@@ -613,13 +668,18 @@ other host or on a sign-up form (a second password field, or more than three inp
   and unticking) whose label, aria-label, title, legend or nearby text matches
   `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter|godkänn|accept|personuppgift|policy|intyga|marknadsför|marketing|prenumer|subscribe/i`
   (the last eight alternatives were added in milestone 5 to make the rule stricter).
-- Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY` or
-  `AUTOCOMPLETE_OPTION`; milestone 6 adds `AKTIVITET_SPARA`). Enter is never pressed. `evaluate` runs
-  only the two fixed scripts in `PageScripts`. A test scans `src/main/java` and fails the build if any
-  other class calls a raw click, key press, `evaluate`, `dispatchEvent` or form submit.
+- Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY`, `AUTOCOMPLETE_OPTION`,
+  `AKTIVITET_SPARA`, `OPEN_APPLICATION_FORM`, `ADVANCE_STEP`, `OPEN_DROPDOWN`). Enter is never pressed. `evaluate` runs only the fixed scripts in `PageScripts`
+  (extract, detect, read-saved-activities); `page.ariaSnapshot` is read-only and lives in `PageScripts`. A test scans `src/main/java` and fails the build if any
+  other class calls a raw click, key press, `evaluate`, `dispatchEvent`, form submit, `navigate` or popup listener.
 - No code path calls `click()` on elements matching
-  `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish/i`. The only allowed clicks
-  are cookie "necessary only" buttons and autocomplete options chosen by the executor itself.
+  `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish|registrera|register|spara ansökan/i`, and none on a
+  `type=submit` control or a `<button>` without a type inside a `<form>` (a default submit). The one purpose that may carry
+  "Ansök" or "Apply" is `OPEN_APPLICATION_FORM` (the label must start with an apply word, such as Ansök, Apply, Jag är
+  intresserad, I'm interested), and it is refused when the page already is a form, when JobPilot has filled anything on the
+  application, inside a form that has inputs, or for any `FINAL_SUBMIT` word. A link with an address is loaded instead of
+  clicked, after checking http(s) and the paste-only list. The other allowed clicks are cookie "necessary only" buttons and
+  autocomplete options chosen by the executor itself.
 - Unit-test these guards with fixture HTML pages.
 
 ### 9.4 Site notes from 26 Oct 2026
@@ -716,8 +776,9 @@ GET/POST /cv/tags  GET/POST /cv/skills   DELETE /cv/skills/{id}
 GET/PUT  /cv/gaps               known gaps (PUT replaces the list)
 GET/PUT  /cv/answers            answers memory (PUT upserts one answer by normalised question)
 POST     /cv/seed               body = seed/cv_database_seed.json; 409 unless the CV database is empty
-POST     /cv/import              (multipart: PDF/DOCX/TXT files) -> import preview
-POST     /cv/import/{previewId}/commit
+POST     /cv/import              (multipart: PDF/DOCX/TXT/MD files) -> starts a background reading (a pipeline run of kind IMPORT): {runId, status}
+GET      /cv/import/{runId}      RUNNING | DONE (with the preview) | FAILED;  GET /cv/import/current: the newest reading not yet confirmed or discarded (204 if none);  DELETE /cv/import/{runId} discards it
+POST     /cv/import/{previewId}/commit   {entries: [{entry, mergeIntoEntryId|null}], skills, profile} -> {entryIds, created, enriched, facts, skills, profileFilled}
 POST     /runs                   {prompt, maxAgeDays?, limit?, includeWeb?} -> run id
 GET      /runs/{id}              status, step, progress, message
 PUT      /runs/{id}/profile      edit the SearchProfile before search continues
@@ -758,9 +819,10 @@ POST     /cv/preview-selection  {ad} -> entries and facts that selectFacts would
 GET      /claude/health          GET /claude/usage
 -- overhaul (28 Oct 2026) --
 GET      /onboarding             state and first open step;  PUT /onboarding/mode {DISCOVER|PROMPT};  POST /onboarding/complete | /reopen
-GET/PUT  /claude/connection...   status; /provider {id}; /api-key {key, model?} (DELETE removes); /api-model; POST /test {provider}
+GET/PUT  /claude/connection...   status; /provider {id: "cli"}; /cli-model (the default model); PUT /stage-model/{SEARCH|RANKING|CV_READING|DOCUMENTS|AUTOFILL} {model}; POST /test
 GET/PUT  /country                the countries (available or coming soon) and the chosen one
 GET/PUT  /settings/performance   {claudeConcurrency 1..8};  GET/PUT /settings/search {careerPages}
+POST     /applications/delete    {jobIds} delete completely (409 if one is submitted or being written; nothing is deleted then)
 POST     /applications/approve-all   per document: approved, already approved, or refused with the reason (never all-or-nothing)
 POST     /applications/apply     opens only applications with both documents approved; the rest come back as skipped with a reason
 GET      /submitted[?reported=]  GET /submitted/{id}  GET /submitted/{id}/cv.pdf | letter.pdf   the frozen record of what was sent
@@ -771,12 +833,16 @@ GET      /runs/{id}              also etaSeconds while ads are scored
 ## 12. Frontend
 
 React 19, Tailwind 4 with design tokens (CSS variables, light and dark; `<html data-theme>` always holds the resolved theme and is
-set before the first paint), Inter, rounded cards, one gentle entrance animation that respects "reduce motion". The shell is a
-flow bar (Search mode, Run search, Documents, Apply, Submit) and the bottom menu (CV database, Submitted applications, Extra
-features, Settings). Pages:
+set before the first paint), Public Sans and JetBrains Mono bundled with the app (no CDN: it works offline), warm paper background,
+white panels with hairline borders, one deep teal accent, small radii, almost no shadow, one short entrance animation that respects
+"reduce motion". Light is the default (the operating system setting is not consulted); a light/dark switch sits in the top right corner
+of every screen and the choice is remembered on this computer. The shell (`Layout`) wraps every route including `/welcome`: the bar
+across the top (brand, progress, theme switch), the page, and the bottom menu (CV database, Country, Claude, Submitted applications,
+Extra features, Settings). Pages:
 
 1. **Welcome** (`/welcome`): the four onboarding steps (section 2.2).
-2. **Search mode** (`/`): Discovery or Prompt, the form of the chosen mode, "add a job from a link", recent searches, the
+2. **Search mode** (`/`): nothing is chosen on arrival, so only the two large mode buttons show (with "add a job from a link" below);
+   choosing one shrinks them to the compact size and opens the form of that mode under them (animated, none with "reduce motion"). The form of the chosen mode, "add a job from a link", recent searches, the
    activity-report reminder (only where it exists).
 3. **Run search** (`/runs/{id}`): the processing view (ring, percent, what is happening, time left, cancel), results as they are
    scored (TanStack Table with selection basket and "Create tailored documents for N selected jobs"), the search-plan review for
@@ -787,8 +853,10 @@ features, Settings). Pages:
    and the tab controls. **Submit** (`/submit`): the applications waiting for the user's own click, "Open the application" and
    "I submitted it" with a confirmation.
 6. **Submitted applications** (`/submitted`, `/submitted/{id}`), **Extra features** (`/extras`), **Activity report** (`/aktivitet`).
-7. **CV database** (`/cv`) as before, and **Settings** (`/settings`): Claude connection, search, speed and usage, saved logins,
-   writing rules, appearance (system, light, dark), run the setup again.
+7. **CV database** (`/cv`) as before, and **Settings** (`/settings/{section}`: connection, country, search, performance, logins,
+   writing): Claude connection and model, country, search, speed and usage, saved logins, writing rules. No Appearance section (the
+   switch is in the top bar) and no "run setup again" (the steps are in the menu).
+8. **Not started** (`/not-started/{stage}`): shown for a pipeline stage whose work has not been done.
 
 Notifications: when an application becomes ready for submission the app shows a message and, if the user allowed it, a system
 notification (Web Notifications; asked for at the first Apply). The app-wide watcher runs in the shell.
@@ -844,7 +912,24 @@ results.topN=10
 
 - Local only; bind 127.0.0.1; CORS limited to the UI origin.
 - Personal data stays on the machine. The only outbound calls are JobTech, sites the user
-  applies to, and the chosen Claude access (the Claude Code CLI, or api.anthropic.com with the user's own key).
-- Secrets (the Anthropic API key, saved portal passwords) live only in the OS credential store; there is no plaintext fallback, and
-  without a store nothing is saved. The browser profile holds cookies; document this in the README.
+  applies to, and the Claude Code CLI.
+- Secrets live in the OS credential store. Saved portal passwords live only there (without a store nothing is saved). The browser profile holds cookies; document this in the README.
 - Back up the database with `pg_dump` from a script in `scripts/backup.sh`.
+
+## 13. CV import, merging and per-stage models (ADR 0021, 0022)
+
+- **Import is a background run.** Uploading extracts the text at once (a bad file is refused immediately) and reads it as a `pipeline_run`
+  of kind `IMPORT` on the pipeline executor. The result waits in memory for an hour as a preview. The UI polls `/cv/import/current`, so a
+  reading carries on when the user leaves the page, shows in the top bar ("Reading your CV"), is announced when finished, and is found
+  again on return. Setup uses the same endpoints.
+- **Entries are merged, never duplicated.** A found entry that matches a stored one (same kind; same organisation and a similar title or
+  the same start period; or, with no organisation, a similar title) is added to it: facts not already there (80 % word overlap in the same
+  language, or a longer fact containing every word of a shorter one, counts as there; rewordings and facts in the other language are settled by one batched `matchFacts` Claude call during the reading, stage "Reading your CV", and if it fails the word match stands) are appended, blank fields are filled, tags are added. Existing facts, titles and anything the user wrote are
+  never edited or removed, because documents cite fact ids. Two roles at one employer with different titles and dates stay two entries.
+  Two files describing one job are folded together before comparing with the database. The preview says "Adds N facts to <entry>" and
+  offers "Add as a new entry instead"; the commit carries `mergeIntoEntryId` per entry and does not re-match.
+- **Models per stage.** Search (plans, role ideas, pasted ads, web discovery), Scoring, Reading your CV, CV and cover letter (selection,
+  writing, revising, rewriting), Auto-fill. A stage without a choice uses the default model. Every prompt template must belong to a stage
+  (a test enforces it).
+- **Help.** `/help` (offline) with the five stages, what JobPilot never does, and common questions; a six-step tour shown once after
+  setup and reopenable from Help (a dialog: Escape closes, focus returns, reduced motion respected).

@@ -111,7 +111,7 @@ public class RoleDiscoveryService {
                     false, json(r.profile()), order++);
         }
         if (seen.isEmpty()) {
-            throw new IllegalStateException("Claude suggested no roles");
+            throw new IllegalStateException("The AI suggested no roles");
         }
         return roles.list(runId);
     }
@@ -184,7 +184,7 @@ public class RoleDiscoveryService {
                     "tags", tagList())),
                     ClaudeResources.schema("roleProfiles"), RoleProfiles.class));
             if (built.roles().size() != missing.size()) {
-                throw new IllegalStateException("Claude returned " + built.roles().size() + " role profiles for " + missing.size() + " roles");
+                throw new IllegalStateException("The AI returned " + built.roles().size() + " role profiles for " + missing.size() + " roles");
             }
             for (int i = 0; i < missing.size(); i++) {
                 roles.setProfileJson(missing.get(i).id(), json(built.roles().get(i).profile()));

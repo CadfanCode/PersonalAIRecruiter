@@ -32,7 +32,29 @@ export interface TabView {
   /** The portal a tab is waiting at for a sign-in, so a login can be saved for it. */
   signInHost: string | null
   loginFilled: boolean
+  /** Where the work is now, one of STAGES. */
+  stage: ApplyStage
+  stageLabel: string
+  /** Set when the work stopped: the stage it stopped in and why. */
+  failedStage: ApplyStage | null
+  failure: string | null
+  /** The rules that decided what kind of page this is (shown to explain a sign-in prompt or its absence). */
+  reasons: string[]
+  /** Whether the automation browser window is on screen right now. */
+  browserVisible: boolean
 }
+
+export type ApplyStage = 'OPENING_AD' | 'FINDING_FORM' | 'PERSONAL_DETAILS' | 'UPLOADING' | 'QUESTIONS' | 'READY_FOR_REVIEW'
+
+/** The steps of one application, in the order the progress bar shows them. */
+export const STAGES: { id: ApplyStage; label: string }[] = [
+  { id: 'OPENING_AD', label: 'Opening job ad' },
+  { id: 'FINDING_FORM', label: 'Finding application form' },
+  { id: 'PERSONAL_DETAILS', label: 'Filling personal details' },
+  { id: 'UPLOADING', label: 'Uploading CV and cover letter' },
+  { id: 'QUESTIONS', label: 'Answering questions' },
+  { id: 'READY_FOR_REVIEW', label: 'Ready for your review' },
+]
 
 const WORKING: TabStatus[] = ['QUEUED', 'OPENING', 'FILLING']
 

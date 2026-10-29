@@ -7,11 +7,11 @@ import { BottomDock } from './BottomDock'
 const dock = () => screen.getByRole('navigation', { name: 'More' })
 
 describe('the menu at the bottom edge', () => {
-  it('holds CV database, Submitted applications, Extra features and Settings, hidden until wanted', () => {
+  it('holds CV database, Country, Submitted applications, Extra features, Help and Settings, hidden until wanted', () => {
     render(<MemoryRouter><BottomDock /></MemoryRouter>)
 
     const names = screen.getAllByRole('link').map((l) => l.textContent)
-    expect(names).toEqual(['CV database', 'Submitted applications', 'Extra features', 'Settings'])
+    expect(names).toEqual(['CV database', 'Country', 'Submitted applications', 'Extra features', 'Help', 'Settings'])
     expect(dock().className).toContain('opacity-0')
     expect(dock().className).toContain('pointer-events-none')
   })
@@ -45,6 +45,13 @@ describe('the menu at the bottom edge', () => {
     await userEvent.hover(container.querySelector('div[aria-hidden]') as HTMLElement)
 
     expect(dock().className).toContain('opacity-100')
+  })
+
+  it('marks the section of Settings you are on, not Settings as a whole', () => {
+    render(<MemoryRouter initialEntries={['/settings/country']}><BottomDock /></MemoryRouter>)
+
+    expect(screen.getByRole('link', { name: 'Country' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Settings' })).not.toHaveAttribute('aria-current')
   })
 
   it('marks the page you are on', () => {

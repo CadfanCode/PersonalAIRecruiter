@@ -1,50 +1,106 @@
-import { Link, useLocation } from 'react-router-dom'
-import { CheckIcon, ChevronRightIcon } from '../ui/Icons'
-import { type Stage, type StageState, useFlow } from './flow'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useImportJob } from '../../api/cv'
+import { useOnboarding } from '../../api/onboarding'
+import { SETUP_STEPS, useSetup } from '../../setup/SetupProvider'
+import { CheckIcon } from '../ui/Icons'
+import { type StageState, useFlow } from './flow'
+import { ThemeToggle } from './ThemeToggle'
 
-function StageItem({ stage, state }: { stage: Stage; state: StageState }) {
-  const content = (
+type Look = 'current' | 'done' | 'available' | 'waiting'
+
+const TAB = 'relative flex h-9 cursor-pointer items-center gap-2 rounded-full px-3 text-sm transition-colors'
+const LOOK: Record<Look, string> = {
+  current: 'bg-[var(--accent-soft)] font-semibold text-[var(--ink)]',
+  done: 'text-[var(--ink)] hover:bg-[var(--hover)]',
+  available: 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--ink)]',
+  waiting: 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--ink)]',
+}
+
+function Tab({ n, label, look }: { n: number; label: string; look: Look }) {
+  return (
     <>
-      {state === 'done' && <CheckIcon width={14} height={14} className="text-[var(--success)]" />}
-      <span>{stage.label}</span>
+      <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[11px] font-semibold tabular-nums ${
+        look === 'done' ? 'bg-[var(--success)] text-[var(--surface)]' : look === 'current' ? 'bg-[var(--accent)] text-[var(--on-accent)]' : 'bg-[var(--hover)] text-[var(--muted)]'}`}>
+        {look === 'done' ? <CheckIcon width={11} height={11} strokeWidth={3} /> : n}
+      </span>
+      <span className="whitespace-nowrap">{label}</span>
     </>
   )
-  const base = 'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm transition-colors'
-  if (state === 'current') {
-    return <span aria-current="step" className={`${base} bg-[var(--accent-soft)] font-semibold text-[var(--ink)]`}>{content}</span>
+}
+
+/** Before setup is finished: the four setup steps, each one a button. After: the five stages of the pipeline, each one a link. */
+function Steps() {
+  const onboarding = useOnboarding()
+  const { pathname } = useLocation()
+  const { stages, state } = useFlow(pathname)
+  const setup = useSetup()
+  const navigate = useNavigate()
+
+  if (onboarding.data && !onboarding.data.complete) {
+    const shown = setup.step === null ? 0 : setup.reading ? 1 : setup.step
+    return (
+      <ol aria-label="Setup progress" className="flex items-center">
+        {SETUP_STEPS.map((label, i) => {
+          const look: Look = pathname === '/welcome' && i === shown ? 'current' : i < setup.reachable ? 'done' : i === setup.reachable ? 'available' : 'waiting'
+          return (
+            <li key={label}>
+              <button type="button" aria-current={look === 'current' ? 'step' : undefined} className={`${TAB} ${LOOK[look]}`}
+                title={i > setup.reachable ? `Not started yet: complete ${SETUP_STEPS[setup.reachable]} first` : undefined}
+                onClick={() => { setup.setReading(false); setup.goTo(i); navigate('/welcome') }}>
+                <Tab n={i + 1} label={label} look={look} />
+              </button>
+            </li>
+          )
+        })}
+      </ol>
+    )
   }
-  if (state === 'locked') {
-    return <span aria-disabled="true" className={`${base} cursor-default text-[var(--muted)]/55`}>{content}</span>
-  }
+
+  const lookOf = (s: StageState): Look => (s === 'locked' ? 'waiting' : s)
   return (
-    <Link to={stage.to} className={`${base} text-[var(--muted)] hover:bg-[var(--line)]/50 hover:text-[var(--ink)]`}>
-      {content}
+    <ol aria-label="Pipeline" className="flex items-center">
+      {stages.map((stage, i) => {
+        const look = lookOf(state(stage.key))
+        return (
+          <li key={stage.key}>
+            <Link to={stage.to} aria-current={look === 'current' ? 'step' : undefined} className={`${TAB} ${LOOK[look]}`}
+              title={look === 'waiting' ? 'Not started yet' : undefined}>
+              <Tab n={i + 1} label={stage.label} look={look} />
+            </Link>
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+/** Shown while a CV is being read in the background: it carries on whatever the user does, and a click goes to where it will appear. */
+function ReadingChip() {
+  const job = useImportJob().data
+  if (job?.status !== 'RUNNING') return null
+  return (
+    <Link to="/cv?tab=import" className="glow-chip relative flex shrink-0 items-center gap-2 rounded-full border border-[var(--line)] bg-[var(--panel)] px-3 py-1.5 text-xs font-medium">
+      <span aria-hidden className="h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--accent)]" />
+      Reading your CV
     </Link>
   )
 }
 
-/** The flow across the top: Search mode, Run search, Documents, Apply, Submit. The current one is bold, the others are faded. */
+/** The bar across the top, on every screen: the brand, where you are in the process (every part of it clickable), and the theme switch. */
 export function FlowBar() {
-  const { pathname } = useLocation()
-  const { stages, state } = useFlow(pathname)
   return (
-    <header className="sticky top-0 z-30 border-b border-[var(--line)]/70 bg-[var(--glass)] backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center gap-6 px-6 py-3">
-        <Link to="/" className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
-          <img src="/jobpilot.svg" alt="" width={22} height={22} className="rounded-md" />
+    <header className="sticky top-3 z-30 px-4">
+      <div className="mx-auto flex h-14 max-w-[1240px] items-center gap-4 rounded-full border border-[var(--line)] bg-[var(--glass)] py-2 pl-5 pr-2.5 shadow-[var(--shadow-lift)] backdrop-blur-xl">
+        <Link to="/" className="flex shrink-0 items-center gap-2.5 text-[15px] font-semibold tracking-tight">
+          <img src="/jobpilot.svg" alt="" width={26} height={26} className="rounded-[7px]" />
           JobPilot
         </Link>
-        <nav aria-label="Pipeline" className="mx-auto">
-          <ol className="flex items-center gap-1">
-            {stages.map((stage, i) => (
-              <li key={stage.key} className="flex items-center gap-1">
-                <StageItem stage={stage} state={state(stage.key)} />
-                {i < stages.length - 1 && <ChevronRightIcon width={14} height={14} className="text-[var(--muted)]/50" />}
-              </li>
-            ))}
-          </ol>
+        <span aria-hidden className="h-5 w-px shrink-0 bg-[var(--line)]" />
+        <nav aria-label="Progress" className="min-w-0 flex-1 overflow-x-auto">
+          <Steps />
         </nav>
-        <span className="w-[88px]" aria-hidden />
+        <ReadingChip />
+        <ThemeToggle />
       </div>
     </header>
   )

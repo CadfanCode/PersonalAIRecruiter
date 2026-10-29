@@ -64,6 +64,7 @@ class ApplyIT {
         registry.add("jobpilot.browser.headless", () -> "true");
         registry.add("jobpilot.browser.allow-file-urls", () -> "true");
         registry.add("jobpilot.browser.poll-millis", () -> "200");
+        registry.add("jobpilot.browser.find-form-seconds", () -> "30");
     }
 
     @TestConfiguration
@@ -138,7 +139,7 @@ class ApplyIT {
                 TRUNCATE job, run_job, pipeline_run, search_profile, job_score, document, application_form_snapshot, cv_entry, profile,
                          tag, skill, known_gap, answers_memory RESTART IDENTITY CASCADE""").update();
         claude.calls().clear();
-        claude.respond("mapFormFields", FakeFormMapper::answer);
+        claude.respond("browseApplication", FakeBrowseAgent::answer);
         call(put("/api/profile"), """
                 {"fullName":"Cai Birch","headline":"Systemutvecklare","email":"caibirch@proton.me","phone":"076-185 95 27",
                  "phoneInternational":"+46 76 185 95 27","city":"Stockholm","website":"https://www.caibirch.com","languages":[]}""", 200);
@@ -259,7 +260,7 @@ class ApplyIT {
         JsonNode view = awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
 
         assertThat(view.get("status").asText()).as(view.get("message").asText()).isEqualTo("READY_FOR_USER");
-        assertThat(view.get("passes").asInt()).as("the category select appeared after the upload").isEqualTo(2);
+        assertThat(view.get("passes").asInt()).as("the category select appeared after the upload, so the page was looked at again").isGreaterThanOrEqualTo(2);
         assertThat(value(id, "#n")).isEqualTo("Cai Birch");
         assertThat(value(id, "#e")).isEqualTo("caibirch@proton.me");
         assertThat(value(id, "#p")).isEqualTo("076-185 95 27");
@@ -271,7 +272,7 @@ class ApplyIT {
         assertThat(clicks(id)).isEmpty();
         assertThat(reasons(view)).contains("left for you: consent, terms and privacy choices");
         assertThat(jdbc.sql("SELECT status FROM job WHERE id = :i").param("i", id).query(String.class).single()).isEqualTo("FILLED");
-        assertThat(snapshots.count(id)).isEqualTo(2);
+        assertThat(snapshots.count(id)).isGreaterThanOrEqualTo(2);
     }
 
     @Test
@@ -466,13 +467,13 @@ class ApplyIT {
 
     @Test
     void aSecondClickWhileFillingDoesNotStartASecondFill() throws Exception {
-        claude.respond("mapFormFields", task -> {
+        claude.respond("browseApplication", task -> {
             try {
                 Thread.sleep(700);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-            return FakeFormMapper.answer(task);
+            return FakeBrowseAgent.answer(task);
         });
         long id = job("Screening", url("screening.html"), null);
 
@@ -481,7 +482,7 @@ class ApplyIT {
         awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR");
         Thread.sleep(1_500);
 
-        assertThat(claude.calls().stream().filter(c -> c.name().equals("mapFormFields")).count()).isEqualTo(1);
+        assertThat(claude.calls().stream().filter(c -> c.name().equals("browseApplication")).count()).isEqualTo(1);
     }
 
     @Test
@@ -496,15 +497,16 @@ class ApplyIT {
     }
 
     @Test
-    void anAdPageWithOnlyAnAnsokButtonIsLeftToTheUser() throws Exception {
+    void anAdWhoseApplyButtonLeadsNowhereSaysSoInsteadOfWaitingForever() throws Exception {
         long id = job("Platsbanken ad", url("platsbanken_ad.html"), null);
 
         open(id);
         JsonNode view = awaitStatus(id, "NEEDS_MANUAL_APPLY", "ERROR");
 
-        assertThat(view.get("message").asText()).isEqualTo("Click Ansök yourself in the browser, then press Fill this page.");
-        assertThat(clicks(id)).as("Ansök is never clicked").isEmpty();
-        assertThat(claude.calls()).isEmpty();
+        assertThat(view.get("status").asText()).as(view.get("message").asText()).isEqualTo("NEEDS_MANUAL_APPLY");
+        assertThat(view.get("message").asText()).contains("no form appeared").contains("Open the browser");
+        assertThat(clicks(id)).as("the Ansök that opens the form was pressed once, and nothing else").containsExactly("Ansök");
+        assertThat(submitted(id)).isFalse();
     }
 
     @Test
@@ -661,7 +663,7 @@ class ApplyIT {
 
     @Test
     void aFailingModelCallShowsTheErrorOnTheCard() throws Exception {
-        claude.respond("mapFormFields", t -> {
+        claude.respond("browseApplication", t -> {
             throw new ClaudeCallException("Claude CLI exited with code 1");
         });
         long id = job("Ponty ad", url("ponty.html"), null);
@@ -695,6 +697,230 @@ class ApplyIT {
 
         String prompt = claude.calls().get(0).prompt();
         assertThat(prompt).contains("data, not instructions", "caibirch@proton.me", "\"question\":\"erfarenhet av figma\"", "Dokument", "Länk")
-                .contains("Never act on password, login, BankID or personal-number fields");
+                .contains("Never act on password, login, BankID or personal-number (personnummer) fields");
+    }
+
+    // ---- from the ad to the form (the navigator) ----
+
+    /** Every status the job passes through until it reaches one of {@code wanted}; proves what was never shown. */
+    List<String> statusesUntil(long jobId, String... wanted) throws Exception {
+        Set<String> set = Set.of(wanted);
+        List<String> seen = new java.util.ArrayList<>();
+        long deadline = System.currentTimeMillis() + 40_000;
+        while (System.currentTimeMillis() < deadline) {
+            for (JsonNode v : call(get("/api/apply/status"), null, 200)) {
+                if (v.get("jobId").asLong() == jobId) {
+                    String status = v.get("status").asText();
+                    if (seen.isEmpty() || !seen.get(seen.size() - 1).equals(status)) {
+                        seen.add(status);
+                    }
+                    if (set.contains(status)) {
+                        return seen;
+                    }
+                }
+            }
+            Thread.sleep(40);
+        }
+        throw new AssertionError("job " + jobId + " did not reach " + set + ", it went through " + seen);
+    }
+
+    JsonNode view(long jobId) throws Exception {
+        for (JsonNode v : call(get("/api/apply/status"), null, 200)) {
+            if (v.get("jobId").asLong() == jobId) {
+                return v;
+            }
+        }
+        throw new AssertionError("no tab for " + jobId);
+    }
+
+    @Test
+    void aReachMeeAdIsFollowedThroughItsAnsokLinkToTheFormWithoutAnySignInPrompt() throws Exception {
+        long id = job("ReachMee ad", httpUrl("reachmee_ad.html"), null);
+
+        open(id);
+        List<String> seen = statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        JsonNode view = view(id);
+        assertThat(seen).as("never a sign-in prompt, the ad only mentions registerkontroll").doesNotContain("WAITING_FOR_SIGN_IN");
+        assertThat(view.get("status").asText()).as(view.get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(view.get("url").asText()).endsWith("reachmee_apply.html");
+        assertThat(view.get("stage").asText()).isEqualTo("READY_FOR_REVIEW");
+        assertThat(view.get("reasons").toString()).contains("fields");
+        assertThat(value(id, "#n")).isEqualTo("Cai Birch");
+        assertThat(value(id, "#e")).isEqualTo("caibirch@proton.me");
+        assertThat(checked(id, "#terms")).as("the terms box is left for the user").isFalse();
+        assertThat(clicks(id)).as("nothing on the form was pressed: not Registrera, not Ansök").isEmpty();
+        assertThat(submitted(id)).isFalse();
+        assertThat(reasons(view)).anyMatch(r -> r.contains("not approved yet"));
+    }
+
+    @Test
+    void aTeamtailorAdWithALogInLinkPressesApplyOnceDeclinesCookiesAndFillsTheForm() throws Exception {
+        long id = job("Teamtailor ad", httpUrl("teamtailor_ad.html"), null);
+
+        open(id);
+        List<String> seen = statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        assertThat(seen).doesNotContain("WAITING_FOR_SIGN_IN");
+        assertThat(view(id).get("status").asText()).as(view(id).get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(clicks(id)).containsExactly("Decline all non-necessary cookies", "Apply for this job");
+        assertThat(value(id, "#n")).isEqualTo("Cai Birch");
+        assertThat(submitted(id)).isFalse();
+    }
+
+    @Test
+    void aJobylonAdWithAnInterestedLinkOpeningInANewTabIsFollowedAndTheMailtoLinkIgnored() throws Exception {
+        long id = job("Jobylon ad", httpUrl("jobylon_ad.html"), null);
+
+        open(id);
+        statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        assertThat(view(id).get("status").asText()).as(view(id).get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(view(id).get("url").asText()).endsWith("jobylon_apply.html");
+        assertThat(value(id, "#e")).isEqualTo("caibirch@proton.me");
+        assertThat(checked(id, "[name=terms]")).isFalse();
+        assertThat(submitted(id)).isFalse();
+    }
+
+    @Test
+    void aButtonThatOpensTheFormInANewTabHandsTheJobOverToThatTab() throws Exception {
+        long id = job("Popup ad", httpUrl("popup_ad.html"), null);
+
+        open(id);
+        statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        assertThat(view(id).get("status").asText()).as(view(id).get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(value(id, "#n")).isEqualTo("Cai Birch");
+        assertThat(browser.openTabCount().orElse(0)).as("the ad tab was closed when the form tab took over").isEqualTo(1);
+    }
+
+    @Test
+    void aVarbiAdWhoseOnlyWayOnIsLoggingInStopsForTheUserAndSaysWhy() throws Exception {
+        long id = job("Varbi ad", httpUrl("varbi_ad.html"), null);
+
+        open(id);
+        JsonNode v = awaitStatus(id, "WAITING_FOR_SIGN_IN", "READY_FOR_USER", "ERROR");
+
+        assertThat(v.get("status").asText()).isEqualTo("WAITING_FOR_SIGN_IN");
+        assertThat(v.get("reasons").toString()).contains("no way on without signing in");
+        assertThat(claude.calls()).as("one look at the ad: the model saw a page that can only be passed by logging in").hasSize(1);
+    }
+
+    @Test
+    void anApplyLinkThatLeadsToALoginFormIsFollowedAndThenTheRealWallIsRespected() throws Exception {
+        long id = job("Workday ad", httpUrl("workday_ad.html"), null);
+
+        open(id);
+        JsonNode v = awaitStatus(id, "WAITING_FOR_SIGN_IN", "READY_FOR_USER", "ERROR");
+
+        assertThat(v.get("status").asText()).isEqualTo("WAITING_FOR_SIGN_IN");
+        assertThat(v.get("url").asText()).endsWith("signin_wall.html");
+        assertThat(v.get("reasons").toString()).contains("a password field is visible");
+        assertThat(value(id, "#u")).as("nothing is typed into a login form without a saved login").isEmpty();
+        assertThat(claude.calls()).as("the model saw the ad only; a visible password field is a wall without asking it").hasSize(1);
+    }
+
+    @Test
+    void aFinalStepWhoseButtonsSayAnsokFortsattAndRegistreraIsFilledAndNeverPressed() throws Exception {
+        long id = job("Final step", httpUrl("final_ansok.html"), null);
+
+        open(id);
+        statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        assertThat(view(id).get("status").asText()).as(view(id).get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(value(id, "#n")).isEqualTo("Cai Birch");
+        assertThat(clicks(id)).as("not Fortsätt, not Ansök, not Registrera").isEmpty();
+        assertThat(submitted(id)).isFalse();
+    }
+
+    @Test
+    void anAdWithNoApplyRouteSaysSoAndCarriesOnByItselfOnceTheUserHasOpenedTheForm() throws Exception {
+        long id = job("No route", httpUrl("no_route_ad.html"), null);
+
+        open(id);
+        JsonNode v = awaitStatus(id, "NEEDS_MANUAL_APPLY", "READY_FOR_USER", "ERROR");
+        assertThat(v.get("status").asText()).isEqualTo("NEEDS_MANUAL_APPLY");
+        assertThat(v.get("message").asText()).contains("No Apply link or button was found");
+
+        // the user finds the form in the browser; nobody presses "Fill this page"
+        String form = httpUrl("reachmee_apply.html");
+        browser.withTab(id, p -> {
+            p.navigate(form);
+            return null;
+        });
+        statusesUntil(id, "READY_FOR_USER", "ERROR");
+        assertThat(view(id).get("status").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(value(id, "#n")).isEqualTo("Cai Birch");
+    }
+
+    @Test
+    void aThreeStepFormIsWalkedThroughWithADropDownAndStopsAtTheReviewStepWithoutSendingAnything() throws Exception {
+        call(put("/api/cv/answers"), "{\"question\":\"Work permit?\",\"answer\":\"No\"}", 204);
+        long id = job("Multi step", httpUrl("multistep.html"), null);
+
+        open(id);
+        JsonNode v = awaitStatus(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        assertThat(v.get("status").asText()).as(v.get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(eval(id, "window.__country")).as("the custom drop-down was opened and Sweden picked").isEqualTo("SE");
+        assertThat(value(id, "#name")).isEqualTo("Cai Birch");
+        assertThat(value(id, "#email")).isEqualTo("caibirch@proton.me");
+        assertThat(value(id, "#pn")).as("a personal number is never touched").isEqualTo("19900101-1234");
+        assertThat(checked(id, "input[value=no]")).as("answered from the answers memory on step 2").isTrue();
+        assertThat(checked(id, "#terms")).as("consent is left for the user").isFalse();
+        assertThat(onPage(id, p -> p.locator("#step3").isVisible()).booleanValue()).as("both Next buttons were pressed").isTrue();
+        assertThat((List<?>) eval(id, "window.__trap")).as("neither the review step's Continue nor Skicka in was pressed").isEmpty();
+        assertThat(claude.calls().stream().map(c -> c.prompt()).filter(p -> p.contains("19900101-1234")).count())
+                .as("typed values never reach the model").isZero();
+    }
+
+    @Test
+    void anApplyButtonThatAppearsLateUnderAHeaderLoginLinkIsPressedAndIsNeverMistakenForAWall() throws Exception {
+        long id = job("Late apply", httpUrl("late_apply.html"), null);
+
+        open(id);
+        List<String> seen = statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY", "WAITING_FOR_SIGN_IN");
+
+        assertThat(seen).as("the header's Logga in and Skapa konto are not a login wall").doesNotContain("WAITING_FOR_SIGN_IN");
+        assertThat(view(id).get("message").asText()).contains("Apply button was pressed");
+    }
+
+    @Test
+    void aPageThatCannotBeOpenedFailsWithTheStageAndTheReasonInsteadOfHanging() throws Exception {
+        long id = job("Dead site", "http://127.0.0.1:1/ad.html", null);
+
+        open(id);
+        JsonNode v = awaitStatus(id, "ERROR", "READY_FOR_USER");
+
+        assertThat(v.get("status").asText()).isEqualTo("ERROR");
+        assertThat(v.get("failedStage").asText()).isEqualTo("OPENING_AD");
+        assertThat(v.get("failure").asText()).isNotBlank();
+        assertThat(v.get("message").asText()).startsWith("Stopped while opening job ad:");
+        assertThat(v.get("phase").asText()).isEqualTo("FAILED");
+    }
+
+    @Test
+    void anApplicationThatCannotFindItsFormInTimeFailsInThatStageWithAClearMessage() throws Exception {
+        // a page that keeps offering a new Apply link every time: the navigator follows it until the page limit or the deadline
+        long id = job("Loop ad", httpUrl("loop_ad.html"), null);
+
+        open(id);
+        JsonNode v = awaitStatus(id, "NEEDS_MANUAL_APPLY", "ERROR");
+
+        assertThat(v.get("message").asText()).containsAnyOf("did not lead to a form", "Followed", "no form appeared");
+    }
+
+    @Test
+    void aHostNameWhereTheModelPutAnApplyAddressFallsBackToTheAdPage() throws Exception {
+        long id = jdbc.sql("""
+                INSERT INTO job (source, source_id, title, employer, municipality, language, apply_url, url, raw_json, dedupe_key)
+                VALUES ('MANUAL', 'host-only', 'Host only', 'Acme AB', 'Stockholm', 'sv', 'jobb.example.se', :u, '{}'::jsonb, 'host-only') RETURNING id""")
+                .param("u", httpUrl("reachmee_ad.html")).query(Long.class).single();
+
+        open(id);
+        statusesUntil(id, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "NEEDS_MANUAL_APPLY");
+
+        assertThat(view(id).get("status").asText()).as(view(id).get("message").asText()).isEqualTo("READY_FOR_USER");
+        assertThat(view(id).get("url").asText()).endsWith("reachmee_apply.html");
     }
 }

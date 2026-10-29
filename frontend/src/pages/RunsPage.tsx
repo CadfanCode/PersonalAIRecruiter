@@ -11,7 +11,7 @@ export function RunsPage() {
       <PageTitle subtitle="Open one to see its results again, or to continue selecting jobs.">Past searches</PageTitle>
       {runs.isError && <p role="alert" className="text-sm text-[var(--danger)]">Cannot reach the JobPilot API. Is the backend running?</p>}
       {runs.data?.length === 0 && (
-        <Panel><p className="text-sm text-[var(--muted)]">No searches yet. Start one in <Link className="text-[var(--accent)] underline" to="/">Search mode</Link>.</p></Panel>
+        <Panel><p className="text-sm text-[var(--muted)]">No searches yet. Start one in <Link className="text-[var(--accent)] underline" to="/">Mode</Link>.</p></Panel>
       )}
       <ul className="flex flex-col gap-2">
         {runs.data?.map((r) => (

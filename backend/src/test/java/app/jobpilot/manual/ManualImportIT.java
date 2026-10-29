@@ -57,6 +57,7 @@ class ManualImportIT {
         registry.add("jobpilot.manual.allow-private-hosts", () -> "true"); // WireMock is on localhost
         registry.add("jobpilot.manual.paste-only-hosts", () -> "linkedin.com,blocked.example");
         registry.add("jobpilot.browser.headless", () -> "true");
+        registry.add("jobpilot.jobtech.base-url", () -> "http://localhost:" + site.port());
     }
 
     @AfterAll
@@ -284,6 +285,60 @@ class ManualImportIT {
         assertThat(jdbc.sql("SELECT apply_url FROM job WHERE id = :id").param("id", existing).query(String.class).single())
                 .isEqualTo("https://apply.platsbanken/1");
         assertThat(call(get("/api/runs/" + id + "/jobs"), null, 200).get(0).get("id").asLong()).isEqualTo(existing);
+    }
+
+    static final String PLATSBANKEN_AD = """
+            {"id":"31498536","webpage_url":"https://arbetsformedlingen.se/platsbanken/annonser/31498536","headline":"Undersköterska hemtjänsten",
+             "application_deadline":"2026-11-08T23:59:59","publication_date":"2026-09-21T08:38:10",
+             "description":{"text":"Du arbetar i hemtjänsten i Mölndal med omsorg och omvårdnad hos äldre. Vi söker dig med undersköterskeutbildning."},
+             "employer":{"name":"AB Trygghetscentrum i Göteborg","workplace":"Trygghetscentrum i Göteborg AB"},
+             "application_details":{"url":"www.trygghetscentrum.se","email":"info@trygghetscentrum.se"},
+             "workplace_address":{"municipality":"Mölndal","city":"Mölndal"},"removed":false}""";
+
+    @Test
+    void aPlatsbankenLinkIsReadFromTheOpenApiNotFromTheScriptDrawnPage() throws Exception {
+        site.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(urlEqualTo("/ad/31498536"))
+                .willReturn(aResponse().withHeader("Content-Type", "application/json").withBody(PLATSBANKEN_AD)));
+
+        long id = importUrl("https://arbetsformedlingen.se/platsbanken/annonser/31498536", null);
+        JsonNode view = await(id, "DONE", "FAILED", "WAITING_FOR_USER");
+
+        assertThat(view.get("run").get("status").asText()).as(view.get("run").get("message").asText()).isEqualTo("DONE");
+        JsonNode row = call(get("/api/runs/" + id + "/jobs"), null, 200).get(0);
+        assertThat(row.get("title").asText()).isEqualTo("Undersköterska hemtjänsten");
+        assertThat(row.get("employer").asText()).isEqualTo("AB Trygghetscentrum i Göteborg");
+        assertThat(row.get("source").asText()).isEqualTo("JOBTECH"); // the same row a search would have made
+        assertThat(row.get("score").get("total").asInt()).isEqualTo(65);
+        // a bare host name is made into an address a browser can open
+        assertThat(jdbc.sql("SELECT apply_url FROM job").query(String.class).single()).isEqualTo("https://www.trygghetscentrum.se");
+        assertThat(claude.calls().stream().map(c -> c.name())).doesNotContain("extractJob");
+        long jobId = row.get("id").asLong();
+        call(post("/api/applications"), "{\"jobIds\":[" + jobId + "],\"runId\":" + id + "}", 200);
+    }
+
+    @Test
+    void aRemovedPlatsbankenAdFailsWithAClearMessage() throws Exception {
+        site.stubFor(com.github.tomakehurst.wiremock.client.WireMock.get(urlEqualTo("/ad/1")).willReturn(aResponse().withStatus(404)));
+
+        long id = importUrl("https://arbetsformedlingen.se/platsbanken/annonser/1", null);
+        JsonNode view = await(id, "FAILED", "DONE", "WAITING_FOR_USER");
+
+        assertThat(view.get("run").get("status").asText()).isEqualTo("FAILED");
+        assertThat(view.get("run").get("message").asText()).contains("no ad with that number");
+    }
+
+    @Test
+    void aFetchedPageThatShowsNoAdWaitsForPastedTextInsteadOfFailing() throws Exception {
+        claude.respond("extractJob", """
+                {"isJobAd":false,"title":"","employer":"","location":null,"municipality":null,"language":"sv","employmentType":null,
+                 "publishedDate":null,"deadline":null,"applyUrl":null,"description":""}""");
+        servePage("/spa", "<html><body><p>" + LONG_TEXT + "</p></body></html>"); // plenty of text, but a menu and not an ad
+
+        long id = importUrl(adUrl("/spa"), null);
+        JsonNode view = await(id, "WAITING_FOR_USER", "FAILED", "DONE");
+
+        assertThat(view.get("run").get("status").asText()).isEqualTo("WAITING_FOR_USER");
+        assertThat(view.get("run").get("message").asText()).contains("paste it below");
     }
 
     @Test

@@ -23,7 +23,7 @@ public final class PageScripts {
 
     /** What a page looks like to the sign-in detector. */
     public record PageState(boolean passwordVisible, boolean signInText, boolean bankIdText, boolean createAccountText,
-                            boolean confirmPasswordText, int fieldCount, boolean ansokButton, boolean sessionError,
+                            boolean confirmPasswordText, int fieldCount, boolean applyRoute, boolean sessionError,
                             String url, String title) {
     }
 
@@ -74,8 +74,14 @@ public final class PageScripts {
             }
         }
         return new PageState(b(m, "passwordVisible"), b(m, "signInText"), b(m, "bankIdText"), b(m, "createAccountText"),
-                b(m, "confirmPasswordText"), fields, b(m, "ansokButton"), b(m, "sessionError"),
+                b(m, "confirmPasswordText"), fields, b(m, "applyRoute"), b(m, "sessionError"),
                 String.valueOf(m.get("url")), String.valueOf(m.get("title")));
+    }
+
+    /** The accessibility snapshot with element refs (what Playwright MCP shows a model). Read-only; refs live until the page changes. */
+    public static PageSnapshot snapshot(Page page) {
+        return PageSnapshot.parse(page.ariaSnapshot(new Page.AriaSnapshotOptions().setMode(com.microsoft.playwright.options.AriaSnapshotMode.AI)
+                .setTimeout(10_000)));
     }
 
     /** One saved activity row as text, with its date as yyyy-MM-dd. */

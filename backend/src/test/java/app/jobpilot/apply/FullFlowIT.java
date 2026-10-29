@@ -153,7 +153,7 @@ class FullFlowIT {
                 {"language":"sv","subject":"Ansökan: Javautvecklare","subline":"Comstream AB, Stockholm","greeting":"Hej,",
                  "paragraphs":["Jag är systemutvecklare med erfarenhet av Java och Kotlin.","Det tydligaste exemplet är mitt arbete på Braive.","Jag är oftast ute på sjön."],
                  "closing":"Vänliga hälsningar,","signature":"Cai Birch","factIdsUsed":[%d,%d]}""".formatted(fact1, factPersonal));
-        claude.respond("mapFormFields", FakeFormMapper::answer);
+        claude.respond("browseApplication", FakeBrowseAgent::answer);
 
         wm.resetAll();
         wm.stubFor(WireMock.get(urlPathEqualTo("/v1/taxonomy/main/concepts")).willReturn(json(
@@ -258,7 +258,7 @@ class FullFlowIT {
         assertThat(app.get("cv").get("version").asInt()).isEqualTo(1);
 
         // nothing is approved yet, so nothing goes on to Apply and the reason is given
-        JsonNode notYet = call(post("/api/applications/apply"), "{}", 202);
+        JsonNode notYet = call(post("/api/applications/apply"), "{\"jobIds\":[" + jobId + "]}", 202);
         assertThat(notYet.get("started")).isEmpty();
         assertThat(notYet.get("skipped").get(0).get("reason").asText()).contains("not approved");
         assertThat(app.get("readyToApply").asBoolean()).isFalse();
@@ -269,7 +269,7 @@ class FullFlowIT {
         approvals.forEach(r -> assertThat(r.get("approved").asBoolean()).as(r.toString()).isTrue());
 
         // Apply: fill the application form from the local fixture, then stop
-        JsonNode go = call(post("/api/applications/apply"), "{}", 202);
+        JsonNode go = call(post("/api/applications/apply"), "{\"jobIds\":[" + jobId + "]}", 202);
         assertThat(go.get("started")).hasSize(1);
         assertThat(go.get("skipped")).isEmpty();
         JsonNode tab = awaitTab(jobId, "READY_FOR_USER", "NEEDS_ANSWERS", "ERROR", "WAITING_FOR_SIGN_IN");

@@ -1,20 +1,20 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { applyTheme, resolveTheme, ThemeProvider, useTheme } from './ThemeProvider'
+import { ThemeProvider, useTheme } from './ThemeProvider'
 
 function Probe() {
-  const { preference, setPreference } = useTheme()
+  const { theme, toggle } = useTheme()
   return (
     <div>
-      <span data-testid="pref">{preference}</span>
-      {(['system', 'light', 'dark'] as const).map((p) => <button key={p} onClick={() => setPreference(p)}>{p}</button>)}
+      <span data-testid="theme">{theme}</span>
+      <button onClick={toggle}>toggle</button>
     </div>
   )
 }
 
-const mockSystem = (dark: boolean) =>
-  vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('dark') && dark, addEventListener: () => {}, removeEventListener: () => {} }))
+const mockSystemDark = () =>
+  vi.stubGlobal('matchMedia', (q: string) => ({ matches: q.includes('dark'), addEventListener: () => {}, removeEventListener: () => {} }))
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -23,41 +23,31 @@ afterEach(() => {
 })
 
 describe('theme', () => {
-  it('follows the system by default, and the system can be dark or light', () => {
-    mockSystem(true)
-    expect(resolveTheme('system')).toBe('dark')
-    mockSystem(false)
-    expect(resolveTheme('system')).toBe('light')
-    expect(resolveTheme('dark')).toBe('dark')
-  })
+  it('is light by default, even when the operating system is set to dark', () => {
+    mockSystemDark()
+    render(<ThemeProvider><Probe /></ThemeProvider>)
 
-  it('always puts the resolved theme on the page so every colour and dark: class follows it', () => {
-    mockSystem(true)
-    applyTheme('system')
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    applyTheme('light')
+    expect(screen.getByTestId('theme')).toHaveTextContent('light')
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
-  it('remembers an explicit choice on this computer and forgets it when the user goes back to the system', async () => {
-    mockSystem(false)
+  it('toggles to dark and back, puts the theme on the page, and remembers only dark', async () => {
     render(<ThemeProvider><Probe /></ThemeProvider>)
-    expect(screen.getByTestId('pref')).toHaveTextContent('system')
 
-    await userEvent.click(screen.getByRole('button', { name: 'dark' }))
+    await userEvent.click(screen.getByRole('button', { name: 'toggle' }))
     expect(localStorage.getItem('jobpilot.theme')).toBe('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    await userEvent.click(screen.getByRole('button', { name: 'system' }))
+
+    await userEvent.click(screen.getByRole('button', { name: 'toggle' }))
     expect(localStorage.getItem('jobpilot.theme')).toBeNull()
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
   })
 
   it('starts from the saved choice', () => {
-    mockSystem(false)
     localStorage.setItem('jobpilot.theme', 'dark')
     render(<ThemeProvider><Probe /></ThemeProvider>)
 
-    expect(screen.getByTestId('pref')).toHaveTextContent('dark')
+    expect(screen.getByTestId('theme')).toHaveTextContent('dark')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   })
 })

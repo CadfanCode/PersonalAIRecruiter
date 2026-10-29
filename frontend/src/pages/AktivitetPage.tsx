@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
+import { useDraft } from '../lib/useDraft'
 import { Link, useSearchParams } from 'react-router-dom'
 import { type AktivitetEntry, useAktivitetLog, useAktivitetPlan, useStartLogging } from '../api/aktivitet'
 import { useCountry } from '../api/country'
@@ -21,7 +22,7 @@ export function AktivitetPage() {
   const [params] = useSearchParams()
   const jobIds = (params.get('jobs') ?? '').split(',').map(Number).filter((n) => Number.isInteger(n) && n > 0)
   const plan = useAktivitetPlan(jobIds)
-  const [runId, setRunId] = useState<number | null>(null)
+  const [runId, setRunId] = useDraft<number | null>('aktivitet.run', null)
   const start = useStartLogging()
   const run = useRun(runId ?? 0, runId !== null, true)
   const log = useAktivitetLog()
@@ -83,7 +84,7 @@ export function AktivitetPage() {
           </div>
           <div className="mt-4 flex items-center gap-3">
             <Button disabled={chosen.length === 0 || start.isPending}
-              onClick={() => start.mutate(chosen, { onSuccess: ({ runId: id }) => setRunId(id) })}>
+              onClick={() => void start.mutateAsync(chosen).then(({ runId: id }) => setRunId(id), () => {})}>
               Save {chosen.length} in the aktivitetsrapport
             </Button>
             {start.isError && <span role="alert" className="text-sm text-[var(--danger)]">{start.error.message}</span>}
@@ -209,7 +210,7 @@ const STYLE: Record<string, string> = {
 function ResultTable({ rows }: { rows: { id: number; employerLabel: string; appliedDate: string | null; result: string; message: string | null }[] }) {
   return (
     <table className="mt-3 w-full text-left text-sm">
-      <thead className="text-xs uppercase text-[var(--muted)]">
+      <thead className="text-xs text-[var(--muted)]">
         <tr><th className="py-1 font-semibold">Employer</th><th className="font-semibold">Date</th><th className="font-semibold">Result</th><th className="font-semibold">Note</th></tr>
       </thead>
       <tbody>

@@ -26,8 +26,8 @@ const limits = {
   error: null,
 }
 const connection = (over = {}) => ({
-  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null },
-  api: { configured: false, keyHint: null, model: 'claude-sonnet-5-5' }, secureStore: { available: true, name: 'Secret Service' }, ...over,
+  selected: 'cli', chosen: true, cli: { found: true, path: '/home/u/.local/bin/claude', version: '2.1.312 (Claude Code)', help: null, model: '', stageModels: [{ stage: 'SEARCH', label: 'Search', model: '' }, { stage: 'RANKING', label: 'Scoring', model: '' }, { stage: 'CV_READING', label: 'Reading your CV', model: '' }, { stage: 'DOCUMENTS', label: 'CV and cover letter', model: '' }, { stage: 'AUTOFILL', label: 'Auto-fill', model: '' }] },
+  secureStore: { available: true, name: 'Secret Service' }, ...over,
 })
 
 function setup(extra: Record<string, unknown> = {}) {
@@ -50,7 +50,7 @@ function setup(extra: Record<string, unknown> = {}) {
       <ThemeProvider>
         <MemoryRouter initialEntries={['/settings']}>
           <Routes>
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings/:section?" element={<SettingsPage />} />
             <Route path="/welcome" element={<p>Welcome steps</p>} />
           </Routes>
         </MemoryRouter>
@@ -73,35 +73,10 @@ describe('settings: Claude connection', () => {
     setup()
 
     expect(await screen.findByText(/Found 2.1.312 \(Claude Code\)/)).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Claude Code subscription' })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: 'Anthropic API key' })).toBeDisabled() // no key saved yet
+    expect(screen.queryByText(/Google|Gemini|API key/)).not.toBeInTheDocument()
     expect(await screen.findByRole('progressbar', { name: 'Session (5 hours)' })).toHaveAttribute('aria-valuenow', '7')
     expect(screen.getByRole('progressbar', { name: 'Week (7 days)' })).toHaveAttribute('aria-valuenow', '96')
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
-  })
-
-  it('saves an API key without ever showing it back, then lets the user switch to it and test it', async () => {
-    const key = 'sk-ant-api03-abcdefghijklmnopqrstuvwxyz-0123'
-    let saved = false
-    const calls = setup({
-      'GET /api/claude/connection': () => connection(saved ? { api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } } : {}),
-      'PUT /api/claude/connection/api-key': () => {
-        saved = true
-        return connection({ api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } })
-      },
-      'PUT /api/claude/connection/provider': connection({ selected: 'api', api: { configured: true, keyHint: '…0123', model: 'claude-sonnet-5-5' } }),
-      'POST /api/claude/connection/test': { ok: true, provider: 'api', problem: null, message: 'Connected.', help: null, durationMs: 900 },
-    })
-
-    await userEvent.type(await screen.findByLabelText('Anthropic API key'), key)
-    await userEvent.click(screen.getByRole('button', { name: 'Save key' }))
-    expect(await screen.findByText('…0123')).toBeInTheDocument()
-    expect(screen.queryByDisplayValue(key)).not.toBeInTheDocument()
-    expect(calls.find((c) => c.url === '/api/claude/connection/api-key')!.body).toEqual({ key })
-
-    await userEvent.click(screen.getByRole('radio', { name: 'Anthropic API key' }))
-    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/provider')).toBe(true))
-    expect(calls.find((c) => c.url === '/api/claude/connection/provider')!.body).toEqual({ id: 'api' })
   })
 
   it('tests the connection and explains a failure with what to do about it', async () => {
@@ -119,15 +94,18 @@ describe('settings: Claude connection', () => {
     expect(alert).toHaveTextContent('sign in with your Claude account')
   })
 
-  it('says so when this computer has no secure place to keep a key', async () => {
-    setup({ 'GET /api/claude/connection': connection({ secureStore: { available: false, name: 'none available' } }) })
+  it('changes the Claude Code model and sends it to the server for the next request', async () => {
+    const calls = setup({ 'PUT /api/claude/connection/cli-model': connection({ cli: { found: true, path: '/bin/claude', version: '2.1', help: null, model: 'opus', stageModels: [{ stage: 'SEARCH', label: 'Search', model: '' }, { stage: 'RANKING', label: 'Scoring', model: '' }, { stage: 'CV_READING', label: 'Reading your CV', model: '' }, { stage: 'DOCUMENTS', label: 'CV and cover letter', model: '' }, { stage: 'AUTOFILL', label: 'Auto-fill', model: '' }] } }) })
 
-    expect(await screen.findByText(/No secure credential store is available/)).toBeInTheDocument()
-    expect(screen.queryByLabelText('Anthropic API key')).not.toBeInTheDocument()
-  })
+    await userEvent.selectOptions(await screen.findByLabelText('Default model'), 'opus')
+
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/cli-model')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/claude/connection/cli-model')!.body).toEqual({ model: 'opus' })
+
+})
 })
 
-describe('settings: search, speed, logins, appearance and setup', () => {
+describe('settings: search, speed, logins and country', () => {
   it('makes career-page search an opt-in setting and leaves the national job board always on', async () => {
     const calls = setup({ 'PUT /api/settings/search': { careerPages: true } })
     await open('Search')
@@ -143,7 +121,7 @@ describe('settings: search, speed, logins, appearance and setup', () => {
 
   it('shows Sweden as the only country and the others as coming soon', async () => {
     setup()
-    await open('Search')
+    await open('Country')
 
     expect(await screen.findByRole('radio', { name: /Sweden/ })).toHaveAttribute('aria-checked', 'true')
     const norway = screen.getByRole('radio', { name: /Norway/ })
@@ -182,27 +160,35 @@ describe('settings: search, speed, logins, appearance and setup', () => {
     await vi.waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true))
   })
 
-  it('switches between light, dark and the system setting and remembers the choice on this computer', async () => {
+  it('has no Appearance or Setup section: the theme switch is in the top bar and setup is not repeated', async () => {
     setup()
-    await open('Appearance')
 
-    await userEvent.click(await screen.findByRole('radio', { name: /Dark/ }))
-    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    expect(localStorage.getItem('jobpilot.theme')).toBe('dark')
-    await userEvent.click(screen.getByRole('radio', { name: /Light/ }))
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    await userEvent.click(screen.getByRole('radio', { name: /Same as your computer/ }))
-    expect(localStorage.getItem('jobpilot.theme')).toBeNull()
+    await screen.findByRole('button', { name: 'Country' })
+    expect(screen.queryByRole('button', { name: 'Appearance' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Setup' })).not.toBeInTheDocument()
+  })
+})
+
+describe('settings: models per stage', () => {
+  it('lists the default and one row per stage, and sends a stage choice on its own', async () => {
+    const calls = setup({ 'PUT /api/claude/connection/stage-model/DOCUMENTS': connection() })
+
+    for (const label of ['Default', 'Search', 'Scoring', 'Reading your CV', 'CV and cover letter', 'Auto-fill']) {
+      expect(await screen.findByLabelText(`${label} model`)).toBeInTheDocument()
+    }
+    expect(screen.getByLabelText('Scoring model')).toHaveValue('')
+    await userEvent.selectOptions(screen.getByLabelText('CV and cover letter model'), 'opus')
+
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/claude/connection/stage-model/DOCUMENTS')).toBe(true))
+    expect(calls.find((c) => c.url === '/api/claude/connection/stage-model/DOCUMENTS')!.body).toEqual({ model: 'opus' })
   })
 
-  it('reopens the welcome steps without deleting anything', async () => {
-    const calls = setup({ 'POST /api/onboarding/reopen': { ...onboarded, complete: false } })
-    await open('Setup')
+  it('does not name the credential store next to the saved logins', async () => {
+    setup()
+    await open('Saved logins')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Run setup again' }))
-
-    expect(await screen.findByText('Welcome steps')).toBeInTheDocument()
-    expect(calls.some((c) => c.url === '/api/onboarding/reopen')).toBe(true)
+    expect(await screen.findByText(/Passwords are kept in your computer's secure store\./)).toBeInTheDocument()
+    expect(screen.queryByText(/Secret Service/)).not.toBeInTheDocument()
   })
 })
 

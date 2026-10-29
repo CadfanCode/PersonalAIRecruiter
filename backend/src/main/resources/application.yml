@@ -51,6 +51,10 @@ jobpilot:
     max-tabs: 5
     allow-file-urls: false
     suggestion-wait-millis: 5000
+    # true: the automation browser runs off-screen and is shown only at sign-in or review. false: always visible.
+    background: ${JOBPILOT_BROWSER_BACKGROUND:true}
+    # How long finding the application form may take before the step fails with a clear message.
+    find-form-seconds: 90
   manual:
     paste-only-hosts:
       - linkedin.com

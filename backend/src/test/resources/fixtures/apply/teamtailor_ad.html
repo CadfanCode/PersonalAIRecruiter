@@ -1,0 +1,24 @@
+<!DOCTYPE html><html lang="sv"><head><meta charset="utf-8"><title>UK Account Executive - Teamtailor</title></head><body>
+<div id="cookies" class="cookie-banner" role="dialog"><p>We use cookies.</p>
+  <button type="button" id="accept">Accept all cookies</button>
+  <button type="button" id="decline">Decline all non-necessary cookies</button></div>
+<header><a href="#login">Log in</a> Applicant tracking system by Teamtailor</header>
+<h1>UK Account Executive</h1><p>Join our team in London.</p>
+<button id="apply">Apply for this job</button>
+<form id="form" style="display:none" onsubmit="return false">
+  <label for="n">Namn</label><input id="n"><label for="e">E-post</label><input id="e" type="email">
+  <button type="submit">Skicka</button>
+</form>
+<script>
+document.getElementById("apply").addEventListener("click", function () { document.getElementById("form").style.display = "block"; });
+document.getElementById("decline").addEventListener("click", function () { document.getElementById("cookies").style.display = "none"; });
+</script>
+<script>
+window.__submitted = false; window.__clicks = [];
+document.addEventListener("submit", function (e) { e.preventDefault(); window.__submitted = true; }, true);
+document.addEventListener("click", function (e) {
+  var t = e.target.closest("button, a, input[type=submit], input[type=button], [role=button], [role=option]");
+  if (t) window.__clicks.push((t.textContent || t.value || "").trim());
+}, true);
+</script>
+</body></html>

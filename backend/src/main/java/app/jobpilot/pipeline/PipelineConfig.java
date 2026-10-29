@@ -54,5 +54,20 @@ public class PipelineConfig {
         if (n > 0) {
             log.warn("Marked {} interrupted run(s) as FAILED", n);
         }
+        purge(event.getApplicationContext().getBean(RetentionService.class), "start");
+    }
+
+    /** Search results do not outlive the program (ADR 0024). The database is still open while the context closes. */
+    @EventListener(org.springframework.context.event.ContextClosedEvent.class)
+    public void clearSearchDataOnClose(org.springframework.context.event.ContextClosedEvent event) {
+        purge(event.getApplicationContext().getBean(RetentionService.class), "close");
+    }
+
+    private static void purge(RetentionService retention, String when) {
+        try {
+            retention.purgeSearchData();
+        } catch (RuntimeException e) {
+            log.warn("Could not clear old search data at {}: {}", when, e.toString());
+        }
     }
 }

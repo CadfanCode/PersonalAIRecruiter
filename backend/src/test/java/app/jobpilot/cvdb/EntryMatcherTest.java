@@ -29,7 +29,7 @@ class EntryMatcherTest {
             entry(Kind.OTHER, "Personal", null, null));
 
     boolean matches(Kind kind, String title, String org) {
-        return EntryMatcher.findMatch(kind, title, org, seed).isPresent();
+        return EntryMatcher.findMatch(new EntryMatcher.Key(kind, title, null, org, null), seed).isPresent();
     }
 
     @Test
@@ -48,7 +48,7 @@ class EntryMatcherTest {
 
     @Test
     void sameTitleAtADifferentEmployerIsAnotherEntry() {
-        Entry hit = EntryMatcher.findMatch(Kind.INTERNSHIP, "Systemutvecklare (praktik)", "Omika Health AB", seed).orElseThrow();
+        Entry hit = EntryMatcher.findMatch(new EntryMatcher.Key(Kind.INTERNSHIP, "Systemutvecklare (praktik)", null, "Omika Health AB", null), seed).orElseThrow();
 
         assertThat(hit.organisation()).isEqualTo("Omika Health AB");
         assertThat(matches(Kind.INTERNSHIP, "Systemutvecklare (praktik)", "Ericsson AB")).isFalse();
@@ -65,5 +65,35 @@ class EntryMatcherTest {
     @Test
     void kindMustMatch() {
         assertThat(matches(Kind.WORK, "Jfokus 2026", null)).isFalse();
+    }
+
+    private static Entry job(String title, String org, String start) {
+        return new Entry(2L, Kind.WORK, title, null, org, null, start, null, false, null, null, 0, false, List.of(), List.of());
+    }
+
+    @Test
+    void aPromotionAtTheSameEmployerIsADifferentEntry() {
+        List<Entry> stored = List.of(job("Undersköterska", "Akademiska sjukhuset", "2015-01"));
+
+        assertThat(EntryMatcher.findMatch(new EntryMatcher.Key(Kind.WORK, "Sjuksköterska", null, "Akademiska sjukhuset", "2019-01"), stored)).isEmpty();
+    }
+
+    @Test
+    void theSameRoleWordedDifferentlyOrStartingTheSameMonthIsTheSameEntry() {
+        List<Entry> stored = List.of(job("Sjuksköterska", "Capio", "2020"));
+
+        assertThat(EntryMatcher.findMatch(new EntryMatcher.Key(Kind.WORK, "Legitimerad sjuksköterska", null, "Capio AB", "2020-03"), stored)).isPresent();
+        assertThat(EntryMatcher.findMatch(new EntryMatcher.Key(Kind.WORK, "Avdelningsansvarig", null, "Capio", "2020-09"), stored))
+                .as("a different title but the same start period at the same employer").isPresent();
+        assertThat(EntryMatcher.sameStart(null, "2020")).isFalse();
+        assertThat(EntryMatcher.sameStart("2020-03", "2020")).isTrue();
+        assertThat(EntryMatcher.sameStart("2019", "2020")).isFalse();
+    }
+
+    @Test
+    void factsAreTheSameWhenTheirWordsNearlyAre() {
+        assertThat(FactMatcher.similar("Triage on the emergency ward.", "triage on the emergency ward")).isTrue();
+        assertThat(FactMatcher.similar("Built microservices in Java.", "Led a team of five engineers")).isFalse();
+        assertThat(FactMatcher.similar(null, "x")).isFalse();
     }
 }

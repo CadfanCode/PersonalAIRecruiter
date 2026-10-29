@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Apply - Acme</title></head>
+<body>
+<header><a href="#login">Log in</a></header>
+<main>
+<div id="step1" class="step">
+  <h2>Your details</h2>
+    <label for="pn">Personnummer</label><input id="pn" name="pn" value="19900101-1234">
+  <form onsubmit="go(2); return false">
+    <label for="name">Name</label><input id="name" name="name">
+    <label for="email">Email</label><input id="email" type="email" name="email">
+    <label id="clabel">Country</label>
+    <div role="combobox" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="clabel" aria-controls="clist" tabindex="0" id="country">Select...</div>
+    <ul role="listbox" id="clist" hidden><li role="option" data-v="SE">Sweden</li><li role="option" data-v="NO">Norway</li></ul>
+    <label for="lang">Language</label>
+    <select id="lang"><option value="">Choose</option><option value="sv">Swedish</option><option value="en">English</option></select>
+    <button type="submit" id="next1">Next</button>
+  </form>
+</div>
+<div id="step2" class="step" hidden>
+  <h2>Questions</h2>
+  <form onsubmit="go(3); return false">
+    <fieldset><legend>Work permit?</legend>
+      <label><input type="radio" name="wp" value="yes"> Yes</label>
+      <label><input type="radio" name="wp" value="no"> No</label></fieldset>
+    <label><input type="checkbox" id="terms"> I accept the terms and privacy policy</label>
+    <button type="submit" id="next2">Continue</button>
+  </form>
+</div>
+<div id="step3" class="step" hidden>
+  <h2>Review your application</h2>
+  <p>Please check everything.</p>
+  <button type="button" id="cont3" onclick="window.__trap.push('continue-on-review')">Continue</button>
+  <button type="button" id="send" onclick="window.__trap.push('send')">Skicka in ansökan</button>
+</div>
+</main>
+<script>
+window.__trap = [];
+function go(n) { document.querySelectorAll('.step').forEach(s => s.hidden = true); document.getElementById('step' + n).hidden = false; }
+const cb = document.getElementById('country'), list = document.getElementById('clist');
+cb.addEventListener('click', () => { list.hidden = !list.hidden; cb.setAttribute('aria-expanded', String(!list.hidden)); });
+list.querySelectorAll('[role=option]').forEach(o => o.addEventListener('click', () => { cb.textContent = o.textContent; list.hidden = true; cb.setAttribute('aria-expanded', 'false'); window.__country = o.dataset.v; }));
+</script>
+</body></html>

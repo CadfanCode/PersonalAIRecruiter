@@ -148,4 +148,23 @@ class DocumentValidatorTest {
         assertThat(codes(r)).containsExactlyInAnyOrder("number_not_in_facts", "bad_opening");
         assertThat(r.maxPages()).isEqualTo(1);
     }
+
+    @Test
+    void aCvWhoseBulletsRepeatTheFactsWarnsOnceButANewlyWrittenOneDoesNot() {
+        var copied = cv("sv", new Section("Erfarenhet", "EXPERIENCE", List.of(
+                item(1, new Bullet("Byggde mikrotjänster i Java och Kotlin.", List.of(10L)),
+                        new Bullet("Fixed race conditions in the logging flows.", List.of(11L))),
+                item(2, new Bullet("Skrev ett REST API med 15 Flyway-migreringar.", List.of(20L)),
+                        new Bullet("Skrev ett REST API med 15 Flyway-migreringar.", List.of(20L))))));
+        var digested = cv("sv", new Section("Erfarenhet", "EXPERIENCE", List.of(
+                item(1, new Bullet("Rättade race conditions i loggflödena och drev mikrotjänster i Java och Kotlin i produktion.", List.of(10L, 11L))),
+                item(2, new Bullet("Byggde ett REST API där 15 versionerade Flyway-migreringar håller databasen i takt.", List.of(20L))),
+                item(2, new Bullet("Skrev ett REST API med 15 Flyway-migreringar.", List.of(20L))),
+                item(2, new Bullet("Ett till.", List.of(20L))))));
+
+        var warned = validator.validateCv(copied, ctx(false));
+        assertThat(codes(warned).stream().filter("copied_facts"::equals)).hasSize(1);
+        assertThat(warned.hasFailures()).as("copying only warns").isFalse();
+        assertThat(codes(validator.validateCv(digested, ctx(false)))).doesNotContain("copied_facts");
+    }
 }

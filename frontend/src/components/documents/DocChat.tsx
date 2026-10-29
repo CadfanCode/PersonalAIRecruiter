@@ -9,7 +9,7 @@ const SUGGESTIONS: Record<DocView['kind'], string[]> = {
 
 /**
  * "Ask Claude": fine adjustments in the user's own words. The reply and the refreshed document appear here and in the preview;
- * Claude only uses facts from the CV database, and a change removes approval. The conversation is kept by the page, because the
+ * The AI only uses facts from the CV database, and a change removes approval. The conversation is kept by the page, because the
  * editor starts over (new version) after every change.
  */
 export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
@@ -49,15 +49,15 @@ export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
   }
 
   return (
-    <section aria-label="Ask Claude" className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
-      <h3 className="mb-1 text-sm font-semibold">Ask Claude to adjust this {doc.kind === 'CV' ? 'CV' : 'letter'}</h3>
+    <section aria-label="Ask the AI" className="mb-5 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
+      <h3 className="mb-1 text-sm font-semibold">Ask the AI to adjust this {doc.kind === 'CV' ? 'CV' : 'letter'}</h3>
       <p className="mb-3 text-xs text-[var(--muted)]">
-        Claude only uses facts from your CV database. {dirty ? 'Your unsaved edits are included. ' : ''}A change saves a new version and removes approval.
+        The AI only uses facts from your CV database. {dirty ? 'Your unsaved edits are included. ' : ''}A change saves a new version and removes approval.
       </p>
       {turns.length > 0 && (
         <ol role="log" aria-live="polite" aria-label="Conversation" className="mb-3 flex max-h-56 flex-col gap-2 overflow-y-auto text-sm">
           {turns.map((t, i) => (
-            <li key={i} className={t.role === 'user' ? 'self-end rounded-lg bg-navy px-3 py-1.5 text-white' : `self-start rounded-lg px-3 py-1.5 ${t.error ? 'bg-red-50 text-[var(--danger)]' : 'bg-[var(--surface)]'}`}>
+            <li key={i} className={t.role === 'user' ? 'self-end rounded-lg bg-[var(--accent)] px-3 py-1.5 text-[var(--on-accent)]' : `self-start rounded-lg px-3 py-1.5 ${t.error ? 'bg-[var(--danger-soft)] text-[var(--danger)]' : 'bg-[var(--surface)]'}`}>
               <span className="block">{t.error ? <span role="alert">{t.text}</span> : t.text}</span>
               {t.approvalRevoked && <span className="mt-1 block text-xs text-[var(--warn)]">Approval was removed: review and approve again so it can be uploaded.</span>}
               {t.previous && i === lastIndex && (
@@ -65,11 +65,11 @@ export function DocChat({ doc, jobId, draft, dirty, turns, onTurns }: {
               )}
             </li>
           ))}
-          {chat.isPending && <li className="self-start px-3 py-1.5 text-[var(--muted)]">Claude is working on it...</li>}
+          {chat.isPending && <li className="self-start px-3 py-1.5 text-[var(--muted)]">The AI is working on it...</li>}
         </ol>
       )}
       <div className="flex items-center gap-2">
-        <TextInput aria-label="Your request to Claude" placeholder="For example: make the second paragraph shorter" value={text} disabled={chat.isPending}
+        <TextInput aria-label="Your request to the AI" placeholder="For example: make the second paragraph shorter" value={text} disabled={chat.isPending}
           onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && send(text)} />
         <Button onClick={() => send(text)} disabled={!text.trim() || chat.isPending}>Send</Button>
       </div>

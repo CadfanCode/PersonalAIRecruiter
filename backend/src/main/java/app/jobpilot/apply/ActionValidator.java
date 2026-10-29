@@ -44,6 +44,8 @@ public final class ActionValidator {
     private static final Pattern FULL = pattern("^\\s*(för- och efternamn|fullständigt namn|full name|namn|name|ditt namn|your name)\\s*[*:]?\\s*$");
     private static final Pattern CITY = pattern("\\b(ort|stad|city|town|bostadsort|postort)\\b");
 
+    private static final Pattern NEGATIVE = pattern("(no|nej|inte|false|none|ingen)");
+
     private ActionValidator() {
     }
 
@@ -84,7 +86,7 @@ public final class ActionValidator {
             }
             String problem = switch (action) {
                 case "fill" -> fill(f, a, ctx);
-                case "select" -> select(f, a);
+                case "select", "choose" -> select(f, a);
                 case "check", "uncheck" -> choice(f, a, action.equals("check"), ctx);
                 case "upload" -> upload(f, a, ctx);
                 default -> "unknown action '" + a.action() + "'";
@@ -114,6 +116,12 @@ public final class ActionValidator {
         questions.putIfAbsent(AnswerKeys.normalise(f.isChoice() && !f.legend().isBlank() ? f.legend() : text), new Question(f.id(), text));
     }
 
+    /** A personal-number field, judged by its own words and the text right above it. */
+    static boolean isPersonalNumber(FormField f) {
+        return GuardPatterns.PERSONAL_NUMBER.matcher(f.ownText()).find()
+                || (f.nearbyText() != null && GuardPatterns.PERSONAL_NUMBER.matcher(f.nearbyText()).find());
+    }
+
     // ---- per action ----
 
     private static String refusal(FormField f) {
@@ -123,6 +131,9 @@ public final class ActionValidator {
         }
         if (GuardPatterns.CREDENTIAL.matcher(f.ownText()).find()) {
             return "refused: looks like a login or BankID field";
+        }
+        if (isPersonalNumber(f)) {
+            return "refused: personal identity numbers are left for you in the browser";
         }
         if (GuardPatterns.isConsent(f.consentText())) {
             return "left for you: consent, terms and privacy choices";
@@ -162,9 +173,15 @@ public final class ActionValidator {
             return "select needs a drop-down, this is " + f.type();
         }
         String value = a.value() == null ? "" : a.value().strip();
-        boolean exists = f.options() != null && f.options().stream().anyMatch(o ->
-                o.value().equalsIgnoreCase(value) || o.label().equalsIgnoreCase(value));
-        return exists ? sourceProblem(a) : "no such option: " + value;
+        if (value.isEmpty() || value.length() > MAX_VALUE) {
+            return "no option to choose";
+        }
+        // A native drop-down lists its options, so a made-up one is refused here; a custom one lists them only once opened, and
+        // the guard then picks nothing that is not in the list.
+        boolean known = f.options() == null || f.options().isEmpty() || f.options().stream().anyMatch(o ->
+                o.value().equalsIgnoreCase(value) || o.label().equalsIgnoreCase(value)
+                        || o.label().toLowerCase(Locale.ROOT).contains(value.toLowerCase(Locale.ROOT)));
+        return known ? sourceProblem(a) : "no such option: " + value;
     }
 
     private static String choice(FormField f, MappedAction a, boolean check, ApplyContext ctx) {
@@ -180,6 +197,10 @@ public final class ActionValidator {
         String problem = sourceProblem(a);
         if (problem != null) {
             return problem;
+        }
+        // A "No" is a claim too: it is only given from an answer the person gave before, never from a gap in the CV.
+        if (!"memory".equalsIgnoreCase(a.source()) && NEGATIVE.matcher(AnswerKeys.normalise(nz(f.optionLabel()).isBlank() ? f.value() : f.optionLabel())).matches()) {
+            return "a No is only given from an answer you gave before, not because the CV does not mention it";
         }
         if ("memory".equalsIgnoreCase(a.source())) {
             String answer = ctx.memory().get(AnswerKeys.normalise(f.questionText()));

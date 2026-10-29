@@ -3,7 +3,10 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { application, tab } from '../test/fixtures2'
+import { application as baseApplication, tab } from '../test/fixtures2'
+
+// In this stage every application has been sent on from Documents.
+const application = (over: Parameters<typeof baseApplication>[0] = {}) => baseApplication({ sentToApply: true, ...over })
 import { mockApi } from '../test/mockApi'
 import { ApplyPage } from './ApplyPage'
 
@@ -61,7 +64,7 @@ describe('apply stage', () => {
     const alert = await screen.findByRole('alert')
     expect(alert).toHaveTextContent('needs you to sign in or sign up (jobs.example.com)')
     expect(alert).toHaveTextContent('never creates accounts or handles BankID')
-    await userEvent.click(within(alert).getByRole('button', { name: 'Show the tab' }))
+    await userEvent.click(within(alert).getByRole('button', { name: 'Show the browser' }))
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/apply/1/focus')).toBe(true))
   })
 
@@ -166,5 +169,42 @@ describe('apply stage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Close tab' }))
     await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/apply/1/close')).toBe(true))
     expect(calls.some((c) => c.url === '/api/apply/1/focus')).toBe(true)
+  })
+
+  it('shows the real stage of the application as a progress bar', async () => {
+    mockApi({
+      'GET /api/logins': [],
+      'GET /api/applications': [ready()],
+      'GET /api/apply/status': [tab({ status: 'FILLING', phase: 'FILLING', stage: 'PERSONAL_DETAILS', stageLabel: 'Filling personal details', message: 'Filling in the form' })],
+    })
+    renderPage()
+
+    const bar = await screen.findByRole('progressbar', { name: 'Application progress' })
+    expect(bar).toHaveAttribute('aria-valuenow', '3')
+    expect(bar).toHaveAttribute('aria-valuetext', 'Filling personal details')
+    const parts = bar.querySelectorAll('[data-state]')
+    expect([...parts].map((p) => p.getAttribute('data-state'))).toEqual(['done', 'done', 'current', 'todo', 'todo', 'todo'])
+  })
+
+  it('names the stage that failed and why, and offers to try again or to take over in the browser', async () => {
+    const calls = mockApi({
+      'GET /api/logins': [],
+      'GET /api/applications': [ready()],
+      'GET /api/apply/status': [tab({
+        status: 'ERROR', phase: 'FAILED', stage: 'FINDING_FORM', stageLabel: 'Finding application form', failedStage: 'FINDING_FORM',
+        failure: 'no application form was found within 90 seconds', message: 'Stopped while finding application form: no application form was found within 90 seconds',
+        reasons: ['no fields and no Apply link or button'],
+      })],
+      'POST /api/apply/1/focus': null,
+    })
+    renderPage()
+
+    const alert = await screen.findByText(/It stopped while finding application form/)
+    expect(alert.closest('[role=alert]')).toHaveTextContent('no application form was found within 90 seconds')
+    expect(alert.closest('[role=alert]')).toHaveTextContent('Nothing was submitted')
+    expect(screen.getByRole('progressbar', { name: 'Application progress' })).toHaveAttribute('aria-valuetext', 'Stopped while finding application form')
+    expect(screen.getByText('no fields and no Apply link or button')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Open the browser to take over' }))
+    await vi.waitFor(() => expect(calls.some((c) => c.url === '/api/apply/1/focus')).toBe(true))
   })
 })

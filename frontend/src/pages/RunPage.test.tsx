@@ -133,6 +133,7 @@ describe('run page', () => {
     })
     renderRun('/')
 
+    await userEvent.click(await screen.findByRole('radio', { name: /Prompt Mode/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Accountant in Malmö, part time' }))
     expect(screen.getByLabelText('Starting prompt')).toHaveValue('Accountant in Malmö, part time')
     expect(screen.queryByLabelText(/Max age/)).not.toBeInTheDocument()
@@ -153,6 +154,7 @@ describe('run page', () => {
     })
     renderRun('/')
 
+    await userEvent.click(await screen.findByRole('radio', { name: /Prompt Mode/ }))
     await userEvent.type(await screen.findByLabelText('Starting prompt'), 'Nurse in Uppsala')
     await userEvent.type(screen.getByLabelText(/Ads to score/), '120')
     await userEvent.click(screen.getByRole('button', { name: 'Make a search plan' }))
@@ -165,6 +167,7 @@ describe('run page', () => {
     mockApi(searchMode)
     renderRun('/')
 
+    await userEvent.click(await screen.findByRole('radio', { name: /Prompt Mode/ }))
     expect(await screen.findByRole('button', { name: 'Make a search plan' })).toBeDisabled()
   })
 
@@ -191,7 +194,7 @@ describe('run page', () => {
       })
       renderRun('/')
 
-      await userEvent.click(await screen.findByRole('radio', { name: /Discovery mode/ }))
+      await userEvent.click(await screen.findByRole('radio', { name: /Discovery Mode/ }))
       expect(screen.getByRole('button', { name: 'Find roles' })).toBeEnabled()
       expect(screen.queryByLabelText('Also search career pages (slower)')).not.toBeInTheDocument()
       await userEvent.click(screen.getByLabelText(/Go wider/))

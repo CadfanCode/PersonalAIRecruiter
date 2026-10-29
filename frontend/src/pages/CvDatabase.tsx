@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useEntries, useProfile, useTags } from '../api/cv'
 import { EntryList } from '../components/cv/EntryList'
 import { ImportWizard } from '../components/cv/ImportWizard'
@@ -10,7 +11,8 @@ import { PageTitle, Panel } from '../components/Panel'
 const TABS = ['Entries', 'Profile', 'Skills and gaps', 'Import', 'Preview selection'] as const
 
 export function CvDatabase() {
-  const [tab, setTab] = useState<(typeof TABS)[number]>('Entries')
+  const [params] = useSearchParams()
+  const [tab, setTab] = useState<(typeof TABS)[number]>(params.get('tab') === 'import' ? 'Import' : 'Entries')
   const entries = useEntries()
   const profile = useProfile()
   const tags = useTags()

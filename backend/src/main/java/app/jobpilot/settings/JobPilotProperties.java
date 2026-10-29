@@ -66,8 +66,21 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
         }
     }
 
-    /** The apply browser (SPEC 9.1). file: URLs are only for fixtures in tests. */
-    public record Browser(boolean headless, int maxTabs, boolean allowFileUrls, int suggestionWaitMillis) {
+    /**
+     * The apply browser (SPEC 9.1). file: URLs are only for fixtures in tests. {@code background}: the window runs off-screen and is
+     * shown only when the user has to act (sign-in, review, taking over); it has no effect when {@code headless}.
+     */
+    public record Browser(boolean headless, int maxTabs, boolean allowFileUrls, int suggestionWaitMillis, boolean background,
+                          int findFormSeconds) {
+
+        @ConstructorBinding
+        public Browser {
+            findFormSeconds = findFormSeconds <= 0 ? 240 : findFormSeconds;
+        }
+
+        public Browser(boolean headless, int maxTabs, boolean allowFileUrls, int suggestionWaitMillis) {
+            this(headless, maxTabs, allowFileUrls, suggestionWaitMillis, true, 240);
+        }
     }
 
     /**

@@ -1,48 +1,51 @@
 import { useState } from 'react'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { type BannedPhrase, type StyleRule, useBannedPhrases, usePhraseActions, useSaveRule, useStyleRules } from '../api/settings'
 import { Button, Field, TextArea, TextInput } from '../components/Form'
 import { PageTitle, Panel } from '../components/Panel'
-import { AppearancePanel } from '../components/settings/AppearancePanel'
+import { CountryPicker } from '../components/CountryPicker'
 import { ConnectionPanel } from '../components/settings/ConnectionPanel'
 import { LoginsPanel } from '../components/settings/LoginsPanel'
 import { PerformancePanel } from '../components/settings/PerformancePanel'
 import { SearchPanel } from '../components/settings/SearchPanel'
-import { SetupPanel } from '../components/settings/SetupPanel'
 
 const SECTIONS = [
   ['connection', 'Claude'],
+  ['country', 'Country'],
   ['search', 'Search'],
   ['performance', 'Speed and usage'],
   ['logins', 'Saved logins'],
   ['writing', 'Writing rules'],
-  ['appearance', 'Appearance'],
-  ['setup', 'Setup'],
 ] as const
 
 type Section = (typeof SECTIONS)[number][0]
 
+/** Settings, one section per address (/settings/country and so on), so the bottom menu can link straight to a section. */
 export function SettingsPage() {
-  const [section, setSection] = useState<Section>('connection')
+  const { section: param } = useParams()
+  const navigate = useNavigate()
+  const section = SECTIONS.find(([id]) => id === param)?.[0]
+  if (param && !section) return <Navigate to="/settings" replace />
+  const open: Section = section ?? 'connection'
   return (
     <>
       <PageTitle>Settings</PageTitle>
       <div className="grid gap-8 md:grid-cols-[13rem_1fr]">
         <nav aria-label="Settings sections" className="flex gap-1 overflow-x-auto md:flex-col">
           {SECTIONS.map(([id, label]) => (
-            <button key={id} type="button" aria-current={section === id ? 'page' : undefined} onClick={() => setSection(id)}
-              className={`whitespace-nowrap rounded-xl px-3.5 py-2 text-left text-sm font-medium transition ${section === id ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--muted)] hover:bg-[var(--line)]/50 hover:text-[var(--ink)]'}`}>
+            <button key={id} type="button" aria-current={open === id ? 'page' : undefined} onClick={() => navigate(id === 'connection' ? '/settings' : `/settings/${id}`)}
+              className={`cursor-pointer whitespace-nowrap rounded-md px-3 py-2 text-left text-sm font-medium transition-colors ${open === id ? 'bg-[var(--accent-soft)] text-[var(--accent)]' : 'text-[var(--muted)] hover:bg-[var(--hover)] hover:text-[var(--ink)]'}`}>
               {label}
             </button>
           ))}
         </nav>
         <div className="min-w-0 max-w-3xl">
-          {section === 'connection' && <ConnectionPanel />}
-          {section === 'search' && <SearchPanel />}
-          {section === 'performance' && <PerformancePanel />}
-          {section === 'logins' && <LoginsPanel />}
-          {section === 'writing' && <div className="grid gap-5"><RulesPanel /><PhrasesPanel /></div>}
-          {section === 'appearance' && <AppearancePanel />}
-          {section === 'setup' && <SetupPanel />}
+          {open === 'connection' && <ConnectionPanel />}
+          {open === 'country' && <Panel title="Country"><p className="mb-4 text-sm text-[var(--muted)]">Decides which career pages and job boards JobPilot searches.</p><CountryPicker /></Panel>}
+          {open === 'search' && <SearchPanel />}
+          {open === 'performance' && <PerformancePanel />}
+          {open === 'logins' && <LoginsPanel />}
+          {open === 'writing' && <div className="grid gap-5"><RulesPanel /><PhrasesPanel /></div>}
         </div>
       </div>
     </>
@@ -54,7 +57,7 @@ function RulesPanel() {
   return (
     <Panel title="Writing rules">
       <p className="mb-3 text-xs text-[var(--muted)]">
-        These texts are given to Claude verbatim when it writes a CV or letter. The checks for dashes, new-graduate wording and fact
+        These texts are given to the AI verbatim when it writes a CV or letter. The checks for dashes, new-graduate wording and fact
         citations always run, whatever is written here.
       </p>
       <div className="flex flex-col gap-4">
@@ -100,7 +103,7 @@ function PhrasesPanel() {
       </p>
       {(['sv', 'en'] as const).map((lang) => (
         <div key={lang} className="mb-3">
-          <h3 className="mb-1 text-xs font-semibold uppercase text-[var(--muted)]">{lang === 'sv' ? 'Swedish' : 'English'}</h3>
+          <h3 className="mb-1 text-xs font-semibold text-[var(--muted)]">{lang === 'sv' ? 'Swedish' : 'English'}</h3>
           <ul className="flex flex-wrap gap-1.5">
             {group(lang).map((p: BannedPhrase) => (
               <li key={p.id} className={`flex items-center gap-1.5 rounded-full border border-[var(--line)] px-2.5 py-0.5 text-sm ${p.enabled ? '' : 'text-[var(--muted)] line-through'}`}>

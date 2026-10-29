@@ -69,14 +69,25 @@ class FactSelectionEnforcementTest {
     }
 
     @Test
-    void educationIsAlwaysIncludedAndNeverLetterOnly() {
+    void educationIsChosenByRelevanceButNeverLetterOnlyAndACvKeepsOne() {
         var none = FactSelectionService.enforce(new Selection(List.of(sel(1, "both", 10L))), usable, Set.of());
-        assertThat(none.entries().stream().filter(e -> e.entryId() == 5).findFirst().orElseThrow().factIds()).containsExactly(50L, 51L);
+        SelectedEntry fallback = none.entries().stream().filter(e -> e.entryId() == 5).findFirst().orElseThrow();
+        assertThat(fallback.use()).as("one education stays when Claude chose none").isEqualTo("both");
 
         var letterOnly = FactSelectionService.enforce(new Selection(List.of(sel(1, "both", 10L), sel(5, "letter", 50L))), usable, Set.of());
         SelectedEntry edu = letterOnly.entries().stream().filter(e -> e.entryId() == 5).findFirst().orElseThrow();
         assertThat(edu.use()).isEqualTo("both");
         assertThat(edu.factIds()).containsExactly(50L);
+    }
+
+    @Test
+    void educationClaudeLeftOutStaysOutWhenAnotherEducationWasChosen() {
+        List<Entry> two = List.of(entry(1, Kind.WORK, fact(10, 1)), entry(5, Kind.EDUCATION, fact(50, 5)),
+                entry(6, Kind.EDUCATION, fact(60, 6)));
+
+        var out = FactSelectionService.enforce(new Selection(List.of(sel(1, "both", 10L), sel(6, "both", 60L))), two, Set.of());
+
+        assertThat(out.entries()).extracting(SelectedEntry::entryId).containsExactly(1L, 6L);
     }
 
     @Test

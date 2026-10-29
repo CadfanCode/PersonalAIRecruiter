@@ -79,4 +79,18 @@ public class JobTechClient {
         }
         return hits;
     }
+
+    /** One ad by its id (the number in a Platsbanken address); empty when the ad does not exist or has been removed. */
+    public java.util.Optional<JsonNode> ad(String id) {
+        try {
+            JsonNode ad = HttpRetry.call("JobTech ad " + id, backoff, () -> {
+                limiter.acquire();
+                return http.get().uri(uri -> uri.path("/ad/{id}").build(Map.of("id", id)))
+                        .header("Accept", "application/json").retrieve().body(JsonNode.class);
+            });
+            return java.util.Optional.ofNullable(ad).filter(a -> !a.path("removed").asBoolean(false));
+        } catch (org.springframework.web.client.HttpClientErrorException.NotFound e) {
+            return java.util.Optional.empty();
+        }
+    }
 }

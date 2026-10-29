@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   type Application,
@@ -9,10 +9,13 @@ import {
   useApplyApproved,
   useApproveAll,
   useCreateDocuments,
+  useDeleteApplications,
 } from '../api/applications'
 import { useDocOverview } from '../api/documents'
 import { enableSystemNotifications } from '../components/apply/notifications'
+import { ConfirmDialog } from '../components/ConfirmDialog'
 import { Button } from '../components/Form'
+import { clearDraftsWithPrefix } from '../lib/useDraft'
 import { PageTitle, Panel } from '../components/Panel'
 import { ApprovalTick } from '../components/ui/ApprovalTick'
 import { ArrowRightIcon, CheckIcon } from '../components/ui/Icons'
@@ -26,8 +29,12 @@ export function DocumentsIndexPage() {
   const retry = useCreateDocuments()
   const approveAll = useApproveAll()
   const apply = useApplyApproved()
+  const remove = useDeleteApplications()
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const navigate = useNavigate()
   const [results, setResults] = useState<ApprovalResult[] | null>(null)
+  const [picked, setPicked] = useState<Set<number>>(loadPicked)
+  useEffect(() => savePicked(picked), [picked])
 
   // A submitted application is finished: it lives in Submitted applications, not in this list.
   const selected = (apps.data ?? []).filter((a) => !a.submittedAt)
@@ -35,21 +42,40 @@ export function DocumentsIndexPage() {
   const others = (docs.data ?? []).filter((d) => !selectedIds.has(d.jobId))
   const generating = selected.filter(isGenerating)
   const ready = selected.filter((a) => a.readyToApply)
-  const waiting = selected.filter((a) => !a.readyToApply)
+  // Any application can be ticked (to delete it); only ticked ones that are ready go on to Apply.
+  const ticked = selected.filter((a) => picked.has(a.jobId))
+  const chosen = ready.filter((a) => picked.has(a.jobId))
+  const tickedWriting = ticked.some(isGenerating)
+  const toggle = (jobId: number) => setPicked((p) => { const n = new Set(p); if (n.has(jobId)) n.delete(jobId); else n.add(jobId); return n })
+  const allPicked = selected.length > 0 && ticked.length === selected.length
+  const pickAll = () => setPicked(allPicked ? new Set() : new Set(selected.map((a) => a.jobId)))
   const unapproved = selected.some((a) => (a.cv && !a.cv.approved) || (a.letter && !a.letter.approved))
   const writingPercent = selected.length === 0 ? 0 : Math.round(selected.reduce((sum, a) => sum + (isGenerating(a) ? (a.generation?.progress ?? 0) : 100), 0) / selected.length)
 
+  const deleteTicked = () =>
+    remove.mutate(ticked.map((a) => a.jobId), {
+      onSuccess: () => {
+        ticked.forEach((a) => {
+          clearDraftsWithPrefix(`docs.turns.${a.jobId}`)
+          if (a.cv) clearDraftsWithPrefix(`docs.draft.${a.cv.id}`)
+          if (a.letter) clearDraftsWithPrefix(`docs.draft.${a.letter.id}`)
+        })
+        setPicked(new Set())
+        setResults(null)
+        setConfirmDelete(false)
+      },
+    })
   const approveEverything = () => approveAll.mutate(undefined, { onSuccess: setResults })
   const goApply = () => {
     enableSystemNotifications() // asked for here, on the click, so the "ready for submission" notification can reach the user later
-    apply.mutate(undefined, { onSuccess: (r) => navigate('/apply', { state: { skipped: r.skipped } }) })
+    apply.mutate(chosen.map((a) => a.jobId), { onSuccess: (r) => { setPicked(new Set()); navigate('/apply', { state: { skipped: r.skipped } }) } })
   }
   const refused = (results ?? []).filter((r) => !r.approved)
   const newlyApproved = (results ?? []).filter((r) => r.approved && !r.alreadyApproved).length
 
   return (
     <>
-      <PageTitle subtitle="Each selected job gets its own CV and cover letter, written for that ad. Open one to read, change or ask Claude to adjust it, then approve it.">
+      <PageTitle subtitle="Each selected job gets its own CV and cover letter, written for that ad. Open one to read, change or ask the AI to adjust it, then approve it.">
         Your documents
       </PageTitle>
       {(docs.isError || apps.isError) && <p role="alert" className="text-sm text-[var(--danger)]">Cannot reach the JobPilot API. Is the backend running?</p>}
@@ -71,6 +97,10 @@ export function DocumentsIndexPage() {
               title="Approves every CV and cover letter that has no problems. Ones with problems are listed with the reason.">
               {approveAll.isPending ? 'Approving…' : 'Approve all'}
             </Button>
+            <Button variant="danger" onClick={() => { remove.reset(); setConfirmDelete(true) }} disabled={ticked.length === 0 || tickedWriting}
+              title={tickedWriting ? 'Wait until the documents are written' : 'Deletes the ticked applications and their documents for good'}>
+              {ticked.length > 0 ? `Delete (${ticked.length})` : 'Delete'}
+            </Button>
           </div>
 
           {results && (
@@ -91,35 +121,48 @@ export function DocumentsIndexPage() {
           )}
 
           <div className="overflow-hidden rounded-2xl border border-[var(--line)] bg-[var(--panel)] shadow-[var(--shadow)]">
-            <div className="hidden grid-cols-[1fr_7rem_9rem_14rem] gap-4 border-b border-[var(--line)] bg-[var(--panel-2)] px-5 py-2.5 text-xs font-semibold uppercase tracking-wider text-[var(--muted)] sm:grid">
+            <div className="hidden grid-cols-[2.5rem_1fr_7rem_9rem_14rem] gap-4 border-b border-[var(--line)] bg-[var(--panel-2)] px-5 py-2.5 text-[13px] font-medium text-[var(--muted)] sm:grid">
+              <span><input type="checkbox" aria-label="Select all applications" checked={allPicked} onChange={pickAll} className="size-4 accent-[var(--accent)]" /></span>
               <span>Job</span><span className="text-center">CV approved</span><span className="text-center">Cover letter approved</span><span>Next step</span>
             </div>
             <ul>
-              {selected.map((a) => <Row key={a.jobId} app={a} retrying={retry.isPending} onRetry={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })} />)}
+              {selected.map((a) => <Row key={a.jobId} app={a} picked={picked.has(a.jobId)} onToggle={() => toggle(a.jobId)} retrying={retry.isPending} onRetry={() => retry.mutate({ jobIds: [a.jobId], runId: a.runId ?? undefined })} />)}
             </ul>
           </div>
           {retry.isError && <p role="alert" className="mt-2 text-sm text-[var(--danger)]">{retry.error.message}</p>}
 
           <div className="mt-6 flex flex-wrap items-center gap-4 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-5 shadow-[var(--shadow)]">
             <div className="min-w-0 flex-1 text-sm">
-              {ready.length > 0 ? (
+              {chosen.length > 0 ? (
                 <p>
-                  <strong className="font-semibold">{ready.length}</strong> {ready.length === 1 ? 'application goes' : 'applications go'} to Apply.
+                  <strong className="font-semibold">{chosen.length}</strong> {chosen.length === 1 ? 'application goes' : 'applications go'} to Apply.
                   JobPilot opens each one in its own browser tab and fills it in with the approved documents. Nothing is submitted.
                 </p>
+              ) : ready.length > 0 ? (
+                <p className="text-[var(--muted)]">Tick the applications you want to send on. The others stay here.</p>
               ) : (
                 <p className="text-[var(--muted)]">Approve the CV and the cover letter of at least one job to go on.</p>
               )}
-              {waiting.length > 0 && ready.length > 0 && (
-                <p className="mt-1 text-[var(--muted)]">{waiting.length} {waiting.length === 1 ? 'is' : 'are'} left out for now: see "Next step" above.</p>
+              {chosen.length > 0 && selected.length > chosen.length && (
+                <p className="mt-1 text-[var(--muted)]">{selected.length - chosen.length} stay{selected.length - chosen.length === 1 ? 's' : ''} here, not sent.</p>
               )}
             </div>
-            <Button size="lg" onClick={goApply} disabled={ready.length === 0 || apply.isPending || generating.length > 0}>
-              <span className="flex items-center gap-2">{apply.isPending ? 'Opening…' : `Apply (${ready.length})`}<ArrowRightIcon width={18} height={18} /></span>
+            <Button size="lg" onClick={goApply} disabled={chosen.length === 0 || apply.isPending || generating.length > 0}>
+              <span className="flex items-center gap-2">{apply.isPending ? 'Opening…' : `Apply (${chosen.length})`}<ArrowRightIcon width={18} height={18} /></span>
             </Button>
             {apply.isError && <p role="alert" className="w-full text-sm text-[var(--danger)]">{apply.error.message}</p>}
           </div>
         </section>
+      )}
+
+      {confirmDelete && (
+        <ConfirmDialog title={ticked.length === 1 ? 'Delete this application?' : `Delete ${ticked.length} applications?`} confirmLabel="Delete for good"
+          busy={remove.isPending} error={remove.isError ? remove.error.message : undefined} onConfirm={deleteTicked} onCancel={() => setConfirmDelete(false)}>
+          <p>
+            {ticked.length === 1 ? `“${ticked[0].title}”` : `The ${ticked.length} selected applications`} will be removed together with the CV and the cover letter
+            {ticked.length === 1 ? '' : ' of each'}. Nothing is kept anywhere and this cannot be undone.
+          </p>
+        </ConfirmDialog>
       )}
 
       {selected.length === 0 && docs.data?.length === 0 && (
@@ -132,7 +175,7 @@ export function DocumentsIndexPage() {
 
       {others.length > 0 && (
         <details className="mt-8">
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-[var(--muted)]">Other documents ({others.length})</summary>
+          <summary className="cursor-pointer text-[13px] font-medium text-[var(--muted)]">Other documents ({others.length})</summary>
           <ul className="mt-3 flex max-w-4xl flex-col gap-2">
             {others.map((d) => (
               <li key={d.jobId}>
@@ -150,12 +193,34 @@ export function DocumentsIndexPage() {
   )
 }
 
-function Row({ app: a, retrying, onRetry }: { app: Application; retrying: boolean; onRetry: () => void }) {
+const PICKED_KEY = 'jobpilot.documents.picked'
+
+function loadPicked(): Set<number> {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(PICKED_KEY) ?? '[]') as number[])
+  } catch {
+    return new Set()
+  }
+}
+
+function savePicked(picked: Set<number>) {
+  try {
+    localStorage.setItem(PICKED_KEY, JSON.stringify([...picked]))
+  } catch {
+    // The ticks just are not remembered.
+  }
+}
+
+function Row({ app: a, picked, onToggle, retrying, onRetry }: { app: Application; picked: boolean; onToggle: () => void; retrying: boolean; onRetry: () => void }) {
   const writing = isGenerating(a)
   const failed = !writing && a.generation?.status === 'FAILED' && !(a.cv && a.letter)
   const empty = !writing && !a.cv && !a.letter && !a.generation
   return (
-    <li className="grid items-center gap-x-4 gap-y-2 border-b border-[var(--line)] px-5 py-4 last:border-b-0 sm:grid-cols-[1fr_7rem_9rem_14rem]">
+    <li className="grid items-center gap-x-4 gap-y-2 border-b border-[var(--line)] px-5 py-4 last:border-b-0 sm:grid-cols-[2.5rem_1fr_7rem_9rem_14rem]">
+      <div>
+        <input type="checkbox" aria-label={`Select ${a.title}`} checked={picked} onChange={onToggle}
+          title={a.readyToApply ? 'Select to send on to Apply, or to delete' : 'Select to delete. It can only go to Apply once the CV and the cover letter are approved'} className="size-4 accent-[var(--accent)]" />
+      </div>
       <div className="min-w-0">
         <Link to={`/documents/job/${a.jobId}`} className="block truncate text-[15px] font-semibold tracking-tight hover:text-[var(--accent)]">{a.title}</Link>
         <p className="truncate text-sm text-[var(--muted)]">
@@ -184,7 +249,7 @@ function Row({ app: a, retrying, onRetry }: { app: Application; retrying: boolea
       <div className="flex sm:justify-center"><ApprovalTick approved={!!a.letter?.approved} exists={!!a.letter} label="Cover letter" /></div>
       <div className="text-sm">
         {a.readyToApply ? (
-          <Pill tone="success"><CheckIcon width={12} height={12} /> Goes to Apply</Pill>
+          picked ? <Pill tone="success"><CheckIcon width={12} height={12} /> Goes to Apply</Pill> : <Pill tone="neutral">Ready, not sent</Pill>
         ) : writing ? (
           <Pill tone="accent">Being written</Pill>
         ) : (

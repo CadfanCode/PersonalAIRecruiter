@@ -1,61 +1,87 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/inter';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
 
 /*
- * Design tokens. <html data-theme> always holds the resolved theme (light or dark): index.html sets it before the first paint
- * from the saved choice or the system, and ThemeProvider keeps it in step. Every colour in the app is one of these variables.
+ * Design tokens. <html data-theme> always holds the theme (light unless dark was chosen): index.html sets it before the first
+ * paint and ThemeProvider keeps it in step. Every colour in the app is one of these variables. The look is deliberately plain:
+ * warm paper, white panels with hairline borders, one deep teal accent, small radii, almost no shadow.
  */
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 @theme {
-  --font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Geist Variable', 'Segoe UI', system-ui, -apple-system, Roboto, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
   /* "navy" is the old name of the accent colour; it keeps existing utilities working. */
   --color-navy: var(--accent);
   --color-navy-soft: var(--accent-strong);
+  /* Small, even corners everywhere: the older rounded-2xl / rounded-3xl classes land on these. */
+  --radius-md: 5px;
+  --radius-lg: 7px;
+  --radius-xl: 9px;
+  --radius-2xl: 10px;
+  --radius-3xl: 12px;
 }
 
 :root {
   color-scheme: light;
-  --surface: #f5f5f7;
+  --surface: #f4f3ee;
+  --bg: var(--surface);
   --panel: #ffffff;
-  --panel-2: #fafafc;
-  --line: #e4e4ea;
-  --ink: #1d1d1f;
-  --muted: #6e6e73;
-  --accent: #0071e3;
-  --accent-strong: #0062c4;
-  --accent-soft: rgba(0, 113, 227, 0.1);
-  --success: #1e8e4e;
-  --success-soft: rgba(30, 142, 78, 0.12);
-  --warn: #a35a00;
-  --warn-soft: rgba(255, 159, 10, 0.16);
-  --danger: #d70015;
-  --danger-soft: rgba(215, 0, 21, 0.09);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 10px 30px rgba(0, 0, 0, 0.06);
-  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.06), 0 18px 44px rgba(0, 0, 0, 0.1);
-  --glass: rgba(255, 255, 255, 0.78);
+  --panel-2: #faf9f6;
+  --hover: #eeede7;
+  --line: #e3e1d9;
+  --line-strong: #cbc8bd;
+  --ink: #141716;
+  --muted: #595e5c;
+  --accent: #0b6b5d;
+  --accent-strong: #07544a;
+  --accent-soft: rgba(11, 107, 93, 0.09);
+  --on-accent: #ffffff;
+  --glow: #1fd1a9;
+  --success: #1f7a45;
+  --success-soft: rgba(31, 122, 69, 0.11);
+  --warn: #8f5400;
+  --warn-soft: rgba(196, 118, 0, 0.14);
+  --danger: #b42318;
+  --danger-soft: rgba(180, 35, 24, 0.08);
+  --accent-wash: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  --highlight: rgba(255, 255, 255, 0.9);
+  --shadow: 0 1px 0 rgba(20, 23, 22, 0.03), 0 1px 2px rgba(20, 23, 22, 0.04);
+  --shadow-lift: 0 1px 2px rgba(20, 23, 22, 0.06), 0 12px 32px rgba(20, 23, 22, 0.12);
+  --glass: rgba(255, 255, 255, 0.72);
+  --haze-a: rgba(31, 209, 169, 0.13);
+  --haze-b: rgba(120, 140, 255, 0.07);
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --surface: #0b0b0d;
-  --panel: #1c1c1e;
-  --panel-2: #232326;
-  --line: #2f2f34;
-  --ink: #f5f5f7;
-  --muted: #9a9aa2;
-  --accent: #2b8cff;
-  --accent-strong: #5aa5ff;
-  --accent-soft: rgba(43, 140, 255, 0.16);
-  --success: #35c46f;
-  --success-soft: rgba(53, 196, 111, 0.16);
-  --warn: #ffb340;
-  --warn-soft: rgba(255, 179, 64, 0.16);
-  --danger: #ff5a68;
-  --danger-soft: rgba(255, 90, 104, 0.14);
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 10px 30px rgba(0, 0, 0, 0.35);
-  --shadow-lift: 0 2px 6px rgba(0, 0, 0, 0.6), 0 18px 44px rgba(0, 0, 0, 0.5);
-  --glass: rgba(28, 28, 30, 0.8);
+  --surface: #090c0c;
+  --panel: #111616;
+  --panel-2: #151b1b;
+  --hover: #1b2222;
+  --line: #222a2a;
+  --line-strong: #364040;
+  --ink: #e8eceb;
+  --muted: #98a2a0;
+  --accent: #3dbba2;
+  --accent-strong: #66cfba;
+  --accent-soft: rgba(61, 187, 162, 0.14);
+  --on-accent: #03201a;
+  --glow: #38e0bb;
+  --success: #4cc27f;
+  --success-soft: rgba(76, 194, 127, 0.15);
+  --warn: #f0b24a;
+  --warn-soft: rgba(240, 178, 74, 0.15);
+  --danger: #ff7a70;
+  --danger-soft: rgba(255, 122, 112, 0.13);
+  --accent-wash: color-mix(in srgb, var(--accent) 12%, var(--panel));
+  --highlight: rgba(255, 255, 255, 0.05);
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 1px 2px rgba(0, 0, 0, 0.5), 0 14px 36px rgba(0, 0, 0, 0.55);
+  --glass: rgba(17, 22, 22, 0.7);
+  --haze-a: rgba(56, 224, 187, 0.11);
+  --haze-b: rgba(110, 120, 255, 0.08);
 }
 
 html {
@@ -64,20 +90,56 @@ html {
   text-rendering: optimizeLegibility;
 }
 
+/* Ambient light: two soft washes at the top and a fine grain, fixed, so every screen has depth without a single image. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 28rem at 18% -6%, var(--haze-a), transparent 70%),
+    radial-gradient(48rem 26rem at 92% -10%, var(--haze-b), transparent 70%),
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .07 0'/></filter><rect width='160' height='160' filter='url(%23n)'/></svg>");
+}
+
 body {
   background: var(--surface);
   color: var(--ink);
   font-family: var(--font-sans);
-  font-feature-settings: 'cv11', 'ss01';
-  letter-spacing: -0.006em;
+  font-size: 14.5px;
+  line-height: 1.5;
+  font-feature-settings: 'ss01';
 }
 
 h1, h2, h3 {
-  letter-spacing: -0.02em;
+  letter-spacing: -0.028em;
+  text-wrap: balance;
+}
+
+table, .tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+code, kbd, pre {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Everything clickable says so; everything switched off says that too. */
+button:not(:disabled), [role='button']:not([aria-disabled='true']), [role='radio']:not(:disabled), [role='switch'], summary, label:has(input[type='checkbox']), select:not(:disabled) {
+  cursor: pointer;
+}
+button:disabled, [aria-disabled='true'] {
+  cursor: not-allowed;
+}
+
+input[type='checkbox'], input[type='radio'] {
+  accent-color: var(--accent);
 }
 
 ::selection {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 :focus-visible {
@@ -87,7 +149,7 @@ h1, h2, h3 {
 
 /* Motion: one gentle entrance, and nothing at all for people who ask for less. */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: none; }
 }
 @keyframes fade {
@@ -98,12 +160,78 @@ h1, h2, h3 {
   from { background-position: 200% 0; }
   to { background-position: -200% 0; }
 }
-.animate-rise { animation: rise 0.36s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.animate-rise { animation: rise 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .animate-fade { animation: fade 0.3s ease both; }
 .shimmer {
   background-image: linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--accent) 35%, transparent) 50%, transparent 100%);
   background-size: 200% 100%;
   animation: shimmer 2.2s linear infinite;
+}
+
+/*
+ * Work in progress glows: a thin light travels round the edge of whatever is busy, over a soft halo of the same light. The angle is a
+ * registered property so the gradient itself can turn (no JavaScript, no layout). Only things that are actually working wear it.
+ * With reduced motion the global rule below stops the turning and what is left is a still, faint ring.
+ */
+@property --turn {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+@keyframes turn {
+  to { --turn: 360deg; }
+}
+.glow-border, .glow-chip {
+  position: relative;
+  isolation: isolate;
+}
+.glow-border::before, .glow-chip::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -1;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(from var(--turn), transparent 0 52%, color-mix(in srgb, var(--glow) 35%, transparent) 70%, var(--glow) 86%, transparent 100%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  animation: turn 3.6s linear infinite;
+}
+.glow-border::after, .glow-chip::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  z-index: -2;
+  border-radius: inherit;
+  background: conic-gradient(from var(--turn), transparent 0 55%, var(--glow) 88%, transparent 100%);
+  filter: blur(20px);
+  opacity: 0.16;
+  animation: turn 3.6s linear infinite;
+}
+.glow-chip::after { filter: blur(8px); opacity: 0.3; }
+
+/* Hover physics: cards that can be pressed rise a little and their shadow deepens. */
+.lift {
+  transition: transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.28s ease, border-color 0.2s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lift);
+}
+
+/* Primary buttons: a lit top edge and a slight vertical gradient, so they read as a surface rather than a flat fill. */
+.btn-primary {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, white), var(--accent));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22), 0 1px 2px rgba(0, 0, 0, 0.18);
+}
+.btn-primary:hover:not(:disabled) {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent-strong) 86%, white), var(--accent-strong));
+}
+.btn-primary:active:not(:disabled), .lift:active { transform: translateY(0) scale(0.985); }
+
+.panel-edge {
+  box-shadow: inset 0 1px 0 var(--highlight), var(--shadow);
 }
 
 @media (prefers-reduced-motion: reduce) {

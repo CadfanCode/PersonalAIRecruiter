@@ -55,3 +55,15 @@ export const BellIcon = (p: P) => (
 export const WarnIcon = (p: P) => (
   <svg {...base} {...p}><path d="M12 4l9 16H3L12 4zM12 10v4M12 17.2v.1" /></svg>
 )
+export const SunIcon = (p: P) => (
+  <svg {...base} {...p}><circle cx="12" cy="12" r="4" /><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6L7 7M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" /></svg>
+)
+export const MoonIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z" /></svg>
+)
+export const ChevronUpIcon = (p: P) => (
+  <svg {...base} {...p}><path d="M6 15l6-6 6 6" /></svg>
+)
+export const HelpIcon = (p: P) => (
+  <svg {...base} {...p}><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.1M12 16.8v.1" /></svg>
+)
