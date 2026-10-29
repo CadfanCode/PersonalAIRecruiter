@@ -3,8 +3,10 @@ package app.jobpilot.documents;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -53,6 +55,7 @@ public class DocumentValidator {
                 }
             }
         }
+        copiedFacts(cv, ctx, out);
         String selectedText = ctx.allFacts().values().stream().filter(f -> ctx.selectedEntryIds().contains(f.entryId()))
                 .map(ValidationContext.Fact::text).reduce("", (a, b) -> a + " " + b);
         for (int i = 0; i < cv.profileParagraphs().size(); i++) {
@@ -103,6 +106,69 @@ public class DocumentValidator {
         }
         out.addAll(style(ctx).validate(strings, true));
         return new Report(out, 0, 1);
+    }
+
+    /** Share of experience, project and education bullets that may repeat a fact before the CV counts as transplanted. */
+    static final double COPIED_SHARE = 0.5;
+    /** Word overlap (Jaccard) above which a bullet that cites a single fact is a copy of it. */
+    static final double COPY_SIMILARITY = 0.8;
+
+    /**
+     * A CV whose bullets mostly repeat the database sentences was transplanted, not written (SPEC 8.3). Warns once for the
+     * whole CV, which triggers the single automatic rewrite; never blocks approval.
+     */
+    private void copiedFacts(CvContent cv, ValidationContext ctx, List<Violation> out) {
+        int total = 0;
+        int copies = 0;
+        for (Section section : cv.sections()) {
+            if ("SKILLS".equals(section.kind())) {
+                continue;
+            }
+            for (Item item : section.items()) {
+                for (Bullet bullet : item.bullets()) {
+                    total++;
+                    if (copiesAFact(bullet, ctx)) {
+                        copies++;
+                    }
+                }
+            }
+        }
+        if (total >= 4 && copies > total * COPIED_SHARE) {
+            out.add(new Violation("copied_facts", Severity.WARN, "sections", copies + " of " + total + " bullets",
+                    copies + " of " + total + " bullets repeat the wording of the CV database facts. Combine the facts of an entry"
+                            + " into fewer, fuller sentences in new words, ordered by what matters for this ad"));
+        }
+    }
+
+    static boolean copiesAFact(Bullet bullet, ValidationContext ctx) {
+        if (bullet.factIds() == null || bullet.factIds().size() != 1) {
+            return false;
+        }
+        var fact = ctx.allFacts().get(bullet.factIds().get(0));
+        if (fact == null) {
+            return false;
+        }
+        Set<String> words = words(bullet.text());
+        return similarity(words, words(fact.textEn())) >= COPY_SIMILARITY || similarity(words, words(fact.textSv())) >= COPY_SIMILARITY;
+    }
+
+    private static Set<String> words(String text) {
+        Set<String> out = new HashSet<>();
+        for (String w : (text == null ? "" : text.toLowerCase(Locale.ROOT)).split("[^\\p{L}\\p{N}]+")) {
+            if (!w.isEmpty()) {
+                out.add(w);
+            }
+        }
+        return out;
+    }
+
+    private static double similarity(Set<String> a, Set<String> b) {
+        if (a.isEmpty() || b.isEmpty()) {
+            return 0;
+        }
+        Set<String> common = new HashSet<>(a);
+        common.retainAll(b);
+        return (double) common.size() / (a.size() + b.size() - common.size());
     }
 
     private DocumentStyleValidator style(ValidationContext ctx) {

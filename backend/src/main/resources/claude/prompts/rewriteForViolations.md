@@ -25,6 +25,8 @@ Rules for the rewrite:
 - Fix a dash by rewording with a comma, a colon or a full stop. Fix a banned phrase by saying the same thing
   plainly. Remove words that call the candidate a new graduate. Remove an invented number or a skill that is not
   in the facts. A bullet without a fact id gets the id of the fact it comes from, or is deleted.
+- A "copied_facts" violation means bullets repeat the fact sentences. Rewrite those bullets: combine the facts of the entry
+  into fewer, fuller sentences in new words, ordered by what matters most for the job, citing every fact id used.
 - Do not add new claims. Cite only ids from the facts above.
 
 Return only data matching the schema.

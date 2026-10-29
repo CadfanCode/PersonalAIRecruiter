@@ -56,6 +56,18 @@ public class ApplicationController {
         return service.applyApproved(r == null ? null : r.jobIds());
     }
 
+    /** Deletes the named applications and their documents completely. Fails, deleting nothing, if one is submitted or still being written. */
+    @PostMapping("/delete")
+    public Map<String, Integer> delete(@RequestBody JobsRequest r) {
+        return Map.of("deleted", service.delete(r == null ? null : r.jobIds()));
+    }
+
+    @DeleteMapping("/{jobId}/apply")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void withdrawFromApply(@PathVariable long jobId) {
+        service.withdrawFromApply(jobId);
+    }
+
     @DeleteMapping("/{jobId}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void remove(@PathVariable long jobId) {

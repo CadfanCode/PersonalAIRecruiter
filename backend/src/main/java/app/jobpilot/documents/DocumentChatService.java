@@ -132,12 +132,15 @@ public class DocumentChatService {
         }
         ValidationContext ctx = context(row, ad, language, widened, entryById, cvDoc);
         Report report = report(cvDoc, content, ctx);
-        if (!report.violations().isEmpty()) {
+        // "copied_facts" judges a whole generated CV; the chat changes only what was asked, so it never rewrites for it.
+        Report toFix = new Report(report.violations().stream().filter(v -> !v.code().equals("copied_facts")).toList(),
+                report.pages(), report.maxPages());
+        if (!toFix.violations().isEmpty()) {
             if (cvDoc) {
-                CvContent rewritten = docs.rewrite(Kind.CV, (CvContent) content, report, offered, entryById, language, CvContent.class);
+                CvContent rewritten = docs.rewrite(Kind.CV, (CvContent) content, toFix, offered, entryById, language, CvContent.class);
                 content = CvAssembler.assemble(rewritten, widened, entryById, profile, language, gapNote);
             } else {
-                content = docs.rewrite(Kind.LETTER, (LetterContent) content, report, offered, entryById, language, LetterContent.class);
+                content = docs.rewrite(Kind.LETTER, (LetterContent) content, toFix, offered, entryById, language, LetterContent.class);
             }
             widened = widen(widened, cited(content), entryById, offeredIds, cvDoc);
             ctx = context(row, ad, language, widened, entryById, cvDoc);

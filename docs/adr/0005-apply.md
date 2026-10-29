@@ -13,7 +13,7 @@ enforced in code, not only in prompts.
   click, key press, `evaluate`, `dispatchEvent` or form submit, or imports an element-level Playwright type.
 - **Fixed scripts only.** `evaluate` runs two read-only scripts from the classpath; nothing is built from
   model output or page text.
-- **Distrust both sides.** The model's `mapFormFields` answer is validated by `ActionValidator` (field exists,
+- **Distrust both sides.** The model's form answer is validated by `ActionValidator` (field exists,
   type fits, not password or consent, value traceable to profile, answers memory or an approved document). The
   guard re-checks the live element (type, id, consent text) before acting. After acting, the page is read again to
   prove the value stuck.

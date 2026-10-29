@@ -54,11 +54,11 @@ import app.jobpilot.settings.JobPilotProperties;
 public class ApplyService {
 
     private static final Logger log = LoggerFactory.getLogger(ApplyService.class);
-    private static final int MAX_PASSES = 2;
-    /** How many pages the navigator follows from an ad to the form (ad, then perhaps an apply-with-or-without-account page). */
-    private static final int MAX_HOPS = 4;
+    /** Looks at the page at most this many times per fill (an ad, its apply page and the steps of a long form). */
+    private static final int MAX_STEPS = 30;
+    /** Two looks in a row that changed nothing end the run. */
+    private static final int MAX_IDLE = 2;
     private static final int OPEN_ATTEMPTS = 2;
-    private static final long MAX_CLICK_RESULT_WAIT_MILLIS = 8_000;
 
     private final BrowserService browser;
     private final ClaudeRunner claude;
@@ -273,6 +273,18 @@ public class ApplyService {
         state.set(Status.CLOSED, "The tab was closed. Use Restart and refill to open it again.");
     }
 
+    /** The application was deleted: its tab is closed and nothing about it is remembered. */
+    public void discard(long jobId) {
+        if (tabs.remove(jobId) == null) {
+            return;
+        }
+        try {
+            browser.closeTab(jobId);
+        } catch (RuntimeException e) {
+            log.info("Closing the tab of deleted job {}: {}", jobId, e.toString());
+        }
+    }
+
     /** The user confirmed the submission: the tab has done its job, so its slot is released for the next application. */
     public void finish(long jobId) {
         TabState state = tabs.get(jobId);
@@ -347,36 +359,14 @@ public class ApplyService {
     }
 
     void fillPage(TabState state) {
-        long jobId = state.jobId();
         if (!state.busy.compareAndSet(false, true)) {
             return;
         }
         try {
             state.pollForForm(false);
             state.stage(TabState.Stage.FINDING_FORM);
-            state.set(Status.FILLING, "Looking for the application form");
-            FormSearch found = findForm(state);
-            state.url(found.url());
-            switch (found.kind()) {
-                case WAITING_FOR_SIGN_IN -> {
-                    state.set(Status.WAITING_FOR_SIGN_IN, SIGN_IN_MESSAGE);
-                    offerSavedLogin(state, found.url());
-                    reveal(state);
-                    return;
-                }
-                case MANUAL_APPLY, EMPTY -> {
-                    state.pollForForm(true);
-                    state.set(Status.NEEDS_MANUAL_APPLY, found.message() + " Open the browser, go on to the application form yourself, "
-                            + "and JobPilot carries on by itself once the form is showing.");
-                    return;
-                }
-                case SESSION_ERROR -> {
-                    state.set(Status.SESSION_EXPIRED, "The session expired or the page failed. Use Restart and refill.");
-                    return;
-                }
-                case FORM -> { }
-            }
-            runPasses(state, new Snapshot(found.kind(), found.fields(), found.url()));
+            state.set(Status.FILLING, "Looking at the page");
+            browse(state);
         } catch (BrowserService.TabClosedException e) {
             state.set(Status.CLOSED, "The tab was closed. Open the application again to continue.");
         } catch (RuntimeException e) {
@@ -384,14 +374,6 @@ public class ApplyService {
         } finally {
             state.busy.set(false);
         }
-    }
-
-    /** Where the navigator ended up: a form to fill, a wall to wait at, or a page it could not get past (with the reason). */
-    private record FormSearch(Kind kind, List<FormField> fields, String url, String message) {
-    }
-
-    private record Probe(PageClassifier.Classification classification, String url, List<FormField> fields,
-                         ApplyCandidates.Candidate candidate) {
     }
 
     private boolean addressAllowed(String url) {
@@ -405,76 +387,8 @@ public class ApplyService {
         }
     }
 
-    /**
-     * From the ad to the application form: dismiss the cookie notice, look at the page, and if it is an ad with an Apply link or
-     * button follow it (a link is loaded, a button is clicked through the guard, a new tab it opens becomes this job's tab), up to
-     * {@link #MAX_HOPS} pages, within {@code find-form-seconds}. It stops at a form, at a real wall (see {@link PageClassifier}) or
-     * when there is no way on, and says why. It never fills anything and never clicks anything that sends a form.
-     */
-    private FormSearch findForm(TabState state) {
-        long jobId = state.jobId();
-        long deadline = System.nanoTime() + props.browser().findFormSeconds() * 1_000_000_000L;
-        int hops = 0;
-        String openedFrom = null;
-        long waitUntil = 0;
-        java.util.Set<String> tried = new java.util.HashSet<>(); // page and button already acted on: never pressed twice
-        while (true) {
-            if (System.nanoTime() > deadline) {
-                throw new IllegalStateException("no application form was found within " + props.browser().findFormSeconds()
-                        + " seconds (still at " + state.url() + ")");
-            }
-            Probe probe = browser.withTab(jobId, page -> {
-                BrowserGuard guard = new BrowserGuard(page, props.browser().suggestionWaitMillis(), null);
-                guard.settle();
-                guard.dismissCookieBanner();
-                PageScripts.PageState ps = PageScripts.detect(page);
-                PageClassifier.Classification c = PageClassifier.explain(ps);
-                boolean wantsRoute = c.kind() == Kind.MANUAL_APPLY || c.kind() == Kind.EMPTY;
-                return new Probe(c, ps.url(), c.kind() == Kind.FORM ? PageScripts.extract(page) : List.of(),
-                        wantsRoute ? ApplyCandidates.pick(PageScripts.applyCandidates(page)).orElse(null) : null);
-            }, 60);
-            Kind kind = probe.classification().kind();
-            state.reasons(probe.classification().reasons());
-            log.info("Job {}: {} is {} because {}", jobId, probe.url(), kind, String.join("; ", probe.classification().reasons()));
-            if (kind != Kind.MANUAL_APPLY && kind != Kind.EMPTY) {
-                return new FormSearch(kind, probe.fields(), probe.url(), null);
-            }
-            String here = probe.url().replaceFirst("#.*$", ""); // pressing a "#" link changes only the fragment
-            if (openedFrom != null && here.equals(openedFrom)) {
-                // We clicked and the page has not changed yet: give a script-driven form a few seconds, then call it.
-                if (System.nanoTime() / 1_000_000 < waitUntil) {
-                    sleep(700);
-                    continue;
-                }
-                return new FormSearch(kind, List.of(), here, "The Apply button was pressed but no form appeared.");
-            }
-            if (probe.candidate() == null) {
-                return new FormSearch(kind, List.of(), here, "No Apply link or button was found on this page.");
-            }
-            if (hops >= MAX_HOPS) {
-                return new FormSearch(kind, List.of(), here, "Followed " + MAX_HOPS + " pages without reaching a form.");
-            }
-            ApplyCandidates.Candidate candidate = probe.candidate();
-            if (!tried.add(here + "|" + candidate.text())) {
-                return new FormSearch(kind, List.of(), here, "Pressing '" + candidate.text() + "' did not lead to a form.");
-            }
-            state.set(Status.FILLING, "Opening the application: '" + candidate.text() + "'");
-            BrowserGuard.Opened opened = browser.withTab(jobId, page -> {
-                BrowserGuard.Opened o = new BrowserGuard(page, props.browser().suggestionWaitMillis(), null)
-                        .openApplication(candidate, false, state.filledAnything(), this::addressAllowed);
-                if (o.popup() != null) {
-                    browser.adoptTab(jobId, o.popup());
-                }
-                return o;
-            }, 60);
-            log.info("Job {}: apply step '{}' {}", jobId, candidate.text(), opened.how());
-            if (!opened.done()) {
-                return new FormSearch(kind, List.of(), here, "Could not follow '" + candidate.text() + "' (" + opened.how() + ").");
-            }
-            hops++;
-            openedFrom = here;
-            waitUntil = System.nanoTime() / 1_000_000 + Math.min(MAX_CLICK_RESULT_WAIT_MILLIS, props.browser().findFormSeconds() * 250L);
-        }
+    /** What one look at the page returned. The snapshot text that goes to the model has no text box contents (see {@link PageSnapshot}). */
+    private record Look(PageScripts.PageState page, PageSnapshot snapshot, List<FormField> fileInputs) {
     }
 
     private static void sleep(long millis) {
@@ -495,10 +409,14 @@ public class ApplyService {
         }
     }
 
-    private record Snapshot(Kind kind, List<FormField> fields, String url) {
-    }
-
-    private void runPasses(TabState state, Snapshot first) {
+    /**
+     * Works through the application the way a person with a screen reader would: look at the page (an accessibility snapshot), ask
+     * the model what to do on it, let {@link ActionValidator} and {@link BrowserGuard} check and perform that, and look again. The
+     * same loop opens the ad's Apply link, fills a step, presses its Next button and repeats, until the page is a review, nothing
+     * more can be done, a question needs the person, or a wall needs them to sign in. It never presses anything that sends the
+     * application (hard rule 1, ADR 0023), whatever the model says.
+     */
+    private void browse(TabState state) {
         long jobId = state.jobId();
         Row row = jobs.findRow(jobId, null).orElseThrow();
         Profile profile = cv.profile();
@@ -513,71 +431,235 @@ public class ApplyService {
         List<Done> done = new ArrayList<>();
         List<Skipped> skipped = new ArrayList<>();
         Map<String, Question> questions = new LinkedHashMap<>();
-        List<FormField> fields = first.fields();
-        int pass = 0;
-        while (!fields.isEmpty() && pass < MAX_PASSES) {
-            if (pass > 0) {
-                // An upload can bring up a login or account wall; look again before mapping anything more.
-                Kind kind = browser.withTab(jobId, page -> PageClassifier.classify(PageScripts.detect(page)));
-                if (kind == Kind.WAITING_FOR_SIGN_IN) {
-                    state.result(done, skipped, new ArrayList<>(questions.values()), pass);
-                    state.set(Status.WAITING_FOR_SIGN_IN, "A sign-in or account page appeared. " + SIGN_IN_MESSAGE);
-                    offerSavedLogin(state, browser.withTab(jobId, page -> PageScripts.detect(page).url()));
-                    return;
-                }
+        List<String> history = new ArrayList<>();
+        long formDeadline = System.nanoTime() + props.browser().findFormSeconds() * 1_000_000_000L;
+        boolean sawForm = false;
+        boolean pressedAny = false;
+        java.util.Set<String> tried = new java.util.HashSet<>(); // page and button already pressed: never pressed twice
+        java.util.Set<String> performed = new java.util.HashSet<>(); // page, field and value already done: not repeated, not progress
+        int idle = 0;
+        PageSnapshot previous = null;
+        int step = 0;
+
+        while (step < MAX_STEPS) {
+            if (!sawForm && System.nanoTime() > formDeadline) {
+                throw new IllegalStateException("no application form was found within " + props.browser().findFormSeconds()
+                        + " seconds (still at " + state.url() + ")");
             }
-            pass++;
-            state.stage(pass == 1 ? TabState.Stage.PERSONAL_DETAILS : TabState.Stage.UPLOADING);
-            state.set(Status.FILLING, pass == 1 ? "Working out what to fill" : "Filling the fields that appeared after the upload");
-            final List<FormField> current = fields;
-            FormActions mapped = mapFields(current, profile, row, files, memory, digest);
-            ActionValidator.Validated validated = ActionValidator.validate(current, mapped, ctx);
+            step++;
+            Look look = browser.withTab(jobId, page -> {
+                BrowserGuard guard = new BrowserGuard(page, props.browser().suggestionWaitMillis(), null);
+                guard.awaitStable();
+                guard.dismissCookieBanner();
+                return new Look(PageScripts.detect(page), PageScripts.snapshot(page),
+                        PageScripts.extract(page).stream().filter(f -> "file".equals(f.type())).toList());
+            }, 90);
+            PageScripts.PageState ps = look.page();
+            state.url(ps.url());
+            sawForm |= ps.fieldCount() > 0;
+            List<String> reasons = new ArrayList<>(PageClassifier.explain(ps).reasons());
+            state.reasons(reasons);
+            log.info("Job {}: step {} at {} ({} fields)", jobId, step, ps.url(), ps.fieldCount());
+
+            if (ps.sessionError()) {
+                state.result(done, skipped, new ArrayList<>(questions.values()), step);
+                state.set(Status.SESSION_EXPIRED, "The session expired or the page failed. Use Restart and refill.");
+                return;
+            }
+            boolean guestRoute = look.snapshot().clickables().stream().anyMatch(c -> GuardPatterns.isAdvance(c.name()) && !c.name().toLowerCase(Locale.ROOT).startsWith("next"));
+            if ((ps.passwordVisible() || ps.confirmPasswordText()) && !guestRoute) {
+                reasons.add("no way on without signing in");
+                finishAtWall(state, done, skipped, questions, step, ps.url());
+                return;
+            }
+
+            if (previous != null && look.snapshot().sameAs(previous)) {
+                idle++; // nothing changed since the last step, whatever it did
+            }
+            if (idle >= MAX_IDLE) {
+                endWithoutProgress(state, done, skipped, questions, step, ps, pressedAny
+                        ? "The Apply button was pressed but no form appeared." : "No Apply link or button was found on this page.");
+                return;
+            }
+            previous = look.snapshot();
+
+            FormActions.Step answer = askAgent(row, profile, files, memory, digest, look, history, ps);
+            String kind = answer.pageKind() == null ? "other" : answer.pageKind();
+            if (answer.summary() != null && !answer.summary().isBlank()) {
+                reasons.add(answer.summary().strip());
+                state.reasons(reasons);
+                history.add(kind + ": " + answer.summary().strip());
+            }
+
+            List<FormField> fields = new ArrayList<>(look.snapshot().fields());
+            fields.addAll(look.fileInputs());
+            List<FormActions.MappedAction> all = answer.actions() == null ? List.of() : answer.actions();
+            List<FormActions.MappedAction> fieldActions = all.stream().filter(a -> !"click".equalsIgnoreCase(a.action())).toList();
+            FormActions.MappedAction click = all.stream().filter(a -> "click".equalsIgnoreCase(a.action())).findFirst().orElse(null);
+
+            ActionValidator.Validated validated = ActionValidator.validate(fields, new FormActions(fieldActions, answer.questionsForUser()), ctx);
             if (validated.planned().stream().anyMatch(p -> "upload".equals(p.action()))) {
                 state.stage(TabState.Stage.UPLOADING);
                 state.set(Status.FILLING, "Uploading the approved CV and cover letter");
-            } else {
+            } else if (!validated.planned().isEmpty()) {
+                state.stage(TabState.Stage.PERSONAL_DETAILS);
                 state.set(Status.FILLING, "Filling in the form");
             }
-            ActionExecutor.Result result = browser.withTab(jobId, page ->
-                    new ActionExecutor(page, new BrowserGuard(page, props.browser().suggestionWaitMillis(), null)).execute(validated.planned(), current));
-            if (!result.done().isEmpty()) {
-                state.filledAnything(true); // from now on nothing may open another page on its own
+            int doneBefore = done.size();
+            String pageKey = ps.url().replaceFirst("#.*$", "");
+            List<ActionValidator.Planned> todo = validated.planned().stream()
+                    .filter(p -> !performed.contains(pageKey + "|" + p.field().id() + "|" + p.action() + "|" + p.value() + "|" + p.file())).toList();
+            if (!todo.isEmpty()) {
+                ActionExecutor.Result result = browser.withTab(jobId, page ->
+                        new ActionExecutor(page, new BrowserGuard(page, props.browser().suggestionWaitMillis(), null)).execute(todo), 120);
+                for (ActionValidator.Planned p : todo) {
+                    performed.add(pageKey + "|" + p.field().id() + "|" + p.action() + "|" + p.value() + "|" + p.file());
+                }
+                if (!result.done().isEmpty()) {
+                    state.filledAnything(true); // from now on nothing may open another page on its own
+                }
+                done.addAll(result.done());
+                result.skipped().stream().filter(sk -> !skipped.contains(sk)).forEach(skipped::add);
             }
-            snapshots.save(jobId, state.url(), current, Map.of("pass", pass, "proposed", mapped, "done", result.done(),
-                    "skipped", concat(validated.skipped(), result.skipped())));
-            done.addAll(result.done());
-            skipped.addAll(validated.skipped());
-            skipped.addAll(result.skipped());
+            validated.skipped().stream().filter(sk -> !"not a field on this page".equals(sk.reason()) && !skipped.contains(sk)).forEach(skipped::add);
             validated.questions().forEach(q -> questions.putIfAbsent(q.fieldId(), q));
-            fields = result.newFields(); // only fields that appeared during this pass get a second pass
-        }
+            snapshots.save(jobId, ps.url(), fields, Map.of("step", step, "kind", kind, "done", done.size(), "skipped", skipped.size()));
+            boolean filled = done.size() > doneBefore;
 
-        state.result(done, skipped, new ArrayList<>(questions.values()), pass);
-        if (!questions.isEmpty()) {
-            state.stage(TabState.Stage.QUESTIONS);
-            state.set(Status.NEEDS_ANSWERS, "Filled " + done.size() + " fields. " + questions.size() + " question(s) need your answer.");
-        } else {
-            state.stage(TabState.Stage.READY_FOR_REVIEW);
-            state.set(Status.READY_FOR_USER, "Filled " + done.size() + " field(s), " + skipped.size()
-                    + " left for you. Check the page and submit it yourself.");
-            if (!done.isEmpty()) {
-                jobs.markFilled(jobId);
+            if (!questions.isEmpty()) {
+                state.result(done, skipped, new ArrayList<>(questions.values()), step);
+                state.stage(TabState.Stage.QUESTIONS);
+                state.set(Status.NEEDS_ANSWERS, "Filled " + done.size() + " fields. " + questions.size() + " question(s) need your answer.");
+                return;
             }
-            reveal(state);
+            if (kind.equals("login") && !filled && click == null) {
+                if (ps.passwordVisible() || ps.bankIdText() || ps.signInText() || ps.createAccountText()) {
+                    reasons.add("no way on without signing in");
+                    state.reasons(reasons);
+                    finishAtWall(state, done, skipped, questions, step, ps.url());
+                    return;
+                }
+            }
+            if (kind.equals("error")) {
+                state.result(done, skipped, new ArrayList<>(questions.values()), step);
+                state.set(Status.SESSION_EXPIRED, "The page reports an error or an expired session. Use Restart and refill.");
+                return;
+            }
+            if (kind.equals("review") || kind.equals("confirmation")) {
+                finishReady(state, done, skipped, questions, step);
+                return;
+            }
+
+            boolean moved = false;
+            if (click != null) {
+                PageSnapshot.Node target = look.snapshot().node(click.fieldId());
+                String signature = ps.url().replaceFirst("#.*$", "") + "|" + (target == null ? click.fieldId() : target.name());
+                if (!tried.add(signature)) {
+                    skipped.add(new Skipped(String.valueOf(click.fieldId()), target == null ? "" : target.name(),
+                            "Pressing '" + (target == null ? click.fieldId() : target.name()) + "' did not lead to a form"));
+                } else {
+                    moved = pressOn(state, look.snapshot(), click, skipped);
+                    pressedAny |= moved;
+                }
+            }
+            if (filled || moved) {
+                idle = 0;
+                continue;
+            }
+            if (click == null && state.filledAnything() && !filled) {
+                // The model has nothing left to do here: the last step of the form.
+                finishReady(state, done, skipped, questions, step);
+                return;
+            }
+            idle++;
+            if (idle >= MAX_IDLE) {
+                endWithoutProgress(state, done, skipped, questions, step, ps, pressedAny ? "The Apply button was pressed but no form appeared."
+                        : click == null ? "No Apply link or button was found on this page." : "The button could not be pressed.");
+                return;
+            }
+            sleep(2_000); // a page that draws its buttons late gets one more look
         }
+        endWithoutProgress(state, done, skipped, questions, step, browser.withTab(jobId, PageScripts::detect), "The application has more than " + MAX_STEPS + " steps.");
     }
 
-    /** Asks the model which field gets which value; one more try when the call fails, because a second attempt often works. */
-    private FormActions mapFields(List<FormField> current, Profile profile, Row row, Map<String, Path> files, Map<String, String> memory,
-                                  String digest) {
-        ClaudeTask<FormActions> task = ClaudeTask.of("mapFormFields", ClaudeResources.prompt("mapFormFields", Map.of(
-                        "fields", json(promptFields(current)), "profile", json(profileForPrompt(profile)),
+    /** Presses the one link or button the model named, through the guard. True when the page moved on. */
+    private boolean pressOn(TabState state, PageSnapshot snapshot, FormActions.MappedAction click, List<Skipped> skipped) {
+        long jobId = state.jobId();
+        String ref = click.fieldId();
+        PageSnapshot.Node target = snapshot.node(ref);
+        if (target == null || !(target.role().equals("button") || target.role().equals("link") || target.role().equals("menuitem"))) {
+            skipped.add(new Skipped(String.valueOf(ref), "", "not a button or link on this page"));
+            return false;
+        }
+        state.set(Status.FILLING, "Pressing '" + target.name() + "'");
+        BrowserGuard.Opened opened = browser.withTab(jobId, page -> {
+            BrowserGuard.Opened o = new BrowserGuard(page, props.browser().suggestionWaitMillis(), null)
+                    .follow(ref, state.filledAnything(), this::addressAllowed);
+            if (o.popup() != null) {
+                browser.adoptTab(jobId, o.popup());
+            }
+            return o;
+        }, 60);
+        log.info("Job {}: '{}' {}", jobId, target.name(), opened.how());
+        if (!opened.done()) {
+            skipped.add(new Skipped(ref, target.name(), opened.how()));
+        }
+        return opened.done();
+    }
+
+    private void finishAtWall(TabState state, List<Done> done, List<Skipped> skipped, Map<String, Question> questions, int steps, String url) {
+        state.result(done, skipped, new ArrayList<>(questions.values()), steps);
+        state.set(Status.WAITING_FOR_SIGN_IN, SIGN_IN_MESSAGE);
+        offerSavedLogin(state, url);
+        reveal(state);
+    }
+
+    private void finishReady(TabState state, List<Done> done, List<Skipped> skipped, Map<String, Question> questions, int steps) {
+        state.result(done, skipped, new ArrayList<>(questions.values()), steps);
+        state.stage(TabState.Stage.READY_FOR_REVIEW);
+        state.set(Status.READY_FOR_USER, "Filled " + done.size() + " field(s), " + skipped.size()
+                + " left for you. Check the page and submit it yourself.");
+        if (!done.isEmpty()) {
+            jobs.markFilled(state.jobId());
+        }
+        reveal(state);
+    }
+
+    private void endWithoutProgress(TabState state, List<Done> done, List<Skipped> skipped, Map<String, Question> questions, int steps,
+                                    PageScripts.PageState ps, String why) {
+        if (state.filledAnything()) {
+            finishReady(state, done, skipped, questions, steps);
+            return;
+        }
+        state.result(done, skipped, new ArrayList<>(questions.values()), steps);
+        state.pollForForm(true);
+        state.set(Status.NEEDS_MANUAL_APPLY, why + " Open the browser, go on to the application form yourself, "
+                + "and JobPilot carries on by itself once the form is showing.");
+    }
+
+    /** Asks the model what to do on this page; one more try when the call fails, because a second attempt often works. */
+    private FormActions.Step askAgent(Row row, Profile profile, Map<String, Path> files, Map<String, String> memory, String digest,
+                                      Look look, List<String> history, PageScripts.PageState ps) {
+        Map<String, Object> facts = new LinkedHashMap<>();
+        facts.put("url", ps.url());
+        facts.put("title", ps.title());
+        facts.put("visiblePasswordField", ps.passwordVisible());
+        facts.put("fileInputs", look.fileInputs().stream().map(f -> {
+            Map<String, Object> m = new LinkedHashMap<>();
+            m.put("id", f.id());
+            m.put("label", f.questionText());
+            m.put("accept", f.accept());
+            m.put("multiple", f.multiple());
+            return m;
+        }).toList());
+        ClaudeTask<FormActions.Step> task = ClaudeTask.of("browseApplication", ClaudeResources.prompt("browseApplication", Map.of(
+                        "snapshot", look.snapshot().forPrompt(), "page", json(facts), "profile", json(profileForPrompt(profile)),
                         "job", json(Map.of("title", String.valueOf(row.title()), "employer", String.valueOf(row.employer()))),
                         "documents", json(Map.of("cv", Map.of("available", files.containsKey("cv")),
                                 "letter", Map.of("available", files.containsKey("letter")))),
                         "memory", json(memory.entrySet().stream().map(e -> Map.of("question", e.getKey(), "answer", e.getValue())).toList()),
-                        "cv", digest)),
-                ClaudeResources.schema("mapFormFields"), FormActions.class);
+                        "cv", digest, "history", json(history))),
+                ClaudeResources.schema("browseApplication"), FormActions.Step.class);
         try {
             return claude.run(task);
         } catch (ClaudeCallException first) {
@@ -586,41 +668,13 @@ public class ApplyService {
                 // A call that already used its whole time limit is not repeated: the stage would hold twice as long.
                 throw new IllegalStateException("the AI took too long to work out the form: " + firstLine(first), first);
             }
-            log.info("The AI did not answer for the form ({}); trying once more", firstLine(first));
+            log.info("The AI did not answer for the page ({}); trying once more", firstLine(first));
             try {
                 return claude.run(task);
             } catch (ClaudeCallException second) {
                 throw new IllegalStateException("the AI could not work out the form: " + firstLine(second), second);
             }
         }
-    }
-
-    /** Fields as Claude sees them: no password, login or credential fields at all. */
-    private static List<Map<String, Object>> promptFields(List<FormField> fields) {
-        List<Map<String, Object>> out = new ArrayList<>();
-        for (FormField f : fields) {
-            if ("password".equals(f.type()) || GuardPatterns.CREDENTIAL.matcher(f.ownText()).find() || ActionValidator.isPersonalNumber(f)) {
-                continue;
-            }
-            Map<String, Object> m = new LinkedHashMap<>();
-            m.put("id", f.id());
-            m.put("type", f.type());
-            m.put("tag", f.tag());
-            m.put("label", f.label());
-            m.put("ariaLabel", f.ariaLabel());
-            m.put("placeholder", f.placeholder());
-            m.put("question", f.legend());
-            m.put("nearbyText", f.nearbyText());
-            m.put("option", f.optionLabel());
-            m.put("required", f.required());
-            m.put("currentValue", f.value());
-            m.put("checked", f.checked());
-            m.put("accept", f.accept());
-            m.put("multiple", f.multiple());
-            m.put("options", f.options() == null ? List.of() : f.options().stream().map(FormField.Option::label).toList());
-            out.add(m);
-        }
-        return out;
     }
 
     private static Map<String, Object> profileForPrompt(Profile p) {

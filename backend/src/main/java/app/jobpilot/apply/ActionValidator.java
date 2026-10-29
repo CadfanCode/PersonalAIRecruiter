@@ -86,7 +86,7 @@ public final class ActionValidator {
             }
             String problem = switch (action) {
                 case "fill" -> fill(f, a, ctx);
-                case "select" -> select(f, a);
+                case "select", "choose" -> select(f, a);
                 case "check", "uncheck" -> choice(f, a, action.equals("check"), ctx);
                 case "upload" -> upload(f, a, ctx);
                 default -> "unknown action '" + a.action() + "'";
@@ -173,9 +173,15 @@ public final class ActionValidator {
             return "select needs a drop-down, this is " + f.type();
         }
         String value = a.value() == null ? "" : a.value().strip();
-        boolean exists = f.options() != null && f.options().stream().anyMatch(o ->
-                o.value().equalsIgnoreCase(value) || o.label().equalsIgnoreCase(value));
-        return exists ? sourceProblem(a) : "no such option: " + value;
+        if (value.isEmpty() || value.length() > MAX_VALUE) {
+            return "no option to choose";
+        }
+        // A native drop-down lists its options, so a made-up one is refused here; a custom one lists them only once opened, and
+        // the guard then picks nothing that is not in the list.
+        boolean known = f.options() == null || f.options().isEmpty() || f.options().stream().anyMatch(o ->
+                o.value().equalsIgnoreCase(value) || o.label().equalsIgnoreCase(value)
+                        || o.label().toLowerCase(Locale.ROOT).contains(value.toLowerCase(Locale.ROOT)));
+        return known ? sourceProblem(a) : "no such option: " + value;
     }
 
     private static String choice(FormField f, MappedAction a, boolean check, ApplyContext ctx) {

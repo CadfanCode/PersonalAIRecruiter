@@ -32,7 +32,6 @@ public final class PageScripts {
     private static final String EXTRACT = read("apply/extract-fields.js");
     private static final String DETECT = read("apply/detect-state.js");
     private static final String SAVED = read("apply/read-saved-activities.js");
-    private static final String CANDIDATES = read("apply/find-apply-candidates.js");
 
     private PageScripts() {
     }
@@ -79,9 +78,10 @@ public final class PageScripts {
                 String.valueOf(m.get("url")), String.valueOf(m.get("title")));
     }
 
-    /** The visible links and buttons that might open an application form; read-only. */
-    public static List<ApplyCandidates.Candidate> applyCandidates(Page page) {
-        return MAPPER.convertValue(page.mainFrame().evaluate(CANDIDATES), new TypeReference<List<ApplyCandidates.Candidate>>() { });
+    /** The accessibility snapshot with element refs (what Playwright MCP shows a model). Read-only; refs live until the page changes. */
+    public static PageSnapshot snapshot(Page page) {
+        return PageSnapshot.parse(page.ariaSnapshot(new Page.AriaSnapshotOptions().setMode(com.microsoft.playwright.options.AriaSnapshotMode.AI)
+                .setTimeout(10_000)));
     }
 
     /** One saved activity row as text, with its date as yyyy-MM-dd. */

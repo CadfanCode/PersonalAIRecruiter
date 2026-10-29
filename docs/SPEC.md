@@ -49,8 +49,11 @@ The UI is one pipeline with four stages, each ending in one obvious action:
    deselect, and offers "Create tailored documents for N selected jobs": one batch writes a CV and a letter per job (one
    failure does not stop the others) and opens Documents.
 3. **Documents**: progress and retry per selected job, the unchanged editor and PDF preview per job, "Ask Claude" chat
-   (section 8.6) and "Continue to Finalize Applications".
-4. **Finalize Applications** (was "Apply monitor"): every selected job with its documents and status; "Fill all" fills the
+   (section 8.6). Each application with both documents approved has a checkbox ("Send to Apply", remembered in the browser,
+   nothing ticked by default); "Apply (N)" sends exactly the ticked ones on (`POST /api/applications/apply {jobIds}`, which
+   marks them `sent_to_apply_at`). The rest stay in Documents.
+4. **Finalize Applications** (was "Apply monitor"): only the applications sent on from Documents, each with its documents and status
+   ("Take out of Apply" returns one to Documents; `DELETE /api/applications/{jobId}/apply"); "Fill all" fills the
    forms, at most five browser tabs at a time, the rest queue. The pause before submit is permanent (CLAUDE.md rule 1).
    The user submits by hand and confirms with "I submitted it", which records the application (job, company, role type,
    search mode, date, documents used) for the Activity Report. Logging in Arbetsförmedlingen stays a separate, prefilled
@@ -269,7 +272,7 @@ enabled `style_rule` texts verbatim.
 | `writeCv` | job ad, selected facts, profile, style rules, language | CvContent |
 | `writeLetter` | job ad, selected facts, profile, style rules, language, example letter | LetterContent |
 | `rewriteForViolations` | document JSON, validator report | same schema as input |
-| `mapFormFields` | extracted form fields, profile, job, available files, answers memory | FormActions |
+| `browseApplication` | accessibility snapshot of the page (no typed values), page facts, profile, job, available files, answers memory, CV digest, history | FormActions.Step |
 
 ### 5.4 Key schemas (abbreviated, write full JSON Schema files)
 
@@ -444,6 +447,18 @@ the run waits in step FETCH for the user to paste the ad text. The same wait hap
 score steps run in a MANUAL run and the job appears in the results like any other. An ad already stored is linked, not
 overwritten, and an explicit employer apply link in the ad is used for filling.
 
+A Platsbanken address (`arbetsformedlingen.se/platsbanken/annonser/{id}`) is not fetched as a page (it is drawn by a script and
+returns only menu text): the ad is read from the JobTech `GET /ad/{id}` API and mapped like a search hit (`JobTechMapper`), with no
+`extractJob` call; a bare host name as apply link gets `https://`. A removed ad fails the run with a clear message. For any other
+fetched page that `extractJob` says is not an ad, the run waits for pasted text rather than failing (ADR 0025).
+
+### 6.6 What persists (ADR 0025)
+
+Search runs and their ads are scratch data: cleared at program start, at close and when a new Discovery or Prompt search starts.
+An application the user selected stays (with its documents) until deleted or submitted. Submitted applications and the
+aktivitetsrapport log are never purged. Deleting applications in Documents (`POST /applications/delete {jobIds}`, after a
+confirmation dialog) removes the job, documents, scores and PDF files completely; submitted or still-written ones refuse (409).
+
 ### 6.5 Countries (ADR 0013)
 
 `CountryRegistry` lists the known countries; one with a `JobSource` bean is available, the rest show as "coming soon". The chosen
@@ -471,9 +486,10 @@ exists (`activityReport`, Sweden only). Adding a country is one `JobSource` bean
 
 `selectFacts` chooses entries and facts by relevance to the ad and the SearchProfile's
 `relevantTags`. Rules:
-- Always include contact details, all education entries (unless the user excluded one), and
-  languages. Education facts are the ones Claude picked; an education entry Claude left out is
-  added without bullets. Entries marked "letter" only (for example leisure facts) stay out of the CV.
+- Always include contact details and languages. Education is chosen by relevance like everything else (every completed
+  degree stays as one line, the most relevant first; unfinished programmes, duplicates of the same degree and minor
+  unrelated courses are left out); if Claude chose none, the newest education entry stays, so a CV never goes out without one. Entries marked
+  "letter" only (for example leisure facts) stay out of the CV, and education is never letter only (ADR 0024).
 - Prefer recent and relevant entries; omit unrelated ones. A teaching CV drops Spring Boot; a
   developer CV keeps teaching only as a short line that shows communication skills.
 - Keep employment gaps honest: an omitted job can be summarised as one line ("Other employment
@@ -484,7 +500,13 @@ exists (`activityReport`, Sweden only). Adding a country is one `JobSource` bean
 
 ### 8.2 Generation
 
-`writeCv` and `writeLetter` receive only the selected facts and are called at the same time (each with its own validation
+After selection, `planDocument` writes an editor's brief (ADR 0024): the field of the ad, one angle for the whole application,
+what the ad values, the strongest evidence as points that combine several facts, how the profile opens, which example the
+letter tells, the limits to state in the letter and what to keep short. If the plan call fails the writers carry on without it.
+The facts are raw material: the writers digest them into new sentences (a bullet may rest on one to four facts of its entry),
+order bullets by what the ad values, never strengthen a claim, and state limits only in the letter.
+
+`writeCv` and `writeLetter` receive only the selected facts and the plan and are called at the same time (each with its own validation
 and single rewrite); a batch of jobs also runs up to three jobs at once. The model-call limit is the only throttle. Language = the ad's language. The
 example letter (the user's Knowit letter, in `seed/`) is passed as a structure example, never as
 text to copy.
@@ -505,6 +527,8 @@ invented employers or dates, and en-dashes in date ranges.
 - Fail if the letter opens with "Jag heter" or "My name is".
 - Warn (rewrite once) on banned AI phrasing (8.4).
 - Fail on bullets without valid fact citations.
+- Warn (rewrite once) with `copied_facts` when more than half of the bullets of a CV (at least four) repeat a single cited
+  fact almost word for word (word overlap of 0.8 or more): the CV was transplanted, not written.
 - Fail when `content.language` differs from the ad's language, and when a letter names an employer
   that only appears in an example letter (Knowit, Ravion) and is not the target employer.
 - Warn (rewrite once, never block approval) on: a number in a bullet or letter paragraph that the
@@ -575,30 +599,33 @@ is saved back). A request that needs something not in the CV database changes no
 ### 9.2 Filling a page
 
 1. Navigate to `apply_url` (fall back to `url` when `apply_url` is not an address), with one retry. Stage: *Opening job ad*.
-2. **Find the form** (stage *Finding application form*, `find-form-seconds` = 90 in all). Dismiss a necessary-only cookie notice, read
-   the page and classify it with its reasons (`PageClassifier.explain`, logged and shown on the card): a form with fields is
-   filled; an ad with an Apply link or button and no fields is followed (a link is loaded, a button is clicked, a new tab becomes
-   the job's tab), up to 4 pages, never pressing the same button twice; a sign-in wall is declared only when a password field is
-   visible, a password is being confirmed, or the page is near empty (at most two fields) with sign-in, BankID or account words and
-   no Apply link or button. A "Logga in" link in a header, an ad that says "registerkontroll", or a form that offers BankID never
-   counts. Set the tab status to `WAITING_FOR_SIGN_IN` (and reveal the window) and poll every 3 s until the page changes. When no way
-   on is found the tab says why (`NEEDS_MANUAL_APPLY`), offers "Open the browser to take over", and carries on by itself when the
-   form shows (poll).
-3. Extract fields with a script injected via `page.evaluate`: for every visible input, select,
-   textarea and file input, assign `data-jp-id`, then collect label text (label[for], aria-label,
-   closest label, preceding text), name, type, required, options, current value, and the
-   fieldset or question text.
-4. Call `mapFormFields` with the fields, the profile, the job, the approved documents, and the
-   answers memory (previous answers to similar screening questions, keyed by normalised question
-   text).
-5. Execute actions with Playwright locators on `[data-jp-id=...]`: `fill`, `selectOption`,
-   `check`, and `setInputFiles` for uploads (cv or letter PDF).
-6. Re-extract and show a per-tab summary: filled, skipped (with reasons), and questions for the
-   user. Screening questions that need judgment ("Har du erfarenhet av Angular?") are filled only
-   if the answers memory or CV database clearly supports an answer. Otherwise they go to
-   `questionsForUser`, and the user's answer is saved to the answers memory.
-7. Multi-step forms: the user clicks Next themselves, then presses "Fill this page" in the UI. (Known gap: automatically pressing
-   "Nästa" or "Fortsätt" was not built, because those labels are also used for the final step of many sites.)
+2. **Look, decide, act, repeat** (ADR 0023; `ApplyService.browse`). Each look waits for the page to settle (load, a short network
+   lull, then three equal accessibility snapshots in a row, so a button drawn late by a single-page app is seen), dismisses a
+   necessary-only cookie notice, and takes `page.ariaSnapshot` in AI mode: every element with a role, a name and a `ref`
+   (`PageSnapshot`). The snapshot sent to the model never carries what a text box holds (`[filled]` replaces it), so a typed password,
+   a personal number or anything else the person typed cannot reach a prompt. The model (`browseApplication`) answers with the kind of
+   page (ad, form, login, review, confirmation, error) and the actions for this page, by ref. The program validates and performs
+   them, then looks again. Limits: 30 looks, `find-form-seconds` (240) to reach a form, two looks in a row that change nothing end the
+   run, and a button is never pressed twice on the same page.
+3. **Wall rule.** A tab is `WAITING_FOR_SIGN_IN` (window revealed, polled every 3 s) only when a password field is visible or a
+   password is being confirmed and the page offers no guest route ("Apply manually", "Continue as guest", "Apply without account"),
+   or when the model calls the page a login page, nothing else could be done, and the main content (header, nav and footer are
+   ignored) has sign-in, BankID or account wording. A "Logga in" link in a header, an ad that says "registerkontroll", or a form that
+   offers BankID never counts. When no way on is found the tab says why (`NEEDS_MANUAL_APPLY`), offers "Open the browser to take
+   over", and carries on by itself when the form shows (poll).
+4. **Fields.** The validator sees the snapshot's controls as `FormField`s (ref as id; file inputs keep `data-jp-id` from the extract
+   script because the snapshot does not list them). Actions: `fill`, `choose` (a native select by label, or a custom drop-down:
+   open it, click the option whose text matches; only an option that exists is picked), `check`, `uncheck`, `upload`, `click`.
+5. **Clicks.** One per look, last, through `BrowserGuard.follow`: the Apply link of an ad (rules unchanged, ADR 0018) or a Next /
+   Continue / Nästa / Fortsätt / Apply manually / Continue as guest button whose whole label is such a word (`ADVANCE_LABEL`). A Next
+   is refused on a page whose visible heading or step name reads review, summary, confirm or granska, and when any other visible
+   control says submit, send, finish, register or a bare Ansök/Apply.
+6. Re-read after the actions (snapshot for refs, extract script for `jp-` ids) and show a per-tab summary: filled, skipped (with
+   reasons), and questions for the user. Screening questions that need judgment ("Har du erfarenhet av Angular?") are filled only
+   if the answers memory or CV database clearly supports an answer. Otherwise they go to `questionsForUser`, the run stops there
+   (`NEEDS_ANSWERS`), and the user's answer is saved to the answers memory; Fill this page continues from where the form is.
+7. The run ends `READY_FOR_USER` at a review page, or when the model has nothing left to do on a form that was filled. The user
+   checks the page and presses the final button.
 8. **Stages and failures.** The card shows *Opening job ad, Finding application form, Filling personal details, Uploading CV and cover
    letter, Answering questions, Ready for your review* as a progress bar (`stage` in `GET /api/apply/status`). A step that throws, or
    a form not found in time, ends in `ERROR` with `failedStage` and `failure`; the card names the stage and offers "Try again" and
@@ -642,8 +669,8 @@ other host or on a sign-up form (a second password field, or more than three inp
   `/samtyck|consent|gdpr|villkor|terms|privacy|integritet|talent|stay in touch|nyhetsbrev|newsletter|godkänn|accept|personuppgift|policy|intyga|marknadsför|marketing|prenumer|subscribe/i`
   (the last eight alternatives were added in milestone 5 to make the rule stricter).
 - Only `BrowserGuard` may call `click()`, and only for a named purpose (`COOKIE_NECESSARY`, `AUTOCOMPLETE_OPTION`,
-  `AKTIVITET_SPARA`, `OPEN_APPLICATION_FORM`). Enter is never pressed. `evaluate` runs only the fixed scripts in `PageScripts`
-  (extract, detect, read-saved-activities, find-apply-candidates). A test scans `src/main/java` and fails the build if any
+  `AKTIVITET_SPARA`, `OPEN_APPLICATION_FORM`, `ADVANCE_STEP`, `OPEN_DROPDOWN`). Enter is never pressed. `evaluate` runs only the fixed scripts in `PageScripts`
+  (extract, detect, read-saved-activities); `page.ariaSnapshot` is read-only and lives in `PageScripts`. A test scans `src/main/java` and fails the build if any
   other class calls a raw click, key press, `evaluate`, `dispatchEvent`, form submit, `navigate` or popup listener.
 - No code path calls `click()` on elements matching
   `/skicka|send|submit|apply now|ansök|slutför|bekräfta|confirm|finish|registrera|register|spara ansökan/i`, and none on a
@@ -795,6 +822,7 @@ GET      /onboarding             state and first open step;  PUT /onboarding/mod
 GET/PUT  /claude/connection...   status; /provider {id: "cli"}; /cli-model (the default model); PUT /stage-model/{SEARCH|RANKING|CV_READING|DOCUMENTS|AUTOFILL} {model}; POST /test
 GET/PUT  /country                the countries (available or coming soon) and the chosen one
 GET/PUT  /settings/performance   {claudeConcurrency 1..8};  GET/PUT /settings/search {careerPages}
+POST     /applications/delete    {jobIds} delete completely (409 if one is submitted or being written; nothing is deleted then)
 POST     /applications/approve-all   per document: approved, already approved, or refused with the reason (never all-or-nothing)
 POST     /applications/apply     opens only applications with both documents approved; the rest come back as skipped with a reason
 GET      /submitted[?reported=]  GET /submitted/{id}  GET /submitted/{id}/cv.pdf | letter.pdf   the frozen record of what was sent
@@ -813,7 +841,8 @@ across the top (brand, progress, theme switch), the page, and the bottom menu (C
 Extra features, Settings). Pages:
 
 1. **Welcome** (`/welcome`): the four onboarding steps (section 2.2).
-2. **Search mode** (`/`): Discovery or Prompt, the form of the chosen mode, "add a job from a link", recent searches, the
+2. **Search mode** (`/`): nothing is chosen on arrival, so only the two large mode buttons show (with "add a job from a link" below);
+   choosing one shrinks them to the compact size and opens the form of that mode under them (animated, none with "reduce motion"). The form of the chosen mode, "add a job from a link", recent searches, the
    activity-report reminder (only where it exists).
 3. **Run search** (`/runs/{id}`): the processing view (ring, percent, what is happening, time left, cancel), results as they are
    scored (TanStack Table with selection basket and "Create tailored documents for N selected jobs"), the search-plan review for

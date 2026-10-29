@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+import app.jobpilot.claude.ClaudeCallException;
 import app.jobpilot.claude.ClaudeConcurrency;
 import app.jobpilot.claude.ClaudeResources;
 import app.jobpilot.claude.ClaudeRunner;
@@ -213,6 +214,9 @@ public class DocumentService {
         Selection selection = selector.select(adText, searchProfile, language, entries, state.pinned(), state.excluded());
         jobs.saveSelection(jobId, write(selection));
 
+        runs.update(runId, Status.RUNNING, "PLAN", 20, "Planning what the application should say");
+        String plan = plan(adText, profile, selection, entryById);
+
         runs.update(runId, Status.RUNNING, "WRITE", 30, "Writing the CV and the cover letter");
         Set<String> foreign = foreignEmployers(language, ad.employer());
         ValidationContext cvCtx = context(language, asksNewGrad, entries, Selection.ids(selection.forCv()), foreign);
@@ -222,9 +226,9 @@ public class DocumentService {
         // The CV and the letter depend only on the selection above and share no mutable state, so they are written at the
         // same time; the concurrency setting still caps how many model calls run at once.
         java.util.concurrent.CompletableFuture<Written<CvContent>> cvJob = java.util.concurrent.CompletableFuture.supplyAsync(
-                () -> buildCv(runId, adText, language, profile, selection, entryById, entries, cvCtx, gapNote), WRITERS);
+                () -> buildCv(runId, adText, plan, language, profile, selection, entryById, entries, cvCtx, gapNote), WRITERS);
         java.util.concurrent.CompletableFuture<Written<LetterContent>> letterJob = java.util.concurrent.CompletableFuture.supplyAsync(
-                () -> buildLetter(runId, adText, ad, language, profile, selection, entryById, letterCtx), WRITERS);
+                () -> buildLetter(runId, adText, plan, ad, language, profile, selection, entryById, letterCtx), WRITERS);
         Written<CvContent> cvResult = await(cvJob, letterJob);
         Written<LetterContent> letterResult = await(letterJob, cvJob);
         CvContent cvDoc = cvResult.document();
@@ -261,9 +265,9 @@ public class DocumentService {
         }
     }
 
-    private Written<CvContent> buildCv(long runId, String adText, String language, Profile profile, Selection selection,
+    private Written<CvContent> buildCv(long runId, String adText, String plan, String language, Profile profile, Selection selection,
                                        Map<Long, Entry> entryById, List<Entry> entries, ValidationContext ctx, String gapNote) {
-        CvContent cvDoc = writeCv(adText, language, profile, selection, entryById, entries, ctx, gapNote);
+        CvContent cvDoc = writeCv(adText, plan, language, profile, selection, entryById, entries, ctx, gapNote);
         Report report = validator.validateCv(cvDoc, ctx);
         if (!report.violations().isEmpty()) {
             runs.progress(runId, 45, "Fixing problems found in the CV");
@@ -274,9 +278,9 @@ public class DocumentService {
         return new Written<>(cvDoc, report);
     }
 
-    private Written<LetterContent> buildLetter(long runId, String adText, AdText ad, String language, Profile profile,
+    private Written<LetterContent> buildLetter(long runId, String adText, String plan, AdText ad, String language, Profile profile,
                                                Selection selection, Map<Long, Entry> entryById, ValidationContext ctx) {
-        LetterContent letter = writeLetter(adText, ad, language, profile, selection, entryById, ctx);
+        LetterContent letter = writeLetter(adText, plan, ad, language, profile, selection, entryById, ctx);
         Report report = validator.validateLetter(letter, ctx);
         if (!report.violations().isEmpty()) {
             runs.progress(runId, 60, "Fixing problems found in the letter");
@@ -286,7 +290,7 @@ public class DocumentService {
         return new Written<>(letter, report);
     }
 
-    private CvContent writeCv(String adText, String language, Profile profile, Selection selection, Map<Long, Entry> entryById,
+    private CvContent writeCv(String adText, String plan, String language, Profile profile, Selection selection, Map<Long, Entry> entryById,
                               List<Entry> entries, ValidationContext ctx, String gapNote) {
         Map<String, List<String>> skills = new TreeMap<>();
         for (Skill s : cv.skills()) {
@@ -295,7 +299,7 @@ public class DocumentService {
         CvContent written = claude.run(ClaudeTask.of("writeCv",
                 ClaudeResources.prompt("writeCv", Map.ofEntries(
                         Map.entry("languageName", languageName(language)), Map.entry("language", language),
-                        Map.entry("rules", styleRules.rulesText()), Map.entry("ad", adText),
+                        Map.entry("rules", styleRules.rulesText()), Map.entry("ad", adText), Map.entry("plan", plan), Map.entry("today", YearMonth.now(clock).toString()),
                         Map.entry("candidate", candidate(profile)),
                         Map.entry("facts", write(factsFor(selection.forCv(), entryById))),
                         Map.entry("skills", write(skills)))),
@@ -303,14 +307,14 @@ public class DocumentService {
         return CvAssembler.assemble(written, selection, entryById, profile, language, gapNote);
     }
 
-    private LetterContent writeLetter(String adText, AdText ad, String language, Profile profile, Selection selection,
+    private LetterContent writeLetter(String adText, String plan, AdText ad, String language, Profile profile, Selection selection,
                                       Map<Long, Entry> entryById, ValidationContext ctx) {
         boolean sv = "sv".equals(language);
         String name = profile.fullName() == null ? "" : profile.fullName();
         return claude.run(ClaudeTask.of("writeLetter",
                 ClaudeResources.prompt("writeLetter", Map.ofEntries(
                         Map.entry("languageName", languageName(language)), Map.entry("language", language),
-                        Map.entry("rules", styleRules.rulesText()), Map.entry("ad", adText),
+                        Map.entry("rules", styleRules.rulesText()), Map.entry("ad", adText), Map.entry("plan", plan), Map.entry("today", YearMonth.now(clock).toString()),
                         Map.entry("candidate", candidate(profile)),
                         Map.entry("facts", write(factsFor(selection.forLetter(), entryById))),
                         Map.entry("gaps", write(cv.gaps().stream().map(g -> g.text()).toList())),
@@ -321,6 +325,25 @@ public class DocumentService {
                         Map.entry("closing", sv ? "Vänliga hälsningar," : "Kind regards,"),
                         Map.entry("signature", name))),
                 ClaudeResources.schema("writeLetter"), LetterContent.class));
+    }
+
+    /**
+     * The editor's brief for the two writers: the angle of the application, what the ad values and which facts add up to the
+     * strongest evidence. It is what turns a selection of facts into a tailored text. A failed plan is not fatal: the writers
+     * then work from the facts and the ad alone.
+     */
+    String plan(String adText, Profile profile, Selection selection, Map<Long, Entry> entryById) {
+        try {
+            JsonNode plan = claude.run(ClaudeTask.of("planDocument",
+                    ClaudeResources.prompt("planDocument", Map.of("ad", adText, "candidate", candidate(profile), "today", YearMonth.now(clock).toString(),
+                            "facts", write(factsFor(selection.entries(), entryById)),
+                            "gaps", write(cv.gaps().stream().map(g -> g.text()).toList()))),
+                    ClaudeResources.schema("planDocument"), JsonNode.class));
+            return write(plan);
+        } catch (ClaudeCallException e) {
+            log.warn("Planning the documents failed, writing without a plan: {}", e.getMessage());
+            return "{}";
+        }
     }
 
     /** One automatic rewrite with the violation report (SPEC 8.3). Java-owned fields are restored by the caller. */

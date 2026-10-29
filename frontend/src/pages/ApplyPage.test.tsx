@@ -3,7 +3,10 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { application, tab } from '../test/fixtures2'
+import { application as baseApplication, tab } from '../test/fixtures2'
+
+// In this stage every application has been sent on from Documents.
+const application = (over: Parameters<typeof baseApplication>[0] = {}) => baseApplication({ sentToApply: true, ...over })
 import { mockApi } from '../test/mockApi'
 import { ApplyPage } from './ApplyPage'
 

@@ -46,7 +46,7 @@ public class FactSelectionService {
         return enforce(raw, usable, pinned);
     }
 
-    /** Pure and testable: drops anything unusable, then adds pinned and education entries. */
+    /** Pure and testable: drops anything unusable, then adds pinned entries and, if none was chosen, one education. */
     static Selection enforce(Selection raw, List<Entry> usable, Set<Long> pinned) {
         Map<Long, Entry> byId = new LinkedHashMap<>();
         usable.forEach(e -> byId.put(e.id(), e));
@@ -69,26 +69,35 @@ public class FactSelectionService {
             }
         }
         for (Entry e : usable) {
-            boolean forced = pinned.contains(e.id()) || e.kind() == Kind.EDUCATION;
-            if (!forced) {
+            if (!pinned.contains(e.id())) {
                 continue;
             }
-            SelectedEntry existing = chosen.get(e.id());
-            List<Long> all = e.facts().stream().map(Fact::id).toList();
-            if (existing == null) {
-                chosen.put(e.id(), new SelectedEntry(e.id(), all, "both",
-                        pinned.contains(e.id()) ? "Pinned by the user" : "Education is always included"));
-            } else if (pinned.contains(e.id())) {
-                chosen.put(e.id(), new SelectedEntry(e.id(), all, "both", "Pinned by the user"));
-            } else if (!"both".equals(existing.use()) && !"cv".equals(existing.use())) {
-                chosen.put(e.id(), new SelectedEntry(e.id(), existing.factIds(), "both", existing.reason()));
+            chosen.put(e.id(), new SelectedEntry(e.id(), e.facts().stream().map(Fact::id).toList(), "both", "Pinned by the user"));
+        }
+        for (SelectedEntry s : new ArrayList<>(chosen.values())) {
+            if (byId.get(s.entryId()).kind() == Kind.EDUCATION && "letter".equals(s.use())) {
+                chosen.put(s.entryId(), new SelectedEntry(s.entryId(), s.factIds(), "both", s.reason()));
             }
+        }
+        // Education is chosen by relevance like everything else, but a CV never goes out without any: the newest entry stays.
+        Entry fallback = usable.stream().filter(e -> e.kind() == Kind.EDUCATION).max(FactSelectionService::byRecency).orElse(null);
+        boolean hasEducation = chosen.keySet().stream().map(byId::get).anyMatch(e -> e.kind() == Kind.EDUCATION
+                && !"letter".equals(chosen.get(e.id()).use()));
+        if (fallback != null && !hasEducation) {
+            chosen.put(fallback.id(), new SelectedEntry(fallback.id(), List.of(), "both", "A CV needs at least one education"));
         }
         Selection selection = new Selection(new ArrayList<>(chosen.values()));
         if (selection.forCv().isEmpty()) {
             throw new IllegalStateException("No CV entries were selected; check the CV database and the excluded entries");
         }
         return selection;
+    }
+
+    /** Ongoing entries are newest, then the later end month, then the later start month; missing dates sort last. */
+    private static int byRecency(Entry a, Entry b) {
+        return java.util.Comparator.<Entry, Boolean>comparing(Entry::ongoing)
+                .thenComparing(e -> e.endYm() == null ? "" : e.endYm())
+                .thenComparing(e -> e.startYm() == null ? "" : e.startYm()).compare(a, b);
     }
 
     private static String valid(String use) {

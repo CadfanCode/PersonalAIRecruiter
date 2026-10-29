@@ -49,6 +49,10 @@ packaging/  jpackage installer script, icons (docker-compose.yml is optional, fo
    The one exception is navigation (ADR 0018): the "Ansök" / "Apply" link or button of an ad page that only opens the
    application form may be followed, by `BrowserGuard` alone, and never on a page that already is a form, after JobPilot
    filled anything, for a submit button, inside a form with inputs, or for a label with a sending word.
+   The other exception is moving a multi-step form on (ADR 0023): a button whose whole label is Next, Continue, Nästa,
+   Fortsätt, Gå vidare, Apply manually or Continue as guest may be pressed, by `BrowserGuard` alone, never on a page
+   whose visible heading reads review, summary, confirm or granska, never next to another visible control that submits,
+   sends, finishes or registers, and never for a label with a sending word.
    Enforce this in code (see SPEC section 9.3), not only in prompts.
 2. Never create accounts and never handle BankID or any Arbetsförmedlingen login. When a login,
    sign-up or BankID screen appears, pause and show "Waiting for you to sign in" in the UI.

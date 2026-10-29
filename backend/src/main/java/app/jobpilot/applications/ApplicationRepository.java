@@ -18,7 +18,7 @@ public class ApplicationRepository {
     /** The columns of one application row joined with its job and the job's newest score for the run it was selected in. */
     public record Row(long jobId, Long runId, String searchMode, String roleType, Instant selectedAt, Instant submittedAt,
                       String docsJson, String title, String employer, String municipality, String url, String applyUrl,
-                      String jobStatus, Integer score) {
+                      String jobStatus, Integer score, Instant sentToApplyAt) {
     }
 
     private static final String SELECT = """
@@ -69,6 +69,18 @@ public class ApplicationRepository {
         }
     }
 
+    /** Marks the applications the user sent on to the Apply stage; they stay there until removed or submitted. */
+    public void sendToApply(List<Long> jobIds, Instant now) {
+        for (long id : jobIds) {
+            jdbc.sql("UPDATE application SET sent_to_apply_at = coalesce(sent_to_apply_at, :now) WHERE job_id = :j")
+                    .param("now", Timestamp.from(now)).param("j", id).update();
+        }
+    }
+
+    public void withdrawFromApply(long jobId) {
+        jdbc.sql("UPDATE application SET sent_to_apply_at = NULL WHERE job_id = :j").param("j", jobId).update();
+    }
+
     public void clearSubmitted(long jobId) {
         jdbc.sql("UPDATE application SET submitted_at = NULL, docs_json = NULL WHERE job_id = :j").param("j", jobId).update();
         jdbc.sql("UPDATE job SET status = 'FILLED' WHERE id = :j AND status = 'APPLIED'").param("j", jobId).update();
@@ -83,6 +95,7 @@ public class ApplicationRepository {
                 rs.getTimestamp("selected_at").toInstant(),
                 rs.getTimestamp("submitted_at") == null ? null : rs.getTimestamp("submitted_at").toInstant(),
                 rs.getString("docs_json"), rs.getString("title"), rs.getString("employer"), rs.getString("municipality"),
-                rs.getString("url"), rs.getString("apply_url"), rs.getString("job_status"), total);
+                rs.getString("url"), rs.getString("apply_url"), rs.getString("job_status"), total,
+                rs.getTimestamp("sent_to_apply_at") == null ? null : rs.getTimestamp("sent_to_apply_at").toInstant());
     }
 }

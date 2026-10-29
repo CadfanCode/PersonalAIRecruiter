@@ -35,7 +35,7 @@ class ModelStageTest {
         assertThat(ModelStage.ofTask("scoreJob")).contains(ModelStage.RANKING);
         assertThat(ModelStage.ofTask("writeCv")).contains(ModelStage.DOCUMENTS);
         assertThat(ModelStage.ofTask("writeLetter")).contains(ModelStage.DOCUMENTS);
-        assertThat(ModelStage.ofTask("mapFormFields")).contains(ModelStage.AUTOFILL);
+        assertThat(ModelStage.ofTask("browseApplication")).contains(ModelStage.AUTOFILL);
         assertThat(ModelStage.ofTask("buildSearchProfile")).contains(ModelStage.SEARCH);
     }
 }

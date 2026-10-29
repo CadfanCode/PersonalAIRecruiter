@@ -28,6 +28,8 @@ import app.jobpilot.pipeline.RunOptions;
 import app.jobpilot.pipeline.RunRepository;
 import app.jobpilot.ranking.CvDigestService;
 import app.jobpilot.ranking.ScoreService;
+import app.jobpilot.search.JobTechClient;
+import app.jobpilot.search.JobTechMapper;
 import app.jobpilot.search.SearchProfile;
 import app.jobpilot.search.SearchProfileService;
 
@@ -57,12 +59,13 @@ public class ManualImportService {
     private final SearchProfileService profiles;
     private final CvDigestService digests;
     private final ScoreService scorer;
+    private final JobTechClient jobTech;
     private final ExecutorService executor;
     private final Clock clock;
 
     public ManualImportService(AdFetcher fetcher, PasteOnlyHosts pasteOnly, ClaudeRunner claude, JobRepository jobs,
                                RunRepository runs, SearchProfileService profiles, CvDigestService digests, ScoreService scorer,
-                               ExecutorService pipelineExecutor, Clock clock) {
+                               JobTechClient jobTech, ExecutorService pipelineExecutor, Clock clock) {
         this.fetcher = fetcher;
         this.pasteOnly = pasteOnly;
         this.claude = claude;
@@ -71,6 +74,7 @@ public class ManualImportService {
         this.profiles = profiles;
         this.digests = digests;
         this.scorer = scorer;
+        this.jobTech = jobTech;
         this.executor = pipelineExecutor;
         this.clock = clock;
     }
@@ -112,6 +116,11 @@ public class ManualImportService {
             extractAndScore(id, url, pasted);
             return;
         }
+        var platsbankenId = PlatsbankenLinks.adId(url);
+        if (platsbankenId.isPresent()) {
+            addPlatsbankenAd(id, url, platsbankenId.get());
+            return;
+        }
         if (pasteOnly.matches(url)) {
             runs.update(id, Status.WAITING_FOR_USER, Step.FETCH, 10,
                     "This site discourages automatic reading, so JobPilot does not open it. Copy the ad text from your own browser and paste it below.");
@@ -129,16 +138,50 @@ public class ManualImportService {
                     "The page did not contain enough text to be an ad (it may need a login or load its text with a script). Copy the ad text from your browser and paste it below.");
             return;
         }
-        extractAndScore(id, url, text);
+        extractAndScore(id, url, text, true);
+    }
+
+    /** A Platsbanken ad is read from the JobTech API, exactly as a search would have found it. */
+    private void addPlatsbankenAd(long id, String url, String adId) {
+        runs.update(id, Status.RUNNING, Step.FETCH, 25, "Reading the ad from Platsbanken");
+        NewJob job = jobTech.ad(adId).flatMap(JobTechMapper::map)
+                .orElseThrow(() -> new IllegalStateException("Platsbanken has no ad with that number. It may have been removed"));
+        if (blank(job.descriptionText()) || blank(job.employer())) {
+            throw new IllegalStateException("Platsbanken returned that ad without its text, so nothing was added");
+        }
+        addAndScore(id, url, withAddressableApplyLink(job));
+    }
+
+    /** JobTech sometimes gives just a host name ("www.example.se") as the apply link; that is not an address a browser can be sent to. */
+    private static NewJob withAddressableApplyLink(NewJob j) {
+        String link = j.applyUrl();
+        if (link == null || link.isBlank() || link.strip().matches("(?i)^https?://\\S+$")) {
+            return j;
+        }
+        String host = link.strip();
+        String fixed = host.matches("(?i)^[a-z0-9][a-z0-9.-]*\\.[a-z]{2,}(/\\S*)?$") ? "https://" + host : null;
+        return new NewJob(j.source(), j.sourceId(), j.url(), fixed, j.title(), j.employer(), j.clientEmployer(), j.location(),
+                j.municipality(), j.publishedAt(), j.deadline(), j.language(), j.employmentType(), j.descriptionText(), j.rawJson(),
+                j.dateUnverified(), j.evidenceUrl(), j.relevance(), j.remoteHint());
     }
 
     private void extractAndScore(long id, String url, String text) {
+        extractAndScore(id, url, text, false);
+    }
+
+    /** {@code fetched}: the text came from a page JobPilot read, so a non-ad answer means the page needs the user's help, not a failure. */
+    private void extractAndScore(long id, String url, String text, boolean fetched) {
         LocalDate today = LocalDate.now(clock);
         runs.update(id, Status.RUNNING, Step.FETCH, 25, "Reading the ad text");
         Extracted ad = claude.run(ClaudeTask.of("extractJob", ClaudeResources.prompt("extractJob", Map.of(
                 "url", url == null ? "" : url, "today", today.toString(),
                 "text", text.length() > AdText.MAX_CHARS ? text.substring(0, AdText.MAX_CHARS) : text)),
                 ClaudeResources.schema("extractJob"), Extracted.class));
+        if (fetched && !ad.isJobAd()) {
+            runs.update(id, Status.WAITING_FOR_USER, Step.FETCH, 10,
+                    "That page did not show a job ad (it may load its text with a script or need a login). Copy the ad text from your browser and paste it below.");
+            return;
+        }
         if (!ad.isJobAd() || blank(ad.title()) || blank(ad.employer()) || blank(ad.description())) {
             throw new IllegalStateException("That text does not look like a single job ad, so nothing was added");
         }
@@ -147,6 +190,11 @@ public class ManualImportService {
                 ad.employer().strip(), null, ad.location(), blank(ad.municipality()) ? null : ad.municipality().strip(),
                 date(ad.publishedDate(), false), date(ad.deadline(), true), ad.language(), ad.employmentType(),
                 ad.description().strip(), "{}", ad.publishedDate() == null, url, 0, false);
+        addAndScore(id, url, job);
+    }
+
+    private void addAndScore(long id, String url, NewJob job) {
+        LocalDate today = LocalDate.now(clock);
         // The same ad may already be stored from Platsbanken: use that row rather than overwrite its apply link.
         long jobId = jobs.idByDedupeKey(job.dedupeKey()).orElseGet(() -> jobs.upsert(job, id).id());
         jobs.linkToRun(id, jobId, 1.0);

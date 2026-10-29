@@ -19,9 +19,9 @@ public enum ModelStage {
             Map.entry("discoverJobsWeb", SEARCH), Map.entry("extractJob", SEARCH),
             Map.entry("scoreJob", RANKING),
             Map.entry("importCv", CV_READING), Map.entry("matchFacts", CV_READING),
-            Map.entry("selectFacts", DOCUMENTS), Map.entry("writeCv", DOCUMENTS), Map.entry("writeLetter", DOCUMENTS),
+            Map.entry("selectFacts", DOCUMENTS), Map.entry("planDocument", DOCUMENTS), Map.entry("writeCv", DOCUMENTS), Map.entry("writeLetter", DOCUMENTS),
             Map.entry("rewriteForViolations", DOCUMENTS), Map.entry("reviseDocument", DOCUMENTS),
-            Map.entry("mapFormFields", AUTOFILL));
+            Map.entry("browseApplication", AUTOFILL));
 
     private final String label;
 

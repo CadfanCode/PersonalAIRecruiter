@@ -7,7 +7,13 @@
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
-  const body = document.body ? text(document.body) : '';
+  // The wording tests read the main content only: a "Logga in" link in the header or footer is on every site and means nothing here.
+  let body = '';
+  if (document.body) {
+    const clone = document.body.cloneNode(true);
+    clone.querySelectorAll('header, nav, footer, [role=banner], [role=navigation], [role=contentinfo], script, style, noscript').forEach((e) => e.remove());
+    body = (clone.textContent || '').replace(/\s+/g, ' ').trim();
+  }
   // A search box or a newsletter sign-up on an ad page is not the application form.
   const notTheForm = (el) => (el.getAttribute('type') || '').toLowerCase() === 'search' || el.closest('[role=search]')
     || /search|sök|newsletter|nyhetsbrev/i.test((el.name || '') + ' ' + (el.getAttribute('aria-label') || '') + ' ' + (el.placeholder || ''));

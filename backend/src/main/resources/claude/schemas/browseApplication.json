@@ -1,13 +1,15 @@
 {
   "type": "object",
   "properties": {
+    "pageKind": { "type": "string", "enum": ["form", "ad", "login", "review", "confirmation", "error", "other"] },
+    "summary": { "type": "string" },
     "actions": {
       "type": "array",
       "items": {
         "type": "object",
         "properties": {
           "fieldId": { "type": "string" },
-          "action": { "type": "string", "enum": ["fill", "select", "check", "uncheck", "upload", "skip"] },
+          "action": { "type": "string", "enum": ["fill", "choose", "check", "uncheck", "upload", "click", "skip"] },
           "value": { "type": "string" },
           "file": { "type": "string", "enum": ["cv", "letter", "none"] },
           "reason": { "type": "string" },
@@ -31,6 +33,6 @@
       }
     }
   },
-  "required": ["actions", "questionsForUser"],
+  "required": ["pageKind", "summary", "actions", "questionsForUser"],
   "additionalProperties": false
 }

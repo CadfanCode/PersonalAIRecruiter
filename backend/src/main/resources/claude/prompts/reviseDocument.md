@@ -37,6 +37,8 @@ The job seeker's new request:
 
 Rules:
 - Make the change that was asked for and nothing else. Keep every other part of the document as it is, word for word.
+- Write the change as polished prose in the style of the rest of the document: digest the facts into natural sentences, do
+  not paste fact wording, and never make a claim stronger than the facts.
 - Never invent anything. Every claim must come from the facts above: do not add employers, dates, tools, degrees,
   numbers or results that are not there. Cite the fact ids a bullet or paragraph rests on ("factIds" in a CV,
   "factIdsUsed" in a letter), using only ids from the list.

@@ -75,11 +75,11 @@ public record JobPilotProperties(Path dataDir, List<String> allowedOrigins, Clau
 
         @ConstructorBinding
         public Browser {
-            findFormSeconds = findFormSeconds <= 0 ? 90 : findFormSeconds;
+            findFormSeconds = findFormSeconds <= 0 ? 240 : findFormSeconds;
         }
 
         public Browser(boolean headless, int maxTabs, boolean allowFileUrls, int suggestionWaitMillis) {
-            this(headless, maxTabs, allowFileUrls, suggestionWaitMillis, true, 90);
+            this(headless, maxTabs, allowFileUrls, suggestionWaitMillis, true, 240);
         }
     }
 

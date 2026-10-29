@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "field": { "type": "string" },
+    "angle": { "type": "string" },
+    "adPriorities": { "type": "array", "items": { "type": "string" } },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "point": { "type": "string" },
+          "factIds": { "type": "array", "items": { "type": "integer" } }
+        },
+        "required": ["point", "factIds"],
+        "additionalProperties": false
+      }
+    },
+    "cvProfile": { "type": "string" },
+    "letterExample": { "type": "string" },
+    "letterHook": { "type": "string" },
+    "gapsToState": { "type": "array", "items": { "type": "string" } },
+    "keepShort": { "type": "array", "items": { "type": "string" } }
+  },
+  "required": ["field", "angle", "adPriorities", "evidence", "cvProfile", "letterExample", "letterHook", "gapsToState", "keepShort"],
+  "additionalProperties": false
+}

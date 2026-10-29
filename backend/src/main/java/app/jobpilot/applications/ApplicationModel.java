@@ -24,7 +24,7 @@ public final class ApplicationModel {
     public record View(long jobId, Long runId, String title, String employer, String municipality, String url, String applyUrl,
                        String searchMode, String roleType, Integer score, String jobStatus, Instant selectedAt,
                        Instant submittedAt, DocState cv, DocState letter, Generation generation, JsonNode submittedDocs,
-                       boolean readyToApply, List<String> blockers) {
+                       boolean readyToApply, List<String> blockers, boolean sentToApply) {
     }
 
     /** The outcome of "Approve all" for one document: approved now, already approved, or refused with the reason. */

@@ -33,7 +33,51 @@ function renderPage(path = '/documents?new=1') {
   )
 }
 
-afterEach(() => vi.unstubAllGlobals())
+afterEach(() => {
+  vi.unstubAllGlobals()
+  localStorage.clear()
+})
+
+describe('deleting applications', () => {
+  it('deletes the ticked applications, including ones that are not ready, only after a confirmation', async () => {
+    let applications = [ready({ jobId: 1, title: 'Nurse' }), application({ jobId: 2, title: 'Teacher', blockers: ['No CV yet'] })]
+    const calls = mockApi({
+      'GET /api/documents': [],
+      'GET /api/applications': () => applications,
+      'POST /api/applications/delete': () => { applications = [applications[0]]; return { deleted: 1 } },
+    })
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: 'Delete' })).toBeDisabled()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Select Teacher' }))
+    await userEvent.click(screen.getByRole('button', { name: 'Delete (1)' }))
+    expect(calls.some((c) => c.url === '/api/applications/delete')).toBe(false)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(dialog).toHaveTextContent('“Teacher” will be removed')
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(calls.some((c) => c.url === '/api/applications/delete')).toBe(false)
+
+    await userEvent.click(screen.getByRole('button', { name: 'Delete (1)' }))
+    await userEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete for good' }))
+
+    await vi.waitFor(() => expect(calls.find((c) => c.url === '/api/applications/delete')?.body).toEqual({ jobIds: [2] }))
+    await vi.waitFor(() => expect(screen.queryByText('Teacher')).not.toBeInTheDocument())
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+  })
+
+  it('cannot delete while the documents of a ticked application are being written', async () => {
+    mockApi({
+      'GET /api/documents': [],
+      'GET /api/applications': [application({ jobId: 1, title: 'Nurse', generation: { runId: 5, status: 'RUNNING', step: 'WRITE', progress: 40, message: 'Writing' } })],
+    })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Select Nurse' }))
+    expect(screen.getByRole('button', { name: 'Delete (1)' })).toBeDisabled()
+  })
+})
 
 describe('documents overview for the selected jobs', () => {
   it('shows a green tick per approved document and says which applications go on and why the others do not', async () => {
@@ -49,6 +93,8 @@ describe('documents overview for the selected jobs', () => {
     const nurse = (await screen.findByText('Nurse')).closest('li') as HTMLElement
     expect(within(nurse).getByRole('img', { name: 'CV: approved' })).toBeInTheDocument()
     expect(within(nurse).getByRole('img', { name: 'Cover letter: approved' })).toBeInTheDocument()
+    expect(within(nurse).getByText('Ready, not sent')).toBeInTheDocument()
+    await userEvent.click(within(nurse).getByRole('checkbox', { name: 'Select Nurse' }))
     expect(within(nurse).getByText('Goes to Apply')).toBeInTheDocument()
     const teacher = screen.getByText('Teacher').closest('li') as HTMLElement
     expect(within(teacher).getByRole('img', { name: 'CV: approved' })).toBeInTheDocument()
@@ -89,10 +135,31 @@ describe('documents overview for the selected jobs', () => {
     })
     renderPage()
 
+    // Any row can be ticked (to delete it), but only a ready one goes on to Apply
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Select Teacher' }))
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Select Nurse' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Apply (1)' }))
 
     expect(await screen.findByText('Apply page, left out: Teacher')).toBeInTheDocument()
-    expect(calls.some((c) => c.method === 'POST' && c.url === '/api/applications/apply')).toBe(true)
+    const post = calls.find((c) => c.method === 'POST' && c.url === '/api/applications/apply')
+    expect(post?.body).toEqual({ jobIds: [1] })
+  })
+
+  it('sends only the ticked applications on, even when others are ready too', async () => {
+    const calls = mockApi({
+      'GET /api/documents': [],
+      'GET /api/applications': [ready({ jobId: 1, title: 'Nurse' }), ready({ jobId: 2, title: 'Teacher' }), ready({ jobId: 3, title: 'Cook' })],
+      'POST /api/applications/apply': { started: [{ jobId: 2 }], skipped: [] },
+    })
+    renderPage()
+
+    expect(await screen.findByRole('button', { name: 'Apply (0)' })).toBeDisabled()
+    expect(screen.getByText(/Tick the applications you want to send on/)).toBeInTheDocument()
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Select Teacher' }))
+    expect(screen.getByText('2 stay here, not sent.')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Apply (1)' }))
+
+    await vi.waitFor(() => expect(calls.find((c) => c.url === '/api/applications/apply')?.body).toEqual({ jobIds: [2] }))
   })
 
   it('asks for permission to show a system notification when the user presses Apply, so "ready for submission" can reach them', async () => {
@@ -105,6 +172,7 @@ describe('documents overview for the selected jobs', () => {
     })
     renderPage()
 
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Select Nurse' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Apply (1)' }))
 
     await vi.waitFor(() => expect(request).toHaveBeenCalledTimes(1))

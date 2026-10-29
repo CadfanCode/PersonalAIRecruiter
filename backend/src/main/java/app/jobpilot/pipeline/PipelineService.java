@@ -59,6 +59,7 @@ public class PipelineService {
     private final Clock clock;
     private final JobPilotProperties props;
     private final RoleDiscoveryService discovery;
+    private final RetentionService retention;
     private final Set<Long> cancelRequested = ConcurrentHashMap.newKeySet();
 
     /** Ads scored by a Discover run when the user sets no limit: the normal and the aggressive default, and the hard cap. */
@@ -78,8 +79,9 @@ public class PipelineService {
     public PipelineService(RunRepository runs, SearchProfileService profiles, CountryRegistry countries,
                            WebDiscoveryService web, JobRepository jobs, CvDigestService digests, ScoreService scorer,
                            RoleDiscoveryService discovery, ExecutorService pipelineExecutor, Clock clock, JobPilotProperties props,
-                           AppSettings settings) {
+                           AppSettings settings, RetentionService retention) {
         this.settings = settings;
+        this.retention = retention;
         this.runs = runs;
         this.profiles = profiles;
         this.countries = countries;
@@ -99,6 +101,7 @@ public class PipelineService {
             throw new IllegalArgumentException("prompt is required");
         }
         validate(options);
+        retention.purgeSearchData(); // the previous search does not outlive the start of a new one
         long id = runs.create(options, clock.instant());
         String text = prompt == null ? "" : prompt.trim();
         submit(id, () -> {

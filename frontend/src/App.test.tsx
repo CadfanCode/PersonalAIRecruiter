@@ -86,6 +86,7 @@ describe('app shell', () => {
     mockApi(routes())
     renderApp()
 
+    await userEvent.click(await screen.findByRole('radio', { name: /Prompt Mode/ }))
     await userEvent.type(await screen.findByLabelText('Starting prompt'), 'Nurse in Uppsala')
     await userEvent.click(within(screen.getByRole('navigation', { name: 'More' })).getByRole('link', { name: 'Settings' }))
     expect(await screen.findByRole('heading', { name: 'Settings' })).toBeInTheDocument()
@@ -148,7 +149,15 @@ describe('app shell', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Find your next role' })).toBeInTheDocument()
     expect(screen.getByRole('radio', { name: /Discovery Mode/ })).toBeInTheDocument()
+    // Nothing is chosen yet, so no prompt is shown, only the two modes and the link for a job found elsewhere
+    expect(screen.getByRole('radio', { name: /Prompt Mode/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByRole('radio', { name: /Discovery Mode/ })).toHaveAttribute('aria-checked', 'false')
+    expect(screen.queryByLabelText('Starting prompt')).not.toBeInTheDocument()
+    expect(screen.getByText('I found a job myself, add it from a link')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('radio', { name: /Prompt Mode/ }))
     expect(screen.getByRole('radio', { name: /Prompt Mode/ })).toHaveAttribute('aria-checked', 'true')
+    expect(await screen.findByLabelText('Starting prompt')).toBeInTheDocument()
     expect(screen.getByText('Nurse positions in Stockholm, last 7 days')).toBeInTheDocument()
     expect(screen.getByText('Accountant in Malmö, part time')).toBeInTheDocument()
     expect(screen.queryByLabelText(/Max age/)).not.toBeInTheDocument()

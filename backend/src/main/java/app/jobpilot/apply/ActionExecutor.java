@@ -1,11 +1,8 @@
 package app.jobpilot.apply;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.Locale;
 
 import com.microsoft.playwright.Page;
 
@@ -15,15 +12,14 @@ import app.jobpilot.apply.BrowserGuard.Outcome;
 
 /**
  * Runs validated actions through the {@link BrowserGuard}, then reads the page again to prove each value landed:
- * controlled inputs can reject a fill, and a page that re-renders drops its fields (SPEC 9.2 steps 5 and 6).
+ * controlled inputs can reject a fill, and a page that re-renders drops its fields (SPEC 9.2).
  */
 public final class ActionExecutor {
 
     public record Done(String fieldId, String label, String action, String detail) {
     }
 
-    /** @param newFields fields that appeared during the run (for example Ponty's category selects after an upload) */
-    public record Result(List<Done> done, List<Skipped> skipped, List<FormField> newFields) {
+    public record Result(List<Done> done, List<Skipped> skipped) {
     }
 
     private final Page page;
@@ -34,14 +30,14 @@ public final class ActionExecutor {
         this.guard = guard;
     }
 
-    public Result execute(List<Planned> planned, List<FormField> before) {
+    public Result execute(List<Planned> planned) {
         List<Done> done = new ArrayList<>();
         List<Skipped> skipped = new ArrayList<>();
         List<Planned> ran = new ArrayList<>();
         for (Planned p : planned) {
             Outcome o = switch (p.action()) {
                 case "fill" -> guard.fill(p.field(), p.value());
-                case "select" -> guard.select(p.field(), p.value());
+                case "select", "choose" -> guard.choose(p.field(), p.value());
                 case "check" -> guard.check(p.field(), true);
                 case "uncheck" -> guard.check(p.field(), false);
                 case "upload" -> guard.upload(p.field(), p.file());
@@ -53,12 +49,13 @@ public final class ActionExecutor {
                 skipped.add(new Skipped(p.field().id(), p.field().questionText(), o.reason()));
             }
         }
-
-        List<FormField> after = PageScripts.extract(page);
-        Map<String, FormField> now = new HashMap<>();
-        after.forEach(f -> now.put(f.id(), f));
+        PageSnapshot after = ran.isEmpty() ? null : PageScripts.snapshot(page);
+        // Tagged fields (jp-N) are read back by the extractor, snapshot refs by the snapshot.
+        List<FormField> tagged = ran.stream().anyMatch(p -> isTagged(p.field())) ? PageScripts.extract(page) : List.of();
         for (Planned p : ran) {
-            String problem = verify(p, now.get(p.field().id()));
+            FormField now = isTagged(p.field()) ? tagged.stream().filter(t -> t.id().equals(p.field().id())).findFirst().orElse(null)
+                    : find(after, p.field());
+            String problem = verify(p, now);
             if (problem == null) {
                 done.add(new Done(p.field().id(), p.field().questionText(), p.action(),
                         p.action().equals("upload") ? p.file().getFileName().toString() : p.value()));
@@ -66,29 +63,42 @@ public final class ActionExecutor {
                 skipped.add(new Skipped(p.field().id(), p.field().questionText(), problem));
             }
         }
-        Set<String> known = new HashSet<>();
-        before.forEach(f -> known.add(f.id()));
-        List<FormField> added = after.stream().filter(f -> !known.contains(f.id())).toList();
-        return new Result(done, skipped, added);
+        return new Result(done, skipped);
+    }
+
+    private static boolean isTagged(FormField f) {
+        return f.id().matches("^(f\\d+-)?jp-\\d+$");
+    }
+
+    /** The field again after the actions: by its ref, or, when the page rebuilt it, the one control with the same role and name. */
+    private static FormField find(PageSnapshot snapshot, FormField f) {
+        FormField byRef = snapshot.field(f.id());
+        if (byRef != null) {
+            return byRef;
+        }
+        List<FormField> same = snapshot.fields().stream().filter(o -> o.type().equals(f.type())
+                && o.label().equals(f.label()) && o.legend().equals(f.legend()) && o.optionLabel().equals(f.optionLabel())).toList();
+        return same.size() == 1 ? same.get(0) : null;
+    }
+
+    /** Masked inputs reformat what is typed (spaces in a phone number, a date picker); only letters and digits are compared. */
+    private static String squash(String s) {
+        return s == null ? "" : s.replaceAll("[^\\p{L}\\p{N}]", "").toLowerCase(Locale.ROOT);
     }
 
     /** Null when the value is on the page; otherwise why the fill did not stick. */
     static String verify(Planned p, FormField now) {
+        if (p.action().equals("upload") || p.action().equals("choose") || p.action().equals("select")) {
+            return null; // an upload cannot be read back, and a custom drop-down shows its choice in ways that differ per site
+        }
         if (now == null) {
             return "the page changed and the field disappeared";
         }
         return switch (p.action()) {
-            case "fill" -> p.field().autocomplete() || now.value().strip().equals(p.value().strip()) ? null : "the page did not keep the value";
-            case "select" -> selectedMatches(p, now) ? null : "the page did not keep the choice";
+            case "fill" -> squash(now.value()).equals(squash(p.value())) ? null : "the page did not keep the value";
             case "check" -> now.checked() ? null : "the page did not keep the tick";
             case "uncheck" -> !now.checked() ? null : "the page did not keep the untick";
-            default -> null; // uploads cannot be read back reliably; the guard confirmed the call
+            default -> null;
         };
-    }
-
-    private static boolean selectedMatches(Planned p, FormField now) {
-        String v = p.value().strip();
-        return now.options() != null && now.options().stream().anyMatch(o ->
-                (o.value().equalsIgnoreCase(v) || o.label().equalsIgnoreCase(v)) && o.value().equals(now.value()));
     }
 }

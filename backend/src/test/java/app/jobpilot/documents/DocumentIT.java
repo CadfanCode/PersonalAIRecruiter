@@ -140,6 +140,7 @@ class DocumentIT {
         jobId = addJob("Junior Java-utvecklare", "Comstream AB", "sv", "Vi söker en Javautvecklare till vårt team i Stockholm.", runId);
 
         claude.respond("selectFacts", t -> selection(braive, fBraive1, fBraive2));
+        claude.respond("planDocument", PLAN);
         claude.respond("writeCv", t -> cvJson("sv", "Byggde mikrotjänster i Java och Kotlin.", "Åtgärdade race conditions i loggningsflödena."));
         claude.respond("writeLetter", t -> letterJson("sv", "Jag är systemutvecklare med erfarenhet av Java och Kotlin."));
         claude.respond("rewriteForViolations", t -> {
@@ -581,9 +582,22 @@ class DocumentIT {
         call(post("/api/applications"), "{\"jobIds\":[" + jobId + "," + bad + "],\"runId\":" + runId + "}", 200);
         call(post("/api/applications/approve-all"), "{}", 200);
 
-        JsonNode result = call(post("/api/applications/apply"), "{}", 202);
+        // Nothing is named, so nothing goes on: an application nobody ticked is never opened.
+        JsonNode none = call(post("/api/applications/apply"), "{}", 202);
+        assertThat(none.get("started")).isEmpty();
+        assertThat(none.get("skipped")).isEmpty();
+
+        JsonNode result = call(post("/api/applications/apply"), "{\"jobIds\":[" + jobId + "," + bad + "]}", 202);
 
         assertThat(result.get("started")).hasSize(1);
+        JsonNode sent = call(get("/api/applications"), null, 200);
+        for (JsonNode a : sent) {
+            assertThat(a.get("sentToApply").asBoolean()).as("job " + a.get("jobId")).isEqualTo(a.get("jobId").asLong() == jobId);
+        }
+        call(delete("/api/applications/" + jobId + "/apply"), null, 204);
+        for (JsonNode a : call(get("/api/applications"), null, 200)) {
+            assertThat(a.get("sentToApply").asBoolean()).isFalse();
+        }
         assertThat(result.get("started").get(0).get("jobId").asLong()).isEqualTo(jobId);
         assertThat(result.get("skipped")).hasSize(1);
         assertThat(result.get("skipped").get(0).get("jobId").asLong()).isEqualTo(bad);
@@ -760,6 +774,31 @@ class DocumentIT {
         assertThat(Files.exists(dataDir.resolve("documents/job-" + jobId + "/Personligt_brev_Cai_Birch_Comstream.pdf"))).isTrue();
         assertThat(pdfText(mvc.perform(get("/api/documents/" + letter.get("id").asLong() + "/pdf")).andReturn().getResponse().getContentAsByteArray()))
                 .contains("Ansökan: Junior Java-utvecklare", "Vänliga hälsningar,");
+        assertThat(call(get("/api/jobs/" + jobId + "/documents"), null, 200).get("selection").get("entries")).hasSize(3);
+    }
+
+    static final String PLAN = """
+            {"field":"Java development","angle":"Wants a developer who finds and fixes faults in live services.",
+             "adPriorities":["Java"],"evidence":[{"point":"Fixed race conditions in production logging.","factIds":[1]}],
+             "cvProfile":"Open with the microservice work.","letterExample":"The race condition hunt.","letterHook":"The team in Stockholm.",
+             "gapsToState":[],"keepShort":[]}""";
+
+    @Test
+    void bothWritersReceiveThePlanAndAFailedPlanDoesNotStopTheDocuments() throws Exception {
+        generate(jobId);
+
+        for (String writer : List.of("writeCv", "writeLetter")) {
+            String prompt = claude.calls().stream().filter(c -> c.name().equals(writer)).findFirst().orElseThrow().prompt();
+            assertThat(prompt).as(writer).contains("Wants a developer who finds and fixes faults in live services.");
+        }
+        claude.respond("planDocument", t -> {
+            throw new app.jobpilot.claude.ClaudeCallException("plan is down");
+        });
+
+        generate(jobId);
+
+        String prompt = claude.calls().stream().filter(c -> c.name().equals("writeCv")).reduce((a, b) -> b).orElseThrow().prompt();
+        assertThat(prompt).doesNotContain("Wants a developer");
         assertThat(call(get("/api/jobs/" + jobId + "/documents"), null, 200).get("selection").get("entries")).hasSize(3);
     }
 

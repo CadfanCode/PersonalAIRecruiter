@@ -87,7 +87,7 @@ class NoUnguardedBrowserCallsTest {
         assertThat(guard).contains(".press(\"ArrowDown\"").doesNotContain("\"Enter\"").doesNotContain("Key.ENTER");
         assertThat(FORM_SUBMIT.matcher(guard).find()).isFalse();
         // the only reasons a click may have; a new one has to change this test on purpose
-        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA, OPEN_APPLICATION_FORM }");
+        assertThat(guard).contains("enum ClickPurpose { COOKIE_NECESSARY, AUTOCOMPLETE_OPTION, AKTIVITET_SPARA, OPEN_APPLICATION_FORM, ADVANCE_STEP, OPEN_DROPDOWN }");
     }
 
     @Test
@@ -107,12 +107,15 @@ class NoUnguardedBrowserCallsTest {
         String guard = code(MAIN.resolve("app/jobpilot/apply/BrowserGuard.java"));
         // an address is only loaded after the address check, and a click for OPEN_APPLICATION_FORM only after the page-is-a-form
         // and something-was-filled refusals
-        int open = guard.indexOf("public Opened openApplication");
-        String method = guard.substring(open, guard.indexOf("public void settle"));
-        assertThat(method.indexOf("pageIsForm")).isLessThan(method.indexOf("page.navigate"));
+        int open = guard.indexOf("public Opened follow");
+        String method = guard.substring(open, guard.indexOf("private String absolute"));
         assertThat(method.indexOf("anythingFilled")).isLessThan(method.indexOf("page.navigate"));
+        assertThat(method.indexOf("fieldCount() > 0")).isLessThan(method.indexOf("page.navigate"));
         assertThat(method.indexOf("addressAllowed.test")).isLessThan(method.indexOf("page.navigate"));
         assertThat(method.indexOf("anythingFilled")).isLessThan(method.indexOf("click(target"));
+        // only a label that is exactly an advance word may be pressed at all, and a sending word is refused on top of it
+        assertThat(method.indexOf("GuardPatterns.isAdvance(label)")).isLessThan(method.indexOf("click(target"));
+        assertThat(guard).contains("pageMaySend(target)");
     }
 
     @Test
@@ -152,17 +155,16 @@ class NoUnguardedBrowserCallsTest {
     void pageScriptsRunsOnlyTheFixedScriptsFromTheClasspath() throws IOException {
         String scripts = code(MAIN.resolve("app/jobpilot/apply/PageScripts.java"));
 
-        assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(5);
-        assertThat(scripts).contains("read(\"apply/extract-fields.js\")", "read(\"apply/detect-state.js\")", "read(\"apply/read-saved-activities.js\")",
-                "read(\"apply/find-apply-candidates.js\")");
+        assertThat(Pattern.compile("\\.evaluate\\s*\\(").matcher(scripts).results().count()).isEqualTo(4);
+        assertThat(scripts).contains("read(\"apply/extract-fields.js\")", "read(\"apply/detect-state.js\")", "read(\"apply/read-saved-activities.js\")");
         assertThat(scripts).doesNotContainPattern("\\.(click|press|keyboard|mouse|dispatchEvent|submit)\\s*\\(");
         // every call starts with one of the two fixed scripts; nothing is concatenated from other input
-        assertThat(Pattern.compile("\\.evaluate\\s*\\((EXTRACT|DETECT|SAVED|CANDIDATES)\\b").matcher(scripts).results().count()).isEqualTo(5);
+        assertThat(Pattern.compile("\\.evaluate\\s*\\((EXTRACT|DETECT|SAVED)\\b").matcher(scripts).results().count()).isEqualTo(4);
     }
 
     @Test
     void theScriptFilesThemselvesNeverClickTypeOrSubmit() throws IOException {
-        for (String name : List.of("extract-fields.js", "detect-state.js", "read-saved-activities.js", "find-apply-candidates.js")) {
+        for (String name : List.of("extract-fields.js", "detect-state.js", "read-saved-activities.js")) {
             String js = Files.readString(Path.of("src/main/resources/apply/" + name)).replaceAll("(?m)^\\s*//.*$", "");
             assertThat(js).as(name).doesNotContainPattern("\\.(click|submit|requestSubmit|dispatchEvent|focus)\\s*\\(")
                     .doesNotContainPattern("\\.(value|checked)\\s*=[^=]").doesNotContain("fetch(").doesNotContain("XMLHttpRequest");
